@@ -3,7 +3,7 @@ Full Procedural Asset Tree — With Descriptions, Road States, Energy/Utility Pr
 Every folder carries an inline # description comment. Added: road states (muddy/rocky/bumpy/sandy/gravel/snowy/icy/wet/dry-cracked/potholed) and new props (electric post, wind turbine, solar panels, transformer, etc.). No truncation.
 
 ```
-gen/                                                     # Root of the procedural generator workspace
+native_assets/                                                     # Root of the procedural generator workspace
 ├── CMakeLists.txt                                       # Top-level build file: adds base/, src/, shaders/, tests/
 ├── main.cpp                                             # Entry point: creates Application, registers generators, runs main loop
 ├── README.md                                            # Project overview, build instructions, architecture summary
