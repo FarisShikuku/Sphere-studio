@@ -1,8 +1,30 @@
 #version 460
+#include "include/atmosphere_common.glsl"
+
 layout(local_size_x = 16, local_size_y = 16) in;
-layout(binding = 0, rgba16f) uniform writeonly image2D outSkyLUT;
+layout(binding = 0, rgba16f) uniform writeonly image2D u_SkyLUT;
+
+layout(push_constant) uniform SkyComputePush {
+    vec4 sunDirection; // xyz = dir, w = elevation
+    float turbidity;
+} push;
 
 void main() {
     ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
-    imageStore(outSkyLUT, pixelCoord, vec4(0.2, 0.45, 0.8, 1.0));
-}\n
+    ivec2 size = imageSize(u_SkyLUT);
+    if (pixelCoord.x >= size.x || pixelCoord.y >= size.y) return;
+
+    vec2 uv = (vec2(pixelCoord) + 0.5) / vec2(size);
+    float altitude = (uv.y * 0.5 * PI);
+    float azimuth = (uv.x * TWO_PI) - PI;
+
+    vec3 viewDir = vec3(cos(altitude) * sin(azimuth), sin(altitude), cos(altitude) * cos(azimuth));
+    float cosGamma = dot(viewDir, normalize(push.sunDirection.xyz));
+
+    vec3 transmittance = ComputeAtmosphericTransmittance(push.sunDirection.w, push.turbidity);
+    float rayleigh = RayleighPhase(cosGamma);
+    float mie = MiePhase(cosGamma, 0.76);
+
+    vec3 inScattered = (RAYLEIGH_SCATTERING * rayleigh + vec3(MIE_SCATTERING) * mie) * transmittance;
+    imageStore(u_SkyLUT, pixelCoord, vec4(inScattered, 1.0));
+}

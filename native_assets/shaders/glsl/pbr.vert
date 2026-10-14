@@ -11,12 +11,14 @@ layout(push_constant) uniform PushConstants {
 
 layout(location = 0) out vec3 outWorldPos;
 layout(location = 1) out vec3 outNormal;
-layout(location = 2) out vec2 outTexCoord;
+layout(location = 2) out vec4 outTangent;
+layout(location = 3) out vec2 outTexCoord;
 
 void main() {
     vec4 worldPos = push.modelMatrix * vec4(inPosition, 1.0);
     outWorldPos = worldPos.xyz;
-    outNormal = mat3(push.modelMatrix) * inNormal;
+    outNormal = normalize(mat3(push.modelMatrix) * inNormal);
+    outTangent = vec4(normalize(mat3(push.modelMatrix) * inTangent.xyz), inTangent.w);
     outTexCoord = inTexCoord;
     gl_Position = push.viewProjMatrix * worldPos;
-}\n
+}
