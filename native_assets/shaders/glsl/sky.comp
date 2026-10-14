@@ -1,0 +1,8 @@
+#version 460
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(binding = 0, rgba16f) uniform writeonly image2D outSkyLUT;
+
+void main() {
+    ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+    imageStore(outSkyLUT, pixelCoord, vec4(0.2, 0.45, 0.8, 1.0));
+}\n

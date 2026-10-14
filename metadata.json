@@ -1,0 +1,6 @@
+{
+  "name": "Sphere Studio",
+  "description": "Procedural 3D asset studio and generator for road networks, vegetation, surfaces, terrain, weather, and world simulation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
