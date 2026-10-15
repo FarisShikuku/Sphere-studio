@@ -58,6 +58,7 @@ import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -111,6 +112,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
@@ -307,20 +309,53 @@ fun SphereStudioApp() {
                                 )
                             },
                             label = {
-                                Column {
-                                    Text(
-                                        text = category.title,
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                        ),
-                                        color = if (isSelected) Color.White else Color(0xFFCBD5E1)
-                                    )
-                                    Text(
-                                        text = category.subtitle,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.85f) else Color(0xFF64748B),
-                                        maxLines = 1
-                                    )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = category.title,
+                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                            ),
+                                            color = if (isSelected) Color.White else Color(0xFFCBD5E1)
+                                        )
+                                        Text(
+                                            text = category.subtitle,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.85f) else Color(0xFF64748B),
+                                            maxLines = 1
+                                        )
+                                    }
+                                    if (category.id != "test" && category.id != "sky") {
+                                        Surface(
+                                            shape = RoundedCornerShape(4.dp),
+                                            color = Color(0xFF1E293B)
+                                        ) {
+                                            Text(
+                                                text = "EMPTY",
+                                                fontSize = 9.sp,
+                                                color = Color(0xFF64748B),
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    } else if (category.id == "sky") {
+                                        Surface(
+                                            shape = RoundedCornerShape(4.dp),
+                                            color = Color(0xFF0369A1).copy(alpha = 0.4f)
+                                        ) {
+                                            Text(
+                                                text = "ACTIVE",
+                                                fontSize = 9.sp,
+                                                color = Color(0xFF38BDF8),
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
                                 }
                             },
                             selected = isSelected,
@@ -382,12 +417,24 @@ fun SphereStudioApp() {
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Surface(
                                     shape = RoundedCornerShape(4.dp),
-                                    color = if (selectedCategory.id == "sky") Color(0xFF0369A1).copy(alpha = 0.4f) else Color(0xFF1E293B)
+                                    color = when (selectedCategory.id) {
+                                        "sky" -> Color(0xFF0369A1).copy(alpha = 0.4f)
+                                        "test" -> Color(0xFF1E293B)
+                                        else -> Color(0xFF334155).copy(alpha = 0.5f)
+                                    }
                                 ) {
                                     Text(
-                                        text = if (selectedCategory.id == "sky") "Sky Studio Viewport" else "Common Scene",
+                                        text = when (selectedCategory.id) {
+                                            "sky" -> "Atmosphere & Sky"
+                                            "test" -> "Test Screen"
+                                            else -> "Empty Directory"
+                                        },
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = Color(0xFF38BDF8),
+                                        color = when (selectedCategory.id) {
+                                            "sky" -> Color(0xFF38BDF8)
+                                            "test" -> Color(0xFF10B981)
+                                            else -> Color(0xFF94A3B8)
+                                        },
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
                                 }
@@ -400,18 +447,43 @@ fun SphereStudioApp() {
                         }
                     },
                     navigationIcon = {
-                        IconButton(
-                            onClick = { coroutineScope.launch { drawerState.open() } },
-                            modifier = Modifier.testTag("hamburger_menu_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Menu,
-                                contentDescription = "Open Asset Menu",
-                                tint = Color.White
-                            )
+                        if (selectedCategory.id == "test") {
+                            IconButton(
+                                onClick = { coroutineScope.launch { drawerState.open() } },
+                                modifier = Modifier.testTag("hamburger_menu_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Menu,
+                                    contentDescription = "Open Asset Menu",
+                                    tint = Color.White
+                                )
+                            }
+                        } else {
+                            IconButton(
+                                onClick = { selectedCategory = availableAssetCategories[0] },
+                                modifier = Modifier.testTag("back_to_test_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Back to Test Screen",
+                                    tint = Color.White
+                                )
+                            }
                         }
                     },
                     actions = {
+                        if (selectedCategory.id != "test") {
+                            IconButton(
+                                onClick = { coroutineScope.launch { drawerState.open() } },
+                                modifier = Modifier.testTag("menu_action_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Menu,
+                                    contentDescription = "Asset Menu",
+                                    tint = Color(0xFF94A3B8)
+                                )
+                            }
+                        }
                         IconButton(
                             onClick = {
                                 camRotX = 24f
@@ -440,80 +512,23 @@ fun SphereStudioApp() {
                     )
                 )
             },
-            bottomBar = {
-                NavigationBar(
-                    containerColor = Color(0xFF0F1219),
-                    contentColor = Color.White,
-                    modifier = Modifier.testTag("main_navigation_bar")
-                ) {
-                    NavigationBarItem(
-                        selected = selectedCategory.id == "test",
-                        onClick = {
-                            selectedCategory = availableAssetCategories[0]
-                        },
-                        icon = {
-                            Icon(Icons.Default.ViewInAr, contentDescription = "Calibration Scene")
-                        },
-                        label = { Text("Scene", fontSize = 11.sp) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            selectedTextColor = MaterialTheme.colorScheme.primary,
-                            indicatorColor = Color(0xFF1E2638),
-                            unselectedIconColor = Color(0xFF94A3B8),
-                            unselectedTextColor = Color(0xFF94A3B8)
-                        ),
-                        modifier = Modifier.testTag("nav_item_scene")
-                    )
-                    NavigationBarItem(
-                        selected = selectedCategory.id == "sky",
-                        onClick = {
-                            selectedCategory = availableAssetCategories.first { it.id == "sky" }
-                        },
-                        icon = {
-                            Icon(Icons.Outlined.WbSunny, contentDescription = "Atmosphere & Sky")
-                        },
-                        label = { Text("Sky Studio", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = Color(0xFF38BDF8),
-                            selectedTextColor = Color(0xFF38BDF8),
-                            indicatorColor = Color(0xFF0369A1).copy(alpha = 0.35f),
-                            unselectedIconColor = Color(0xFF94A3B8),
-                            unselectedTextColor = Color(0xFF94A3B8)
-                        ),
-                        modifier = Modifier.testTag("nav_item_sky")
-                    )
-                    NavigationBarItem(
-                        selected = false,
-                        onClick = {
-                            coroutineScope.launch { drawerState.open() }
-                        },
-                        icon = {
-                            Icon(Icons.Default.Menu, contentDescription = "Asset Library")
-                        },
-                        label = { Text("Library", fontSize = 11.sp) },
-                        colors = NavigationBarItemDefaults.colors(
-                            unselectedIconColor = Color(0xFF94A3B8),
-                            unselectedTextColor = Color(0xFF94A3B8)
-                        ),
-                        modifier = Modifier.testTag("nav_item_library")
-                    )
-                }
-            },
             containerColor = Color(0xFF0B0D13)
         ) { innerPadding ->
-            BackHandler(enabled = selectedCategory.id == "sky") {
+            BackHandler(enabled = selectedCategory.id != "test") {
                 selectedCategory = availableAssetCategories[0]
             }
 
-            if (selectedCategory.id == "sky") {
-                SkyStudioScreen(modifier = Modifier.padding(innerPadding))
-            } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                        .background(Color(0xFF0B0D13))
-                ) {
+            when (selectedCategory.id) {
+                "sky" -> {
+                    SkyStudioScreen(modifier = Modifier.padding(innerPadding))
+                }
+                "test" -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                            .background(Color(0xFF0B0D13))
+                    ) {
                 // 1. TOP VIEWPORT: 3D COMMON SCENE WITH CUBE, SKY, SUN & HORIZON
                 Box(
                     modifier = Modifier
@@ -744,6 +759,15 @@ fun SphereStudioApp() {
                         }
                     }
                 }
+            }
+        }
+        else -> {
+            EmptyAssetScreen(
+                    category = selectedCategory,
+                    onBackToTest = { selectedCategory = availableAssetCategories[0] },
+                    onNavigateToSky = { selectedCategory = availableAssetCategories.first { it.id == "sky" } },
+                    modifier = Modifier.padding(innerPadding)
+                )
             }
         }
     }
@@ -1656,3 +1680,365 @@ fun SceneCubeViewport(
         drawLine(Color(0xFF3B82F6), axisOrigin, zEnd, strokeWidth = 2.5f)
     }
 }
+
+// -------------------------------------------------------------
+// EMPTY ASSET GENERATOR SCREEN (STRICTLY EMPTY STATE)
+// -------------------------------------------------------------
+@Composable
+fun EmptyAssetScreen(
+    category: AssetCategory,
+    onBackToTest: () -> Unit,
+    onNavigateToSky: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var selectedEmptyTab by remember { mutableIntStateOf(0) }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color(0xFF0B0D13))
+            .testTag("empty_asset_screen_${category.id}")
+    ) {
+        // 1. TOP VIEWPORT: ISOMETRIC BLUEPRINT LATTICE & EMPTY ASSET CONTAINER (weight 1.08f)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1.08f)
+                .background(Color(0xFF07090E))
+                .testTag("empty_asset_viewport")
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+                val center = Offset(w / 2f, h / 2f)
+
+                // Background gradient
+                drawRect(
+                    brush = Brush.radialGradient(
+                        colors = listOf(Color(0xFF0F172A), Color(0xFF04060A)),
+                        center = center,
+                        radius = w * 0.75f
+                    )
+                )
+
+                // Isometric coordinate lattice grid
+                val step = 32f
+                val gridColor = Color(0xFF1E293B).copy(alpha = 0.45f)
+                val accentGrid = Color(0xFF334155).copy(alpha = 0.7f)
+
+                var x = 0f
+                while (x < w) {
+                    drawLine(if ((x / step).toInt() % 4 == 0) accentGrid else gridColor, Offset(x, 0f), Offset(x, h), strokeWidth = 1f)
+                    x += step
+                }
+                var y = 0f
+                while (y < h) {
+                    drawLine(if ((y / step).toInt() % 4 == 0) accentGrid else gridColor, Offset(0f, y), Offset(w, y), strokeWidth = 1f)
+                    y += step
+                }
+
+                // Empty bounding box wireframe
+                val boxRadius = minOf(w, h) * 0.28f
+                val dashEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
+
+                // Top diamond
+                val topPath = Path().apply {
+                    moveTo(center.x, center.y - boxRadius * 0.8f)
+                    lineTo(center.x + boxRadius, center.y - boxRadius * 0.2f)
+                    lineTo(center.x, center.y + boxRadius * 0.4f)
+                    lineTo(center.x - boxRadius, center.y - boxRadius * 0.2f)
+                    close()
+                }
+                drawPath(topPath, color = Color(0xFF38BDF8).copy(alpha = 0.35f), style = Stroke(width = 1.5f, pathEffect = dashEffect))
+
+                // Vertical posts
+                val postColor = Color(0xFF64748B).copy(alpha = 0.4f)
+                drawLine(postColor, Offset(center.x, center.y - boxRadius * 0.8f), Offset(center.x, center.y - boxRadius * 0.1f), strokeWidth = 1.5f)
+                drawLine(postColor, Offset(center.x + boxRadius, center.y - boxRadius * 0.2f), Offset(center.x + boxRadius, center.y + boxRadius * 0.5f), strokeWidth = 1.5f)
+                drawLine(postColor, Offset(center.x - boxRadius, center.y - boxRadius * 0.2f), Offset(center.x - boxRadius, center.y + boxRadius * 0.5f), strokeWidth = 1.5f)
+                drawLine(postColor, Offset(center.x, center.y + boxRadius * 0.4f), Offset(center.x, center.y + boxRadius * 1.1f), strokeWidth = 1.5f)
+
+                // Bottom diamond
+                val botPath = Path().apply {
+                    moveTo(center.x, center.y - boxRadius * 0.1f)
+                    lineTo(center.x + boxRadius, center.y + boxRadius * 0.5f)
+                    lineTo(center.x, center.y + boxRadius * 1.1f)
+                    lineTo(center.x - boxRadius, center.y + boxRadius * 0.5f)
+                    close()
+                }
+                drawPath(botPath, color = Color(0xFF475569).copy(alpha = 0.3f), style = Stroke(width = 1.5f, pathEffect = dashEffect))
+
+                // Center crosshair
+                drawLine(Color(0xFFEF4444).copy(alpha = 0.6f), Offset(center.x - 24f, center.y), Offset(center.x + 24f, center.y), strokeWidth = 2f)
+                drawLine(Color(0xFF10B981).copy(alpha = 0.6f), Offset(center.x, center.y - 24f), Offset(center.x, center.y + 24f), strokeWidth = 2f)
+            }
+
+            // Floating Top HUD
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xCC0F172A),
+                    border = CardDefaults.outlinedCardBorder()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = category.icon,
+                            contentDescription = null,
+                            tint = Color(0xFF94A3B8),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "native_assets/src/${category.id}/",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF94A3B8),
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xCC1E293B)
+                ) {
+                    Text(
+                        text = "EMPTY DIRECTORY",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = Color(0xFFF59E0B),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+
+            // Center Blueprint Label Overlay
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xDD0D111A)),
+                shape = RoundedCornerShape(12.dp),
+                border = CardDefaults.outlinedCardBorder().copy(
+                    brush = Brush.linearGradient(listOf(Color(0xFF1E293B), Color(0xFF334155)))
+                ),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(24.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = category.icon,
+                        contentDescription = null,
+                        tint = Color(0xFF64748B),
+                        modifier = Modifier.size(36.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "${category.title} Generator",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Directory strictly empty — awaiting resource definitions",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF94A3B8),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+
+        HorizontalDivider(color = Color(0xFF1E293B), thickness = 1.dp)
+
+        // 2. BOTTOM CONTROLS PANEL: SAME PROPORTIONS AS TEST SCREEN (weight 0.92f)
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(0.92f),
+            color = Color(0xFF0F121A)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                TabRow(
+                    selectedTabIndex = selectedEmptyTab,
+                    containerColor = Color(0xFF131722),
+                    contentColor = Color.White,
+                    indicator = { tabPositions ->
+                        TabRowDefaults.SecondaryIndicator(
+                            Modifier.tabIndicatorOffset(tabPositions[selectedEmptyTab]),
+                            color = Color(0xFF94A3B8),
+                            height = 3.dp
+                        )
+                    }
+                ) {
+                    Tab(
+                        selected = selectedEmptyTab == 0,
+                        onClick = { selectedEmptyTab = 0 },
+                        text = { Text("Directory Status", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
+                    )
+                    Tab(
+                        selected = selectedEmptyTab == 1,
+                        onClick = { selectedEmptyTab = 1 },
+                        text = { Text("README Specs", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
+                    )
+                    Tab(
+                        selected = selectedEmptyTab == 2,
+                        onClick = { selectedEmptyTab = 2 },
+                        text = { Text("Active Modules", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
+                    )
+                }
+
+                // Tab Body
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp)
+                ) {
+                    when (selectedEmptyTab) {
+                        0 -> {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF131722)),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Empty Directory Status",
+                                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                            color = Color.White
+                                        )
+                                        Badge(containerColor = Color(0xFF451A03), contentColor = Color(0xFFFBBF24)) {
+                                            Text("Awaiting Assets", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = "As strictly directed, 'native_assets/src/${category.id}/' is kept empty in .gitignore until complete resource definitions and mesh/shader pipelines are provisioned.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFF94A3B8)
+                                    )
+                                    Spacer(modifier = Modifier.height(14.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = Color(0xFF090B10),
+                                        border = CardDefaults.outlinedCardBorder()
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Text(
+                                                text = "• Location: native_assets/src/${category.id}/\n• Status: Excluded in .gitignore (Empty)\n• Active Implemented Subsystem: Atmosphere & Sky (sky/)\n• Calibration Scene: Test Screen (3D Cube & PBR)",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = Color(0xFFCBD5E1),
+                                                fontFamily = FontFamily.Monospace,
+                                                lineHeight = 18.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        1 -> {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF131722)),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(
+                                        text = "Subsystem Architectural Role",
+                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = Color.White
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = category.description,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Color(0xFFE2E8F0)
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Text(
+                                        text = "Reference: Full Procedural Asset Tree in README.md",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color(0xFF64748B)
+                                    )
+                                }
+                            }
+                        }
+                        2 -> {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF131722)),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(
+                                        text = "Implemented & Active Modules",
+                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = Color.White
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = "You can navigate to the fully implemented modules via the drawer or buttons below:",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFF94A3B8)
+                                    )
+                                    Spacer(modifier = Modifier.height(14.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = Color(0xFF0369A1).copy(alpha = 0.35f),
+                                            border = CardDefaults.outlinedCardBorder().copy(brush = Brush.linearGradient(listOf(Color(0xFF0284C7), Color(0xFF38BDF8)))),
+                                            modifier = Modifier.weight(1f).clickable { onNavigateToSky() }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(10.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.Center
+                                            ) {
+                                                Icon(Icons.Outlined.WbSunny, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("Sky Studio", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = Color(0xFF1E2638),
+                                            border = CardDefaults.outlinedCardBorder(),
+                                            modifier = Modifier.weight(1f).clickable { onBackToTest() }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(10.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.Center
+                                            ) {
+                                                Icon(Icons.Default.ViewInAr, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("Test Screen", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+

@@ -56,6 +56,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
@@ -211,7 +213,7 @@ fun SkyStudioScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(290.dp)
+                .weight(1.08f)
                 .background(Color(0xFF05070B))
                 .pointerInput(Unit) {
                     detectDragGestures { change, dragAmount ->
@@ -457,192 +459,212 @@ fun SkyStudioScreen(
                     )
                 }
 
-                IconButton(
-                    onClick = {
-                        camPitch = 15.0f
-                        camYaw = 150.0f
-                    },
-                    modifier = Modifier.size(32.dp).testTag("reset_sky_camera_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Center View",
-                        tint = Color(0xFF94A3B8),
-                        modifier = Modifier.size(18.dp)
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = { isCyclePlaying = !isCyclePlaying },
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(
+                                if (isCyclePlaying) Color(0xFF0F766E).copy(alpha = 0.85f) else Color(0xFF1E293B).copy(alpha = 0.85f),
+                                CircleShape
+                            )
+                            .testTag("toggle_diurnal_cycle_button")
+                    ) {
+                        Icon(
+                            imageVector = if (isCyclePlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = "Play/Pause diurnal cycle",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    IconButton(
+                        onClick = {
+                            camPitch = 15.0f
+                            camYaw = 150.0f
+                        },
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(Color(0xFF1E293B).copy(alpha = 0.85f), CircleShape)
+                            .testTag("reset_sky_camera_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Center View",
+                            tint = Color(0xFF94A3B8),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
             }
 
-            // Bottom Overlay: Drag instructions
-            Text(
-                text = "Drag viewport to look around 360° celestial sky dome",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color(0xFF64748B),
+            // Bottom Overlays inside the Viewport: Floating Presets Bar
+            Row(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 6.dp)
-            )
-        }
-
-        // -------------------------------------------------------------
-        // 2. TIME-OF-DAY PRESET BAR & PLAY / PAUSE CYCLE
-        // -------------------------------------------------------------
-        Surface(
-            color = Color(0xFF10141E),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(
-                            onClick = { isCyclePlaying = !isCyclePlaying },
-                            modifier = Modifier
-                                .size(34.dp)
-                                .background(
-                                    if (isCyclePlaying) Color(0xFF0F766E) else Color(0xFF1E293B),
-                                    CircleShape
-                                )
-                                .testTag("toggle_diurnal_cycle_button")
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                skyPresetsList.forEach { preset ->
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (abs(timeOfDayHours - preset.timeHours) < 1.0f)
+                            Color(0xFF0284C7).copy(alpha = 0.75f)
+                        else
+                            Color(0xCC10141E),
+                        border = CardDefaults.outlinedCardBorder().copy(
+                            brush = Brush.linearGradient(listOf(Color(0xFF1E293B), Color(0xFF334155)))
+                        ),
+                        modifier = Modifier.clickable {
+                            timeOfDayHours = preset.timeHours
+                            sunElevation = preset.elevation
+                            sunAzimuth = preset.azimuth
+                            turbidity = preset.turbidity
+                            moonElevation = -preset.elevation
+                            moonAzimuth = (preset.azimuth + 180f) % 360f
+                        }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = if (isCyclePlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = "Play/Pause diurnal cycle",
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
+                                imageVector = preset.icon,
+                                contentDescription = null,
+                                tint = if (abs(timeOfDayHours - preset.timeHours) < 1.0f) Color.White else Color(0xFF94A3B8),
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = preset.name,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (abs(timeOfDayHours - preset.timeHours) < 1.0f) Color.White else Color(0xFFCBD5E1),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold
                             )
                         }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = if (isCyclePlaying) "24h Orbit Running" else "Diurnal Cycle",
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                            color = Color.White
-                        )
-                    }
-
-                    Text(
-                        text = "%.1f Hours".format(timeOfDayHours),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Color(0xFF38BDF8),
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-
-                // Time slider
-                Slider(
-                    value = timeOfDayHours,
-                    onValueChange = {
-                        timeOfDayHours = it
-                        val sunAngle = (it - 6.0f) / 12.0f * PI.toFloat()
-                        sunElevation = sin(sunAngle) * 65.0f
-                        sunAzimuth = (it / 24.0f * 360.0f + 90.0f) % 360.0f
-                        moonElevation = -sunElevation
-                        moonAzimuth = (sunAzimuth + 180.0f) % 360.0f
-                    },
-                    valueRange = 0f..24f,
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color(0xFF38BDF8),
-                        activeTrackColor = Color(0xFF0284C7),
-                        inactiveTrackColor = Color(0xFF1E293B)
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("time_of_day_slider")
-                )
-
-                // Quick Preset Chips
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    skyPresetsList.forEach { preset ->
-                        FilterChip(
-                            selected = abs(timeOfDayHours - preset.timeHours) < 1.0f,
-                            onClick = {
-                                timeOfDayHours = preset.timeHours
-                                sunElevation = preset.elevation
-                                sunAzimuth = preset.azimuth
-                                turbidity = preset.turbidity
-                                moonElevation = -preset.elevation
-                                moonAzimuth = (preset.azimuth + 180f) % 360f
-                            },
-                            label = { Text(preset.name, fontSize = 11.sp) },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = preset.icon,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                            },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Color(0xFF1E293B),
-                                selectedLabelColor = Color(0xFF38BDF8),
-                                selectedLeadingIconColor = Color(0xFF38BDF8),
-                                containerColor = Color(0xFF0F121A),
-                                labelColor = Color(0xFF94A3B8)
-                            )
-                        )
                     }
                 }
             }
         }
 
-        // -------------------------------------------------------------
-        // 3. SKY COMPONENT NAVIGATION TABS
-        // -------------------------------------------------------------
-        ScrollableTabRow(
-            selectedTabIndex = activeTab,
-            containerColor = Color(0xFF0B0E17),
-            contentColor = Color.White,
-            edgePadding = 12.dp,
-            modifier = Modifier.fillMaxWidth().testTag("sky_tabs_row")
-        ) {
-            val tabTitles = listOf("Atmosphere", "Sun & Flare", "Stars & Cosmos", "Moon & Phases", "Tonemap & LUT", "Native C++ Core")
-            tabTitles.forEachIndexed { index, title ->
-                Tab(
-                    selected = activeTab == index,
-                    onClick = { activeTab = index },
-                    text = {
-                        Text(
-                            text = title,
-                            fontSize = 12.sp,
-                            fontWeight = if (activeTab == index) FontWeight.Bold else FontWeight.Normal
-                        )
-                    }
-                )
-            }
-        }
+        HorizontalDivider(color = Color(0xFF1E293B), thickness = 1.dp)
 
         // -------------------------------------------------------------
-        // 4. TAB CONTENT BODY
+        // 2. BOTTOM CONTROLS PANEL: SAME PROPORTIONS AS TEST SCREEN (weight 0.92f)
         // -------------------------------------------------------------
-        Column(
+        Surface(
             modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp)
+                .fillMaxWidth()
+                .weight(0.92f),
+            color = Color(0xFF0F121A)
         ) {
-            when (activeTab) {
-                0 -> AtmosphereControlsTab(
-                    turbidity = turbidity,
-                    onTurbidityChange = { turbidity = it },
-                    rayleighScale = rayleighScale,
-                    onRayleighChange = { rayleighScale = it },
-                    mieScale = mieScale,
-                    onMieChange = { mieScale = it },
-                    mieAsymmetryG = mieAsymmetryG,
-                    onMieGChange = { mieAsymmetryG = it },
-                    groundAlbedo = groundAlbedo,
-                    onAlbedoChange = { groundAlbedo = it },
-                    ozoneAbsorption = ozoneAbsorption,
-                    onOzoneToggle = { ozoneAbsorption = it }
-                )
-                1 -> SunAndFlareTab(
+            Column(modifier = Modifier.fillMaxSize()) {
+                ScrollableTabRow(
+                    selectedTabIndex = activeTab,
+                    containerColor = Color(0xFF131722),
+                    contentColor = Color.White,
+                    edgePadding = 12.dp,
+                    indicator = { tabPositions ->
+                        TabRowDefaults.SecondaryIndicator(
+                            Modifier.tabIndicatorOffset(tabPositions[activeTab]),
+                            color = Color(0xFF38BDF8),
+                            height = 3.dp
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth().testTag("sky_tabs_row")
+                ) {
+                    val tabTitles = listOf("Atmosphere", "Sun & Flare", "Stars & Cosmos", "Moon & Phases", "Tonemap & LUT", "Native C++ Core")
+                    tabTitles.forEachIndexed { index, title ->
+                        Tab(
+                            selected = activeTab == index,
+                            onClick = { activeTab = index },
+                            text = {
+                                Text(
+                                    text = title,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (activeTab == index) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        )
+                    }
+                }
+
+                // Tab Content Body
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp)
+                ) {
+                    when (activeTab) {
+                        0 -> {
+                            // Timeline Scrubber inside Atmosphere Tab
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF131722)),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "24-Hour Diurnal Orbit",
+                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = Color.White
+                                        )
+                                        Text(
+                                            text = "%.1f h".format(timeOfDayHours),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Color(0xFF38BDF8),
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                    }
+                                    Slider(
+                                        value = timeOfDayHours,
+                                        onValueChange = {
+                                            timeOfDayHours = it
+                                            val sunAngle = (it - 6.0f) / 12.0f * PI.toFloat()
+                                            sunElevation = sin(sunAngle) * 65.0f
+                                            sunAzimuth = (it / 24.0f * 360.0f + 90.0f) % 360.0f
+                                            moonElevation = -sunElevation
+                                            moonAzimuth = (sunAzimuth + 180.0f) % 360.0f
+                                        },
+                                        valueRange = 0f..24f,
+                                        colors = SliderDefaults.colors(
+                                            thumbColor = Color(0xFF38BDF8),
+                                            activeTrackColor = Color(0xFF0284C7),
+                                            inactiveTrackColor = Color(0xFF1E293B)
+                                        ),
+                                        modifier = Modifier.fillMaxWidth().testTag("time_of_day_slider")
+                                    )
+                                }
+                            }
+
+                            AtmosphereControlsTab(
+                                turbidity = turbidity,
+                                onTurbidityChange = { turbidity = it },
+                                rayleighScale = rayleighScale,
+                                onRayleighChange = { rayleighScale = it },
+                                mieScale = mieScale,
+                                onMieChange = { mieScale = it },
+                                mieAsymmetryG = mieAsymmetryG,
+                                onMieGChange = { mieAsymmetryG = it },
+                                groundAlbedo = groundAlbedo,
+                                onAlbedoChange = { groundAlbedo = it },
+                                ozoneAbsorption = ozoneAbsorption,
+                                onOzoneToggle = { ozoneAbsorption = it }
+                            )
+                        }
+                        1 -> SunAndFlareTab(
                     sunElevation = sunElevation,
                     onElevationChange = { sunElevation = it },
                     sunAzimuth = sunAzimuth,
@@ -692,6 +714,8 @@ fun SkyStudioScreen(
             }
         }
     }
+}
+}
 }
 
 // -------------------------------------------------------------
