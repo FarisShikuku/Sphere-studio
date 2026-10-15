@@ -57,6 +57,7 @@ import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -68,6 +69,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.Scaffold
@@ -378,10 +382,10 @@ fun SphereStudioApp() {
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Surface(
                                     shape = RoundedCornerShape(4.dp),
-                                    color = Color(0xFF1E293B)
+                                    color = if (selectedCategory.id == "sky") Color(0xFF0369A1).copy(alpha = 0.4f) else Color(0xFF1E293B)
                                 ) {
                                     Text(
-                                        text = "Common Scene",
+                                        text = if (selectedCategory.id == "sky") "Sky Studio Viewport" else "Common Scene",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = Color(0xFF38BDF8),
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -436,14 +440,80 @@ fun SphereStudioApp() {
                     )
                 )
             },
+            bottomBar = {
+                NavigationBar(
+                    containerColor = Color(0xFF0F1219),
+                    contentColor = Color.White,
+                    modifier = Modifier.testTag("main_navigation_bar")
+                ) {
+                    NavigationBarItem(
+                        selected = selectedCategory.id == "test",
+                        onClick = {
+                            selectedCategory = availableAssetCategories[0]
+                        },
+                        icon = {
+                            Icon(Icons.Default.ViewInAr, contentDescription = "Calibration Scene")
+                        },
+                        label = { Text("Scene", fontSize = 11.sp) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                            indicatorColor = Color(0xFF1E2638),
+                            unselectedIconColor = Color(0xFF94A3B8),
+                            unselectedTextColor = Color(0xFF94A3B8)
+                        ),
+                        modifier = Modifier.testTag("nav_item_scene")
+                    )
+                    NavigationBarItem(
+                        selected = selectedCategory.id == "sky",
+                        onClick = {
+                            selectedCategory = availableAssetCategories.first { it.id == "sky" }
+                        },
+                        icon = {
+                            Icon(Icons.Outlined.WbSunny, contentDescription = "Atmosphere & Sky")
+                        },
+                        label = { Text("Sky Studio", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Color(0xFF38BDF8),
+                            selectedTextColor = Color(0xFF38BDF8),
+                            indicatorColor = Color(0xFF0369A1).copy(alpha = 0.35f),
+                            unselectedIconColor = Color(0xFF94A3B8),
+                            unselectedTextColor = Color(0xFF94A3B8)
+                        ),
+                        modifier = Modifier.testTag("nav_item_sky")
+                    )
+                    NavigationBarItem(
+                        selected = false,
+                        onClick = {
+                            coroutineScope.launch { drawerState.open() }
+                        },
+                        icon = {
+                            Icon(Icons.Default.Menu, contentDescription = "Asset Library")
+                        },
+                        label = { Text("Library", fontSize = 11.sp) },
+                        colors = NavigationBarItemDefaults.colors(
+                            unselectedIconColor = Color(0xFF94A3B8),
+                            unselectedTextColor = Color(0xFF94A3B8)
+                        ),
+                        modifier = Modifier.testTag("nav_item_library")
+                    )
+                }
+            },
             containerColor = Color(0xFF0B0D13)
         ) { innerPadding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .background(Color(0xFF0B0D13))
-            ) {
+            BackHandler(enabled = selectedCategory.id == "sky") {
+                selectedCategory = availableAssetCategories[0]
+            }
+
+            if (selectedCategory.id == "sky") {
+                SkyStudioScreen(modifier = Modifier.padding(innerPadding))
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .background(Color(0xFF0B0D13))
+                ) {
                 // 1. TOP VIEWPORT: 3D COMMON SCENE WITH CUBE, SKY, SUN & HORIZON
                 Box(
                     modifier = Modifier
@@ -677,6 +747,7 @@ fun SphereStudioApp() {
             }
         }
     }
+}
 }
 
 // -------------------------------------------------------------
