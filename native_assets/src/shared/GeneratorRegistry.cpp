@@ -1,5 +1,6 @@
 #include "GeneratorRegistry.h"
 #include "core/Log.h"
+#include "weather/WeatherSystem.h"
 
 namespace sphere {
 GeneratorRegistry& GeneratorRegistry::Get() {
@@ -9,7 +10,9 @@ GeneratorRegistry& GeneratorRegistry::Get() {
 
 void GeneratorRegistry::Initialize() {
     SPHERE_LOG_INFO("GeneratorRegistry initialized. Ready for procedural asset bindings.");
+    Register(std::make_shared<WeatherSystem>());
 }
+
 
 void GeneratorRegistry::Register(std::shared_ptr<IGenerator> generator) {
     if (generator) {

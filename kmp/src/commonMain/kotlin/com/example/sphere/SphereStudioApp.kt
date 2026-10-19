@@ -329,7 +329,7 @@ fun SphereStudioApp() {
                                             maxLines = 1
                                         )
                                     }
-                                    if (category.id != "test" && category.id != "sky") {
+                                    if (category.id != "test" && category.id != "sky" && category.id != "weather") {
                                         Surface(
                                             shape = RoundedCornerShape(4.dp),
                                             color = Color(0xFF1E293B)
@@ -342,7 +342,7 @@ fun SphereStudioApp() {
                                                 modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                                             )
                                         }
-                                    } else if (category.id == "sky") {
+                                    } else if (category.id == "sky" || category.id == "weather") {
                                         Surface(
                                             shape = RoundedCornerShape(4.dp),
                                             color = Color(0xFF0369A1).copy(alpha = 0.4f)
@@ -521,6 +521,9 @@ fun SphereStudioApp() {
             when (selectedCategory.id) {
                 "sky" -> {
                     SkyStudioScreen(modifier = Modifier.padding(innerPadding))
+                }
+                "weather" -> {
+                    WeatherStudioScreen(modifier = Modifier.padding(innerPadding))
                 }
                 "test" -> {
                     Column(
@@ -766,6 +769,7 @@ fun SphereStudioApp() {
                     category = selectedCategory,
                     onBackToTest = { selectedCategory = availableAssetCategories[0] },
                     onNavigateToSky = { selectedCategory = availableAssetCategories.first { it.id == "sky" } },
+                    onNavigateToWeather = { selectedCategory = availableAssetCategories.first { it.id == "weather" } },
                     modifier = Modifier.padding(innerPadding)
                 )
             }
@@ -1689,6 +1693,7 @@ fun EmptyAssetScreen(
     category: AssetCategory,
     onBackToTest: () -> Unit,
     onNavigateToSky: () -> Unit,
+    onNavigateToWeather: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedEmptyTab by remember { mutableIntStateOf(0) }
@@ -2011,7 +2016,24 @@ fun EmptyAssetScreen(
                                             ) {
                                                 Icon(Icons.Outlined.WbSunny, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp))
                                                 Spacer(modifier = Modifier.width(6.dp))
-                                                Text("Sky Studio", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                                Text("Sky", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = Color(0xFF0891B2).copy(alpha = 0.35f),
+                                            border = CardDefaults.outlinedCardBorder().copy(brush = Brush.linearGradient(listOf(Color(0xFF06B6D4), Color(0xFF38BDF8)))),
+                                            modifier = Modifier.weight(1f).clickable { onNavigateToWeather() }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(10.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.Center
+                                            ) {
+                                                Icon(Icons.Outlined.Cloud, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("Weather", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                                             }
                                         }
 
@@ -2028,7 +2050,7 @@ fun EmptyAssetScreen(
                                             ) {
                                                 Icon(Icons.Default.ViewInAr, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                                                 Spacer(modifier = Modifier.width(6.dp))
-                                                Text("Test Screen", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                                Text("Test", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                                             }
                                         }
                                     }

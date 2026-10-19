@@ -1,0 +1,11 @@
+#version 460
+layout(local_size_x = 32) in;
+
+layout(std430, set = 0, binding = 0) buffer BoltBuffer {
+    vec4 points[];
+} bolt;
+
+void main() {
+    uint id = gl_GlobalInvocationID.x;
+    if (id >= bolt.points.length()) return;
+}

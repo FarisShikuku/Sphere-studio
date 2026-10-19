@@ -1,0 +1,9 @@
+#version 460
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 4) in;
+
+layout(set = 0, binding = 0, rgba16f) uniform image3D u_FroxelGrid;
+
+void main() {
+    ivec3 voxel = ivec3(gl_GlobalInvocationID.xyz);
+    imageStore(u_FroxelGrid, voxel, vec4(0.8, 0.85, 0.9, 0.15));
+}

@@ -1,0 +1,13 @@
+#version 460
+layout(local_size_x = 64) in;
+
+layout(std430, set = 0, binding = 0) buffer BlizzardBuffer {
+    vec4 particles[];
+} blizzard;
+
+void main() {
+    uint id = gl_GlobalInvocationID.x;
+    if (id >= blizzard.particles.length()) return;
+    blizzard.particles[id].x += 0.8;
+    blizzard.particles[id].y -= 0.15;
+}

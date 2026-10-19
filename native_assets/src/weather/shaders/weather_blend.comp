@@ -1,0 +1,27 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#include "include/weather_common.glsl"
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(set = 1, binding = 0, rgba16f) uniform image2D u_OutputSceneColor;
+layout(set = 1, binding = 1) uniform sampler2D u_SceneDepth;
+layout(set = 1, binding = 2) uniform sampler2D u_VolumetricFog;
+
+void main() {
+    ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 screenSize = imageSize(u_OutputSceneColor);
+    if (pixelCoord.x >= screenSize.x || pixelCoord.y >= screenSize.y) return;
+
+    vec2 uv = (vec2(pixelCoord) + 0.5) / vec2(screenSize);
+    vec4 baseColor = imageLoad(u_OutputSceneColor, pixelCoord);
+    vec4 fogSample = texture(u_VolumetricFog, uv);
+
+    // Weather atmospheric blend: fog inscattering + lightning flash
+    vec3 blended = mix(baseColor.rgb, fogSample.rgb, fogSample.a * weather.u_AtmosphereParams.x);
+    if (weather.u_LightingParams.x > 0.0) {
+        blended += vec3(0.85, 0.90, 1.0) * weather.u_LightingParams.x * 0.45;
+    }
+
+    imageStore(u_OutputSceneColor, pixelCoord, vec4(blended, baseColor.a));
+}

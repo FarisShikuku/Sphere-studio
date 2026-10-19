@@ -30,12 +30,12 @@ compile_commands.json
 
 # ==============================================================================
 # Empty asset folders in native_assets/ (waiting for resource definitions)
+# Note: native_assets/src/sky/ and native_assets/src/weather/ are implemented & tracked
 # ==============================================================================
 native_assets/src/road/
 native_assets/src/vegetation/
 native_assets/src/surfaces/
 native_assets/src/buildings/
-native_assets/src/weather/
 native_assets/src/terrain/
 native_assets/src/water/
 native_assets/src/vehicles/
@@ -43,6 +43,7 @@ native_assets/src/props/
 native_assets/src/particles/
 native_assets/src/audio/
 native_assets/src/ui/
+
 
 
 
