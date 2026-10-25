@@ -481,3 +481,65 @@ The following table records the deterministic binary assets, precomputed lookup 
 | 47 | `ParticleSystem` | Particles | `ParticleSystem.h / .cpp` | `particle_sim.comp` | **Active** |
 | 48 | `EngineSoundGen` | Audio | `EngineSoundGen.h / .cpp` | Harmonics & Cylinder Firing | **Active** |
 | 49 | `WeatherAcoustics`| Audio | `WeatherAcoustics.h / .cpp` | Rain Acoustics, Thunder Delay | **Active** |
+
+---
+
+## Jetpack Compose Modular Frontend Architecture (`kmp/src/commonMain/kotlin/com/example/sphere/`)
+
+All Kotlin source files are organized into single-responsibility, modular components strictly under 500 lines:
+
+```
+kmp/src/commonMain/kotlin/com/example/sphere/
+├── SphereStudioApp.kt                      # Main App Scaffold, Drawer & Navigation coordinator (411 lines)
+├── SkyStudioScreen.kt                      # Atmosphere & Solar Studio screen coordinator (483 lines)
+├── WeatherStudioScreen.kt                  # Nubis Cloud & Weather Studio screen coordinator (474 lines)
+├── SurfaceSceneMode.kt                     # 5 Scene Surface Modes enum definition (59 lines)
+├── SphereStudioWelcomeScreen.kt            # Onboarding & Welcome screen (195 lines)
+│
+├── model/                                  # Pure domain models & geometry structures
+│   ├── GeometryModels.kt                   # Vec3D, Point2D, FaceQuad, SurfacePattern, ColorOption (40 lines)
+│   ├── ShadowModels.kt                     # ShadowQuality, computeConvexHull2D, cross2D (46 lines)
+│   ├── SolarModels.kt                      # TimeOfDayPreset & 6 Solar presets (26 lines)
+│   └── AssetCategory.kt                    # AssetCategory definitions & Available list (44 lines)
+│
+├── viewport/                               # 3D Viewport, Shadow & Stage renderers
+│   ├── SceneCubeViewport.kt                # Interactive 3D Perspective Canvas with drag orbit (483 lines)
+│   ├── SceneStageRenderer.kt               # 5 Surface Stages: Endless, None, Flat, Water, Slab (410 lines)
+│   └── DirectionalShadowRenderer.kt        # Sascha Willems PCF 3x3/5x5, Contact AO & Hull Projection (157 lines)
+│
+├── tabs/                                   # Primary 3D Studio Control Tabs
+│   ├── DimensionsControlTab.kt             # Cube Dimensions, Scaling & Reset controls (144 lines)
+│   ├── SurfaceAndStageTab.kt               # Stage Scene Modes, PBR Patterns & Materials (444 lines)
+│   ├── ShadowsControlTab.kt                # Vulkan Cascaded Shadows, PCF & Depth Map Debugger (428 lines)
+│   ├── SkyAndSunTab.kt                     # Atmospheric Sky Dome & Solar lighting controls (193 lines)
+│   └── NativeStructureTab.kt               # Native Vulkan C++20 Header & SPIR-V Inspector (122 lines)
+│
+├── sky/                                    # Sky Studio Subsystems
+│   ├── SkyPreset.kt                        # Sky presets & Tonemapping modes (37 lines)
+│   ├── SkyViewportCanvas.kt                # Atmosphere, Sun glare, Moon & Starfield Canvas (215 lines)
+│   └── tabs/
+│       ├── SkySliderItem.kt                # Reusable labeled slider item (48 lines)
+│       ├── AtmosphereControlsTab.kt        # Rayleigh, Mie & Ozone scattering controls (122 lines)
+│       ├── SunAndFlareTab.kt               # Sun disk, Coronary halo & Lens flare parameters (106 lines)
+│       ├── StarsAndCosmosTab.kt            # Star density, Milky Way band & Twinkle rate (85 lines)
+│       ├── MoonAndPhasesTab.kt             # Lunar cycle, Phase angle & Earthshine (138 lines)
+│       ├── TonemapAndLUTTab.kt             # ACES, Reinhard, Filmic tonemapping & LUT controls (129 lines)
+│       └── SkyNativeCodeViewerTab.kt       # Native Preetham & Hosek-Wilkie C++ shader viewer (219 lines)
+│
+├── weather/                                # Weather Simulation Subsystems
+│   ├── WeatherPreset.kt                    # Weather presets list (Clear, Rain, Blizzard, etc.) (25 lines)
+│   ├── ProceduralCloudSynthesizer.kt       # Robert Beckebans Nubis Volumetric Raymarcher (454 lines)
+│   ├── WeatherViewportCanvas.kt            # Sky atmosphere, terrain & cloudscape renderer (421 lines)
+│   ├── WeatherPrecipitationRenderer.kt     # Procedural lightning, rain, snow & fog volume (153 lines)
+│   └── tabs/
+│       ├── WeatherSliderRow.kt             # Reusable weather slider row (45 lines)
+│       ├── PrecipitationTab.kt             # Rain intensity, droplets, splash & puddles (82 lines)
+│       ├── SnowFrostTab.kt                 # Snowfall, flutter, frost glaze & snow cover (73 lines)
+│       ├── CloudsFogTab.kt                 # Beckebans cloud species, erosion & god rays (317 lines)
+│       ├── WindStormsTab.kt                # Wind velocity, severe storm & lightning strikes (129 lines)
+│       └── NativeEngineTab.kt              # Vulkan compute shader & particle buffer inspector (102 lines)
+│
+└── screens/                                # Supplementary Screens
+    └── EmptyAssetScreen.kt                 # Blueprint lattice placeholder for upcoming mesh assets (433 lines)
+```
+
