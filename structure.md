@@ -64,6 +64,22 @@ native_assets/
 │   │   ├── Seed.h / .cpp                           # Deterministic multi-stage PRNG seed mixers
 │   │   ├── bindless/                               # Shared bindless handles and texture array accessors
 │   │   ├── debug/                                  # Debug line, box, and frustum drawing
+│   │   ├── materials/                              # Global Procedural & Physical PBR Material Architecture
+│   │   │   ├── IMaterial.h / .cpp                  # Pure base interface for all procedural material generators
+│   │   │   ├── MaterialID.h                        # 24+ procedural material categories & surface modes
+│   │   │   ├── MaterialDef.h                       # PBR physical properties (Cook-Torrance, Snell IOR, SSS)
+│   │   │   ├── MaterialDefs.cpp                    # Default preset definitions (Rusticated Brick, Grass, Glass)
+│   │   │   ├── MaterialRegistry.h / .cpp           # Singleton cache, lazy GPU allocation, and bindless lookup
+│   │   │   ├── MaterialLibrary.h / .cpp            # High-level material queries and category indexing
+│   │   │   ├── brick/                              # Masonry: BrickMaterial, BrickVariants, brick_spec.h, GLSL shaders
+│   │   │   ├── grass_surface/                      # Nature: GrassSurfaceMaterial (Flat Surface vs 3D Blades), spec, shaders
+│   │   │   ├── dirt/                               # Nature: DirtMaterial (Earth with Foliage 700mm, Mud, Soil), spec, shaders
+│   │   │   ├── glass/                              # Optics: GlassMaterial (Refraction, Snell IOR 1.52, Abbe dispersion), spec, shaders
+│   │   │   ├── water_surface/                      # Optics: WaterSurfaceMaterial (Refraction IOR 1.333, caustics, wave normals)
+│   │   │   └── foliage/                            # Nature: FoliageMaterial (Leaves, Subsurface SSS, Translucency)
+│   │   ├── surfaces/                               # Composite Multi-Material Surfaces (Macro Assemblies)
+│   │   │   ├── SurfaceDef.h                        # Multi-layer surface schema (primary, secondary, tertiary layers)
+│   │   │   └── SurfaceRegistry.h / .cpp            # Registry for Brick Walls, Grass Turf, Car Paint, Wood Floors, Tiles
 │   │   ├── math/                                   # Frustum culling, Hi-Z occlusion, spline math (Catmull-Rom, B-Spline)
 │   │   ├── memory/                                 # Dynamic staging buffer pools and persistent ring buffers
 │   │   ├── noise/                                  # Simplex, Perlin, Worley, and Blue Noise generators

@@ -11,6 +11,7 @@ import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.Landscape
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Texture
+import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.material.icons.outlined.Water
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material.icons.outlined.Widgets
@@ -33,6 +34,7 @@ val availableAssetCategories = listOf(
     AssetCategory("roads", "Roads & Pathways", "Splines, Markings & States", Icons.Outlined.Agriculture, "Procedural camber, asphalt PBR, sign SDFs & 10 surface states"),
     AssetCategory("vegetation", "Vegetation & Foliage", "L-System Trees, Grass & Biomes", Icons.Outlined.Forest, "L-system branching, blade compute simulation & species rules"),
     AssetCategory("surfaces", "PBR Surfaces", "Materials, Decals & Detail", Icons.Outlined.Texture, "Multi-layer PBR textures, micro-detail noise & Voronoi"),
+    AssetCategory("text", "GlyphCore Studio", "Vulkan SDF & TextOverlay Engine", Icons.Outlined.TextFields, "Sascha Willems SDF glyph rasterizer, text overlay pipelines, 3D billboard labels & typography styling"),
     AssetCategory("buildings", "Buildings & Architecture", "Modular Facades & Kits", Icons.Outlined.Apartment, "Grammar-based building generator, socket attachment & floorplans"),
     AssetCategory("weather", "Weather Systems", "Rain, Snow & Clouds", Icons.Outlined.Cloud, "Volumetric froxel fog, raymarched clouds & lightning paths"),
     AssetCategory("terrain", "Terrain & Landscapes", "Erosion, Cliffs & Caves", Icons.Outlined.Landscape, "Hydraulic erosion, marching-cubes voxel caves & splatmaps"),

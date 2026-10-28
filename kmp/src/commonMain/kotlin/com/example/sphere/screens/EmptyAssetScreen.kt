@@ -20,6 +20,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.Texture
+import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
@@ -62,6 +64,8 @@ fun EmptyAssetScreen(
     onBackToTest: () -> Unit,
     onNavigateToSky: () -> Unit,
     onNavigateToWeather: () -> Unit,
+    onNavigateToSurfaces: () -> Unit = {},
+    onNavigateToText: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedEmptyTab by remember { mutableIntStateOf(0) }
@@ -402,6 +406,40 @@ fun EmptyAssetScreen(
                                                 Icon(Icons.Outlined.Cloud, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp))
                                                 Spacer(modifier = Modifier.width(6.dp))
                                                 Text("Weather", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = Color(0xFF0F766E).copy(alpha = 0.35f),
+                                            border = CardDefaults.outlinedCardBorder().copy(brush = Brush.linearGradient(listOf(Color(0xFF14B8A6), Color(0xFF2DD4BF)))),
+                                            modifier = Modifier.weight(1f).clickable { onNavigateToSurfaces() }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(10.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.Center
+                                            ) {
+                                                Icon(Icons.Outlined.Texture, contentDescription = null, tint = Color(0xFF2DD4BF), modifier = Modifier.size(16.dp))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("Surfaces", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                             }
+                                        }
+
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = Color(0xFF4338CA).copy(alpha = 0.35f),
+                                            border = CardDefaults.outlinedCardBorder().copy(brush = Brush.linearGradient(listOf(Color(0xFF6366F1), Color(0xFF818CF8)))),
+                                            modifier = Modifier.weight(1f).clickable { onNavigateToText() }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(10.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.Center
+                                            ) {
+                                                Icon(Icons.Outlined.TextFields, contentDescription = null, tint = Color(0xFF818CF8), modifier = Modifier.size(16.dp))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("Text", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                                             }
                                         }
 

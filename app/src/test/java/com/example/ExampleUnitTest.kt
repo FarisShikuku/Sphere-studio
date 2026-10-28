@@ -29,4 +29,21 @@ class ExampleUnitTest {
     assertTrue(presets.any { it.name == "Sunset" })
     assertTrue(presets.any { it.name == "Midnight" })
   }
+
+  @Test
+  fun `available asset categories contains text as independent GlyphCore Studio option`() {
+    val textCategory = com.example.sphere.availableAssetCategories.find { it.id == "text" }
+    assertNotNull(textCategory)
+    assertEquals("GlyphCore Studio", textCategory?.title)
+    assertTrue(textCategory?.subtitle?.contains("Vulkan") == true)
+  }
+
+  @Test
+  fun `default text presets contain telemetry HUD and 3D billboard presets`() {
+    val presets = com.example.sphere.model.defaultTextPresets
+    assertTrue(presets.isNotEmpty())
+    assertTrue(presets.any { it.id == "vulkan_telemetry_hud" })
+    assertTrue(presets.any { it.id == "billboard_stage_anchor" })
+    assertTrue(presets.any { it.id == "scifi_cyber_terminal" })
+  }
 }

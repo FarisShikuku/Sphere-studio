@@ -10,9 +10,19 @@ add_library(shared STATIC
     shaders/ShaderCache.cpp
     memory/DeviceMemoryAllocator.cpp
     memory/StreamingPool.cpp
+    materials/IMaterial.cpp
     materials/MaterialDefs.cpp
     materials/MaterialRegistry.cpp
     materials/MaterialLibrary.cpp
+    materials/brick/src/BrickMaterial.cpp
+    materials/grass_surface/src/GrassSurfaceMaterial.cpp
+    materials/dirt/src/DirtMaterial.cpp
+    materials/glass/src/GlassMaterial.cpp
+    materials/water_surface/src/WaterSurfaceMaterial.cpp
+    materials/foliage/src/FoliageMaterial.cpp
+    surfaces/SurfaceRegistry.cpp
+    text/TextRegistry.cpp
+    text/VulkanTextPipeline.cpp
     math/FrustumCull.cpp
     math/HiZ.cpp
     math/HizBuild.cpp

@@ -44,6 +44,8 @@ fun SphereStudioApp() {
 
     val skyIndex = remember { availableAssetCategories.indexOfFirst { it.id == "sky" }.coerceAtLeast(0) }
     val weatherIndex = remember { availableAssetCategories.indexOfFirst { it.id == "weather" }.coerceAtLeast(0) }
+    val surfacesIndex = remember { availableAssetCategories.indexOfFirst { it.id == "surfaces" }.coerceAtLeast(0) }
+    val textIndex = remember { availableAssetCategories.indexOfFirst { it.id == "text" }.coerceAtLeast(0) }
 
     // Handle system back navigation to return to primary test studio
     BackHandler(enabled = selectedCategoryIndex != 0 || drawerState.isOpen) {
@@ -412,6 +414,20 @@ fun SphereStudioApp() {
                     }
                 }
             }
+            "surfaces" -> {
+                com.example.sphere.screens.MaterialInspectorScreen(
+                    onNavigateBack = {
+                        selectedCategoryIndex = 0
+                    }
+                )
+            }
+            "text" -> {
+                GlyphCoreStudioScreen(
+                    onNavigateBack = {
+                        selectedCategoryIndex = 0
+                    }
+                )
+            }
             else -> {
                 EmptyAssetScreen(
                     category = currentCategory,
@@ -423,6 +439,12 @@ fun SphereStudioApp() {
                     },
                     onNavigateToWeather = {
                         selectedCategoryIndex = weatherIndex
+                    },
+                    onNavigateToSurfaces = {
+                        selectedCategoryIndex = surfacesIndex
+                    },
+                    onNavigateToText = {
+                        selectedCategoryIndex = textIndex
                     }
                 )
             }
