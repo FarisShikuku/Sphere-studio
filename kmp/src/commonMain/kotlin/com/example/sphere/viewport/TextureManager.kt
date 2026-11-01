@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap
 data class SurfacePoint2D(val x: Float, val y: Float)
 
 object TextureManager {
-    private val bitmapCache = ConcurrentHashMap<String, Bitmap?>()
+    private val bitmapCache = ConcurrentHashMap<String, Bitmap>()
 
     /**
      * Resolves the matching photographic texture bitmap for a given material.
@@ -34,9 +34,13 @@ object TextureManager {
             else -> null
         } ?: return null
 
-        return bitmapCache.getOrPut(key) {
-            loadTexture(context, key)
+        bitmapCache[key]?.let { return it }
+
+        val loaded = loadTexture(context, key)
+        if (loaded != null) {
+            bitmapCache[key] = loaded
         }
+        return loaded
     }
 
     private fun loadTexture(context: Context, baseName: String): Bitmap? {

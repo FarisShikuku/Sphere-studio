@@ -41,6 +41,12 @@ data class CompositeSurface(
     val assetPath: String? = null
 )
 
+private fun getMaterial(id: String): PbrMaterial =
+    defaultPbrMaterials.firstOrNull { it.id == id }
+        ?: defaultPbrMaterials.firstOrNull { it.id == "rusticated_red_brick" && id == "brick_rusticated" }
+        ?: defaultPbrMaterials.firstOrNull { it.id == "mondo_grass" && id == "grass_surface" }
+        ?: defaultPbrMaterials.first()
+
 val defaultCompositeSurfaces = listOf(
     // 1. Rusticated Red Brick Wall
     CompositeSurface(
@@ -51,10 +57,10 @@ val defaultCompositeSurfaces = listOf(
         patternType = SurfacePatternType.BRICK_BOND_MASONRY,
         macroTileMeters = 0.90f,
         displacementScaleMeters = 0.028f,
-        assetPath = "file:///android_asset/rusticated_red_brick.jpg",
+        assetPath = "file:///android_asset/rusticated_red_brick.ktx2",
         layers = listOf(
-            SurfaceLayer("Clay Brick Blocks", defaultPbrMaterials.first { it.id == "brick_rusticated" }, 86f),
-            SurfaceLayer("Cement Mortar Joints", defaultPbrMaterials.first { it.id == "concrete_polished" }.copy(name = "Sandy Cement Mortar", baseColor = Color(0xFFAFAFA8), roughness = 0.92f), 14f)
+            SurfaceLayer("Clay Brick Blocks", getMaterial("rusticated_red_brick"), 86f),
+            SurfaceLayer("Cement Mortar Joints", getMaterial("concrete_polished").copy(name = "Sandy Cement Mortar", baseColor = Color(0xFFAFAFA8), roughness = 0.92f), 14f)
         )
     ),
     // 2. Mondo Grass Lawn Turf
@@ -66,11 +72,11 @@ val defaultCompositeSurfaces = listOf(
         patternType = SurfacePatternType.TURF_BLADE_ORGANIC,
         macroTileMeters = 0.30f,
         displacementScaleMeters = 0.012f,
-        assetPath = "file:///android_asset/mondo_grass.jpg",
+        assetPath = "file:///android_asset/mondo_grass.ktx2",
         layers = listOf(
-            SurfaceLayer("Living Grass Blades", defaultPbrMaterials.first { it.id == "grass_surface" }, 72f),
-            SurfaceLayer("Thatch Root Layer", defaultPbrMaterials.first { it.id == "earth_foliage" }.copy(name = "Dry Yellow Thatch", baseColor = Color(0xFF887D42), roughness = 0.85f), 18f),
-            SurfaceLayer("Soil Topsoil", defaultPbrMaterials.first { it.id == "earth_foliage" }.copy(name = "Organic Topsoil", baseColor = Color(0xFF382A1A), roughness = 0.95f), 10f)
+            SurfaceLayer("Living Grass Blades", getMaterial("mondo_grass"), 72f),
+            SurfaceLayer("Thatch Root Layer", getMaterial("earth_foliage").copy(name = "Dry Yellow Thatch", baseColor = Color(0xFF887D42), roughness = 0.85f), 18f),
+            SurfaceLayer("Soil Topsoil", getMaterial("earth_foliage").copy(name = "Organic Topsoil", baseColor = Color(0xFF382A1A), roughness = 0.95f), 10f)
         )
     ),
     // 3. Earth with Foliage Surface
@@ -82,11 +88,11 @@ val defaultCompositeSurfaces = listOf(
         patternType = SurfacePatternType.FOLIAGE_SOIL_SPLATMAP,
         macroTileMeters = 0.70f,
         displacementScaleMeters = 0.032f,
-        assetPath = "file:///android_asset/earth_foliage.jpg",
+        assetPath = "file:///android_asset/earth_foliage.ktx2",
         layers = listOf(
-            SurfaceLayer("Soil Substrate", defaultPbrMaterials.first { it.id == "earth_foliage" }.copy(name = "Moist Organic Loam", baseColor = Color(0xFF4A3B2B), roughness = 0.92f), 55f),
-            SurfaceLayer("Creeping Ivy Foliage", defaultPbrMaterials.first { it.id == "grass_surface" }.copy(name = "Broadleaf Micro-Foliage", baseColor = Color(0xFF5B7828), subsurface = 0.5f), 35f),
-            SurfaceLayer("Basalt Pebbles", defaultPbrMaterials.first { it.id == "concrete_polished" }.copy(name = "Basalt Stone Aggregate", baseColor = Color(0xFF6B6E72), roughness = 0.6f), 10f)
+            SurfaceLayer("Soil Substrate", getMaterial("earth_foliage").copy(name = "Moist Organic Loam", baseColor = Color(0xFF4A3B2B), roughness = 0.92f), 55f),
+            SurfaceLayer("Creeping Ivy Foliage", getMaterial("mondo_grass").copy(name = "Broadleaf Micro-Foliage", baseColor = Color(0xFF5B7828), subsurface = 0.5f), 35f),
+            SurfaceLayer("Basalt Pebbles", getMaterial("concrete_polished").copy(name = "Basalt Stone Aggregate", baseColor = Color(0xFF6B6E72), roughness = 0.6f), 10f)
         )
     ),
     // 4. Automotive Paint Surface (User example: vehicle metallic black/white glossy surface)
@@ -99,9 +105,9 @@ val defaultCompositeSurfaces = listOf(
         macroTileMeters = 2.0f,
         displacementScaleMeters = 0.001f,
         layers = listOf(
-            SurfaceLayer("Clearcoat Top Layer", defaultPbrMaterials.first { it.id == "glass_clear" }.copy(name = "Polyurethane Clearcoat", roughness = 0.02f, ior = 1.50f, transmission = 0.95f), 100f),
-            SurfaceLayer("Metallic Pigment Base", defaultPbrMaterials.first { it.id == "metal_brushed" }.copy(name = "Jet Black Metallic Pigment", baseColor = Color(0xFF141618), roughness = 0.35f, metallic = 0.85f), 100f),
-            SurfaceLayer("Steel Body Substrate", defaultPbrMaterials.first { it.id == "metal_brushed" }.copy(name = "Cold-Rolled Steel", baseColor = Color(0xFF888C90), metallic = 1.0f), 100f)
+            SurfaceLayer("Clearcoat Top Layer", getMaterial("glass_clear").copy(name = "Polyurethane Clearcoat", roughness = 0.02f, ior = 1.50f, transmission = 0.95f), 100f),
+            SurfaceLayer("Metallic Pigment Base", getMaterial("metal_brushed").copy(name = "Jet Black Metallic Pigment", baseColor = Color(0xFF141618), roughness = 0.35f, metallic = 0.85f), 100f),
+            SurfaceLayer("Steel Body Substrate", getMaterial("metal_brushed").copy(name = "Cold-Rolled Steel", baseColor = Color(0xFF888C90), metallic = 1.0f), 100f)
         )
     ),
     // 5. Wood Plank Floor Surface (User example: wood floor)
@@ -114,9 +120,9 @@ val defaultCompositeSurfaces = listOf(
         macroTileMeters = 1.20f,
         displacementScaleMeters = 0.006f,
         layers = listOf(
-            SurfaceLayer("Oak Timber Planks", defaultPbrMaterials.first { it.id == "skin_dermal" }.copy(name = "Natural White Oak Grain", baseColor = Color(0xFFB88E5E), roughness = 0.45f, ior = 1.53f, subsurface = 0.15f), 92f),
-            SurfaceLayer("Satin Polyurethane Varnish", defaultPbrMaterials.first { it.id == "glass_frosted" }.copy(name = "Satin Protective Varnish", roughness = 0.15f, ior = 1.49f), 100f),
-            SurfaceLayer("Joinery Bevel Gaps", defaultPbrMaterials.first { it.id == "concrete_polished" }.copy(name = "Bevel Shadow Recess", baseColor = Color(0xFF3A2814), roughness = 0.95f), 8f)
+            SurfaceLayer("Oak Timber Planks", getMaterial("skin_dermal").copy(name = "Natural White Oak Grain", baseColor = Color(0xFFB88E5E), roughness = 0.45f, ior = 1.53f, subsurface = 0.15f), 92f),
+            SurfaceLayer("Satin Polyurethane Varnish", getMaterial("glass_frosted").copy(name = "Satin Protective Varnish", roughness = 0.15f, ior = 1.49f), 100f),
+            SurfaceLayer("Joinery Bevel Gaps", getMaterial("concrete_polished").copy(name = "Bevel Shadow Recess", baseColor = Color(0xFF3A2814), roughness = 0.95f), 8f)
         )
     ),
     // 6. Ceramic Floor Tiles (User example: tiles house)
@@ -129,8 +135,8 @@ val defaultCompositeSurfaces = listOf(
         macroTileMeters = 0.60f,
         displacementScaleMeters = 0.008f,
         layers = listOf(
-            SurfaceLayer("Vitrified Ceramic Glaze", defaultPbrMaterials.first { it.id == "concrete_polished" }.copy(name = "White Porcelain Glaze", baseColor = Color(0xFFF0F2F4), roughness = 0.08f, ior = 1.52f), 92f),
-            SurfaceLayer("Epoxy Grout Joint", defaultPbrMaterials.first { it.id == "concrete_polished" }.copy(name = "Light Grey Grout", baseColor = Color(0xFF9FA4A8), roughness = 0.88f), 8f)
+            SurfaceLayer("Vitrified Ceramic Glaze", getMaterial("concrete_polished").copy(name = "White Porcelain Glaze", baseColor = Color(0xFFF0F2F4), roughness = 0.08f, ior = 1.52f), 92f),
+            SurfaceLayer("Epoxy Grout Joint", getMaterial("concrete_polished").copy(name = "Light Grey Grout", baseColor = Color(0xFF9FA4A8), roughness = 0.88f), 8f)
         )
     ),
     // 7. Urban Asphalt Pathway (User example: pathways)
@@ -143,9 +149,9 @@ val defaultCompositeSurfaces = listOf(
         macroTileMeters = 3.0f,
         displacementScaleMeters = 0.015f,
         layers = listOf(
-            SurfaceLayer("Bitumen Asphalt Base", defaultPbrMaterials.first { it.id == "concrete_polished" }.copy(name = "Porous Bitumen Aggregate", baseColor = Color(0xFF282B30), roughness = 0.82f), 85f),
-            SurfaceLayer("Reflective Road Line", defaultPbrMaterials.first { it.id == "concrete_polished" }.copy(name = "Reflective Road Marking Paint", baseColor = Color(0xFFF5CF22), roughness = 0.35f), 8f),
-            SurfaceLayer("Rainwater Puddle Sheen", defaultPbrMaterials.first { it.id == "water_surface" }, 7f)
+            SurfaceLayer("Bitumen Asphalt Base", getMaterial("concrete_polished").copy(name = "Porous Bitumen Aggregate", baseColor = Color(0xFF282B30), roughness = 0.82f), 85f),
+            SurfaceLayer("Reflective Road Line", getMaterial("concrete_polished").copy(name = "Reflective Road Marking Paint", baseColor = Color(0xFFF5CF22), roughness = 0.35f), 8f),
+            SurfaceLayer("Rainwater Puddle Sheen", getMaterial("water_surface"), 7f)
         )
     )
 )
