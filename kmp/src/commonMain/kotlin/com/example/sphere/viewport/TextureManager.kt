@@ -24,14 +24,13 @@ object TextureManager {
      */
     fun getTextureForMaterial(context: Context, material: PbrMaterial): Bitmap? {
         val key = when {
-            material.id.contains("grass") || material.name.contains("Grass", ignoreCase = true) -> "mondo_grass"
-            material.id.contains("foliage") || material.id.contains("earth") ||
-                material.name.contains("Foliage", ignoreCase = true) || material.name.contains("Earth", ignoreCase = true) -> "earth_foliage"
-            material.id.contains("brick") || material.name.contains("Brick", ignoreCase = true) -> "rusticated_red_brick"
             material.assetPath != null -> {
                 val clean = material.assetPath.substringAfterLast("/").substringBeforeLast(".")
-                if (clean.isNotEmpty()) clean else "rusticated_red_brick"
+                if (clean.isNotEmpty()) clean else null
             }
+            material.id == "brick_rusticated" -> "rusticated_red_brick"
+            material.id == "grass_surface" || material.id == "grass_geometry" -> "mondo_grass"
+            material.id.isNotBlank() -> material.id
             else -> null
         } ?: return null
 
@@ -81,6 +80,8 @@ object TextureManager {
             "textures/$filename",
             "native_assets/textures/$filename",
             "../textures/$filename",
+            "app/src/main/assets/$filename",
+            "../app/src/main/assets/$filename",
             "public/assets/aistudio/$filename",
             "../public/assets/aistudio/$filename"
         )
