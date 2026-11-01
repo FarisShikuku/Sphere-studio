@@ -15,16 +15,20 @@
 1. [Executive Summary & Core Highlights](#executive-summary--core-highlights)
 2. [Full Project Directory Tree](#full-project-directory-tree)
 3. [Subsystem Architecture & Capabilities](#subsystem-architecture--capabilities)
-   - [3D Viewport & Surface Scene Modes](#1-3d-viewport--surface-scene-modes)
-   - [Volumetric Clouds Subsystem (Robert Beckebans Nubis-Decima Port)](#2-volumetric-clouds-subsystem-robert-beckebans-nubis-decima-port)
-   - [Atmospheric Sky & Solar Corona (Preetham / Hosek-Wilkie Model)](#3-atmospheric-sky--solar-corona-preetham--hosek-wilkie-model)
-   - [Road Networks & 10 Physical Surface States](#4-road-networks--10-physical-surface-states)
-   - [Vegetation & Biomes (L-System & GPU Blades)](#5-vegetation--biomes-l-system--gpu-blades)
-   - [PBR Materials, Buildings & Modular Facades](#6-pbr-materials-buildings--modular-facades)
-   - [Terrain & Hydraulic Erosion](#7-terrain--hydraulic-erosion)
-   - [Water Bodies & Tessendorf FFT Ocean](#8-water-bodies--tessendorf-fft-ocean)
-   - [Energy, Utility & World Props](#9-energy-utility--world-props)
-   - [GPU Particles & Procedural Audio](#10-gpu-particles--procedural-audio)
+   - [Common Scene, Hierarchical Scene Graph & Procedural Geometry (C++20 / Vulkan 1.3)](#1-common-scene-hierarchical-scene-graph--procedural-geometry-c20--vulkan-13)
+   - [Live Sky Cloud Scanner & Cloud Genera Classification (Meteoros Architecture)](#2-live-sky-cloud-scanner--cloud-genera-classification-meteoros-architecture)
+   - [Unified Vulkan 3D Scene Top Bar Across All Studios](#3-unified-vulkan-3d-scene-top-bar-across-all-studios)
+   - [3D Viewport & Surface Scene Modes](#4-3d-viewport--surface-scene-modes)
+   - [Directional Shadow Mapping & PCF Subsystem (Sascha Willems Reference)](#5-directional-shadow-mapping--pcf-subsystem-sascha-willems-reference-architecture)
+   - [Volumetric Clouds Subsystem (AmanSachan1/Meteoros Vulkan Architecture)](#6-volumetric-clouds-subsystem-amansachan1meteoros-vulkan-architecture)
+   - [Atmospheric Sky & Solar Corona (Preetham / Hosek-Wilkie Model)](#7-atmospheric-sky--solar-corona-preetham--hosek-wilkie-model)
+   - [Road Networks & 10 Physical Surface States](#8-road-networks--10-physical-surface-states)
+   - [Vegetation & Biomes (L-System & GPU Blades)](#9-vegetation--biomes-l-system--gpu-blades)
+   - [PBR Materials, Buildings & Modular Facades](#10-pbr-materials-buildings--modular-facades)
+   - [Terrain & Hydraulic Erosion](#11-terrain--hydraulic-erosion)
+   - [Water Bodies & Tessendorf FFT Ocean](#12-water-bodies--tessendorf-fft-ocean)
+   - [Energy, Utility & World Props](#13-energy-utility--world-props)
+   - [GPU Particles & Procedural Audio](#14-gpu-particles--procedural-audio)
 4. [Generated Assets & Binary Manifest Registry](#generated-assets--binary-manifest-registry)
 5. [Build, Test & Deployment Guide](#build-test--deployment-guide)
 
@@ -111,7 +115,7 @@ sphere-studio/
 │       │   │                                               #   - PBR Procedural Surface Patterns (Solid, Grid, Checker, Ripple, Hex)
 │       │   │                                               #   - Native Engine Architecture inspector & 13 category navigation
 │       │   ├── WeatherStudioScreen.kt                      # Volumetric Weather & Cloud Simulator:
-│       │   │                                               #   - ProceduralCloudSynthesizer (Robert Beckebans Nubis-Decima port)
+│       │   │                                               #   - ProceduralCloudSynthesizer (AmanSachan1/Meteoros Vulkan port)
 │       │   │                                               #   - True 3D perspective raymarching through planetary shell
 │       │   │                                               #   - Henyey-Greenstein forward solar silver lining
 │       │   │                                               #   - Crepuscular light rays (god rays) streaming through cloud gaps
@@ -122,9 +126,15 @@ sphere-studio/
 │       │   │                                               #   - 5 Surface Scene Modes in weather environment
 │       │   │                                               #   - 8 dynamic weather presets (Clear, Overcast, Rain, Downpour, etc.)
 │       │   ├── SkyStudioScreen.kt                          # Atmospheric Sky & Solar Simulator:
+│       │   │                                               #   - Live Sky Cloud Scanner with LiDAR & CV Genera Tracking HUD
+│       │   │                                               #   - 7 Cloud Genera Classification (Cb, Cu, Ci, Sc, St, Ac, Ns)
+│       │   │                                               #   - Multi-category Genera filter pills (All, Cb, Cu, St, Sc, Ci, Ac, Ns)
+│       │   │                                               #   - Interactive cloud focus, optical zoom & microphysics telemetry
+│       │   │                                               #   - Unified Vulkan 3D Scene Top Bar with stage mode switcher
 │       │   │                                               #   - Solar elevation, azimuth, and time-of-day presets
 │       │   │                                               #   - Aerosol turbidity, ozone absorption & Perez parameters
 │       │   │                                               #   - ACES and Reinhard tone-mapping preview
+│       │   │                                               #   - Vulkan Stage & C++ Native Architecture inspection tab
 │       │   ├── SphereStudioWelcomeScreen.kt                # Landing hub & onboarding showcase
 │       │   └── SurfaceSceneMode.kt                         # Surface Scene Mode enum (ENDLESS, NONE, FLAT_PIECE, WATER_BODY, BROKEN_SLAB)
 │       │
@@ -178,20 +188,35 @@ sphere-studio/
 │   │   │   ├── SwapChain.h / .cpp                          # Presentation engine wrapper
 │   │   │   └── Texture.h / .cpp                            # RAII texture with anisotropic filtering samplers
 │   │   │
-│   │   ├── scene/                                          # Scene Graph & World Representation
-│   │   │   ├── CMakeLists.txt                              # Builds libscene.a
-│   │   │   ├── AABB.h / .cpp                               # Axis-aligned bounding box frustum culling
-│   │   │   ├── Camera.h / .cpp                             # Perspective & orthographic projection matrices
-│   │   │   ├── CameraController.h / .cpp                   # Orbit, fly, and walk camera controllers
-│   │   │   ├── Light.h / .cpp                              # Directional, point, and spot light sources
-│   │   │   ├── Material.h / .cpp                           # PBR material descriptors (albedo, normal, roughness, metallic)
+│   │   ├── scene/                                          # Scene Graph & World Representation (C++20 / Vulkan 1.3)
+│   │   │   ├── CMakeLists.txt                              # Compiles libscene.a (Geometry, SceneGraph, VulkanStage, Scene, Mesh, Transform)
+│   │   │   ├── AABB.h / .cpp                               # Axis-aligned bounding box frustum culling & ray intersections
+│   │   │   ├── Camera.h / .cpp                             # Perspective & orthographic projection matrices with Vulkan Y-flip
+│   │   │   ├── CameraController.h / .cpp                   # Orbit, fly, and walk camera controllers with spherical coordinates
+│   │   │   ├── Geometry.h / .cpp                           # Native Procedural Geometry Generators:
+│   │   │   │                                               #   - PBR Calibration Cube (1.0m photometric standard)
+│   │   │   │                                               #   - Stage Platform with beveled perimeter rims & side skirts
+│   │   │   │                                               #   - Infinite ground grid & Reference 3D axes grid (RGB)
+│   │   │   │                                               #   - Parametric UV Sphere (smooth lat-long tessellation)
+│   │   │   │                                               #   - Inward Sky Dome hemisphere & Curved Meteoros Cloud Volume Hull
+│   │   │   │                                               #   - Bounding wireframe AABB box & Procedural Terrain Patch
+│   │   │   ├── Light.h / .cpp                              # Directional, point, and spot light sources with cascaded shadow matrices
+│   │   │   ├── Material.h / .cpp                           # PBR material descriptors (albedo, normal, roughness, metallic, emissive)
 │   │   │   ├── MaterialRegistry.h / .cpp                   # Global material table with bindless texture indices
-│   │   │   ├── Mesh.h / .cpp                               # Vertex and index buffer abstractions with GPU uploads
+│   │   │   ├── Mesh.h / .cpp                               # Vertex/Index buffer abstractions, MikkTSpace tangent orthonormalization,
+│   │   │   │                                               #   area-weighted vertex normal computation, bounding box calculation
 │   │   │   ├── Meshlet.h / .cpp                            # Meshlet clustering for VK_EXT_mesh_shader pipelines
-│   │   │   ├── Scene.h / .cpp                              # Common Scene root container
-│   │   │   ├── SceneNode.h / .cpp                          # Transform hierarchy and component attachments
+│   │   │   ├── Scene.h / .cpp                              # Common Scene root coordinator:
+│   │   │   │                                               #   - 4 Stage Modes (FlatPiece, Boundary, InfiniteGrid, CalibrationCube)
+│   │   │   │                                               #   - Cascaded shadow maps, directional sun light, atmospheric sky coupling
+│   │   │   ├── SceneGraph.h / .cpp                         # Hierarchical parent-child scene graph with top-down dirty matrix propagation
+│   │   │   ├── SceneNode.h / .cpp                          # Scene node entity with component attachments
 │   │   │   ├── SkyModel.h / .cpp                           # Sky model hook (Preetham / Hosek atmospheric evaluation)
-│   │   │   ├── Transform.h / .cpp                          # TRS matrices with cached world transforms
+│   │   │   ├── Transform.h / .cpp                          # 3D Math: column-major Mat4 (Vulkan std430), Vec2/3/4, Quat quaternion,
+│   │   │   │                                               #   Euler rotations, TRS composition, Vulkan clip-space projection
+│   │   │   ├── VulkanStage.h / .cpp                        # Vulkan 1.3 Multi-Pass Stage Coordinator:
+│   │   │   │                                               #   - GlobalSceneUBO layout & MeshPushConstants
+│   │   │   │                                               #   - Dynamic rendering passes (Shadow, Sky, Opaque PBR, Stage Grid, Tonemap)
 │   │   │   └── WorldState.h                                # Global time, solar vector, wind field, and seed state
 │   │   │
 │   │   ├── shared/                                         # Cross-Subsystem Common Interfaces & Math
@@ -339,7 +364,171 @@ sphere-studio/
 
 ## Subsystem Architecture & Capabilities
 
-### 1. 3D Viewport & Surface Scene Modes
+### 1. Common Scene, Hierarchical Scene Graph & Procedural Geometry (C++20 / Vulkan 1.3)
+
+All 3D scene architecture, spatial transforms, procedural mesh synthesis, material registry bindings, bounding volume hierarchies, and Vulkan 1.3 pipeline recording are strictly engineered in native C++20 (`native_assets/src/scene/`), ensuring deterministic performance, zero JNI garbage collection overhead, and cross-platform binary alignment. Kotlin Multiplatform and Jetpack Compose function solely as the declarative client UI layer and viewport display bridge.
+
+```
+       ┌─────────────────────────────────────────────────────────────┐
+       │                   Sphere::Scene (Coordinator)               │
+       │   - 4 Stage Modes: FlatPiece, Boundary, Grid, Calibration   │
+       │   - Cascaded Sun Lighting & Atmospheric Radiance Sync       │
+       └──────────────┬──────────────────────────────┬───────────────┘
+                      │                              │
+       ┌──────────────▼──────────────┐┌──────────────▼───────────────┐
+       │  Sphere::SceneGraph         ││   Sphere::VulkanStage        │
+       │  - Parent-Child Hierarchy   ││   - Dynamic Rendering Passes │
+       │  - Dirty Transform Updates  ││   - GlobalSceneUBO Push      │
+       │  - Frustum & Range Culling  ││   - MeshPushConstants        │
+       └──────────────┬──────────────┘└──────────────┬───────────────┘
+                      │                              │
+       ┌──────────────▼──────────────────────────────▼───────────────┐
+       │     Sphere::Geometry & Sphere::Mesh (C++ Generators)        │
+       │     - 1m Photometric Calibration Cube                       │
+       │     - Stage Platform with Beveled Rims & Side Skirts        │
+       │     - Infinite Ground Grid & 3D RGB Reference Axes          │
+       │     - Curved Meteoros Atmosphere Shell (705km-722km)        │
+       │     - Parametric UV Sphere, Sky Dome, Terrain Patch         │
+       └─────────────────────────────────────────────────────────────┘
+```
+
+#### Native Procedural Geometry Generators (`Geometry.h` / `Geometry.cpp`)
+All geometric assets are generated algorithmically with precise analytical vertex normals, UVs, and orthonormal tangent frames:
+- **Photometric 1m Calibration Cube (`CreateCalibrationCube`)**:
+  - $1.0\text{m} \times 1.0\text{m} \times 1.0\text{m}$ ground-truth reference standard.
+  - Generates 24 distinct vertices with unique face normal directions ($\pm X, \pm Y, \pm Z$) and high-contrast diagnostic UV checkerboards.
+  - Used across all studios for verifying photometric exposure, sun elevation shadow casting, and specular reflection behavior.
+- **Stage Platform with Beveled Rims (`CreateStagePlatform`)**:
+  - Parametric rectangular or square foundation ($W \times L \times H$).
+  - Features $45^\circ$ beveled perimeter bevels, vertical extruded side skirts with directional lighting contrast, and bottom chamfers.
+- **Infinite Ground Grid (`CreateInfiniteGroundGrid`) & Reference 3D Axes (`CreateReferenceGrid`)**:
+  - Metric coordinate grid with colored primary axes: **Red (+X, East)**, **Green (+Y, Zenith/Up)**, **Blue (+Z, South)**.
+  - Radial distance attenuation falloff preventing moiré artifacts at vanishing horizons.
+- **Parametric UV Sphere (`CreateUvSphere`)**:
+  - Tessellated latitude-longitude sphere with welded polar singularities and seamless spherical UV coordinates ($\theta \in [0, \pi]$, $\phi \in [0, 2\pi]$).
+- **Meteoros Atmosphere Cloud Volume Hull (`CreateMeteorosCloudVolumeHull`)**:
+  - Inward-facing curved double-spherical shell matching the planetary curvature ($R_{\text{inner}} = 705\,\text{km}$, $R_{\text{outer}} = 722\,\text{km}$).
+  - Serves as the raymarch entry/exit bounding proxy geometry for the compute cloud synthesizer.
+- **Sky Dome Hemisphere (`CreateSkyDome`)**:
+  - Inward hemispherical canopy for Preetham/Hosek atmospheric radiance sampling and background projection.
+- **Procedural Terrain Patch (`CreateTerrainPatch`)**:
+  - Analytical grid mesh with multi-frequency simplex noise height displacement and central-difference normal reconstruction:
+    $$\vec{N} = \text{normalize}\left(\begin{bmatrix} -(h_{x+1} - h_{x-1}) / 2\Delta \\ 1.0 \\ -(h_{z+1} - h_{z-1}) / 2\Delta \end{bmatrix}\right)$$
+
+#### Tangent Space Orthonormalization & Normal Synthesis (`Mesh.h` / `Mesh.cpp`)
+- Evaluates per-triangle tangents from texture coordinate gradients:
+  $$\Delta \vec{P} = \Delta u \, \vec{T} + \Delta v \, \vec{B}$$
+- Performs Gram-Schmidt orthonormalization to guarantee strict orthogonal frames for PBR normal mapping:
+  $$\vec{T}' = \text{normalize}\left(\vec{T} - (\vec{N} \cdot \vec{T}) \vec{N}\right), \quad \text{handedness } \sigma = \text{sign}\left((\vec{N} \times \vec{T}) \cdot \vec{B}\right)$$
+
+#### Column-Major 3D Math Engine & Camera Subsystem (`Transform.h` / `Camera.h` / `Camera.cpp`)
+- **Sascha Willems Vulkan Camera Reference Architecture (`SaschaWillems/Vulkan`)**:
+  - Direct port of `SaschaWillems/Vulkan/base/camera.hpp` orbit turntable look-at architecture.
+  - **Right-Handed World & Camera Coordinate System**:
+    - $+X$ points East/Right, $+Y$ points Zenith/Up, $+Z$ points towards the viewer (South).
+    - Camera is placed at $+Z$ (distance $D$) looking along $-Z$ towards the scene origin $(0, 0, 0)$.
+    - Points on the front face ($+Z$) have smaller camera view depth ($D - z < D$) and appear closer to the observer.
+    - Points on the back face ($-Z$) have larger camera view depth ($D - (-z) > D$) and are drawn behind front faces.
+  - **View Transformation**:
+    $$V = T(\vec{P}) \times R_x(\text{pitch}) \times R_y(\text{yaw})$$
+  - `Mat4` column-major matrix matching Vulkan `std430` buffer layout rules ($m[\text{col} \times 4 + \text{row}]$).
+  - Quaternion orientation (`Quat`) with Hamilton multiplication, spherical linear interpolation (slerp), and pitch-yaw-roll conversions.
+  - Vulkan clip-space projection with inverted Y-axis to account for Vulkan's inverted NDC coordinate system:
+    $$P_{11} = -\frac{1}{\tan(\text{fov}_y / 2)}$$
+  - Depth buffer maps to $[0, 1]$ (`GLM_FORCE_DEPTH_ZERO_TO_ONE` standard) with clockwise back-face culling on all 6 cube faces and architectural geometry.
+
+#### Hierarchical Scene Graph (`SceneGraph.h` / `SceneGraph.cpp`)
+- Parent-child node relationship tree with top-down dirty matrix propagation:
+  $$M_{\text{world}} = M_{\text{parent\_world}} \times M_{\text{local}}$$
+- Optimized with dirty-flag caching (`m_worldTransformDirty`) to eliminate redundant matrix multiplications during static frame evaluation.
+- Breadth-first and depth-first visitor traversals for frustum culling, shadow pass collection, and render bucket grouping.
+
+#### Vulkan 1.3 Multi-Pass Stage Coordinator (`VulkanStage.h` / `VulkanStage.cpp`)
+- Records render commands utilizing Vulkan 1.3 Dynamic Rendering (`vkCmdBeginRendering`):
+  1. **Directional Shadow Pass**: Depth-only rasterization into $2048 \times 2048$ `D32_SFLOAT` shadow map.
+  2. **Atmospheric Sky Pass**: Inward sky dome radiance projection.
+  3. **Opaque PBR Pass**: Stage platform and calibration cube rendering with Cook-Torrance GGX shading.
+  4. **Reference Grid Overlay**: Dynamic blend pass for metric distance guides and axes.
+  5. **HDR Tonemapping & Post-Process**: ACES filmic or Extended Reinhard tone reproduction.
+- Compact push constant layout (`MeshPushConstants`):
+  ```cpp
+  struct MeshPushConstants {
+      Mat4 modelMatrix;
+      Vec4 baseColorFactor;
+      float metallicFactor;
+      float roughnessFactor;
+      float specularFactor;
+      uint32_t materialFlags;
+  };
+  ```
+
+---
+
+### 2. Live Sky Cloud Scanner & Cloud Genera Classification (Meteoros Architecture)
+
+Integrated directly into `SkyStudioScreen.kt`, the **Live Sky Cloud Scanner** provides a real-time computer vision and LiDAR telemetry dashboard tracking all major cloud genera classified by the World Meteorological Organization (WMO) and rendered via the AmanSachan1/Meteoros volumetric engine:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ ☉ Live Sky Cloud Scanner                     [LiDAR & CV Tracker ACTIVE]  [ON]│
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Cloud Types & Genera Filter:                                                │
+│ [ All (7) ] [ Cb (1) ] [ Cu (1) ] [ St (1) ] [ Sc (1) ] [ Ci (1) ] [ Ac ]   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ ┌────────────────────────────────────────────────────────┐ ┌──────────────┐ │
+│ │ [Cb] Cumulonimbus (capillatus incus)                   │ │  F O C U S   │ │
+│ │      Anvil Thunderhead / Nimbus Class                  │ │  V I E W     │ │
+│ │                                                        │ │              │ │
+│ │  Altitude: 1,800m - 12,500m (Troposphere Depth)        │ │  [ ⛶ 1.8x ]  │ │
+│ │  Density: 0.94 g/m³  •  Coverage: 88%  •  Turb: Heavy   │ │              │ │
+│ │  Phase: Mixed (Supercooled Drops + Hexagonal Ice)      │ │  Align Cam   │ │
+│ └────────────────────────────────────────────────────────┘ └──────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Supported Cloud Genera & Microphysics
+1. **Cumulonimbus (`Cb`)**:
+   - Monolithic vertical convective thunderheads reaching up to $14,000\,\text{m}$.
+   - Exhibits dense anvil cirrus tops (`incus`), heavy optical extinction, dynamic lightning discharge, and strong downdrafts.
+2. **Cumulus (`Cu`)**:
+   - Crisp, billowy cauliflower heaps with flat horizontal condensation bases ($800\text{m} - 2,200\text{m}$).
+   - Forward solar silver lining halo evaluated via dual-lobe Henyey-Greenstein scattering ($g_1 = 0.82$).
+3. **Cirrus (`Ci`)**:
+   - High-altitude fibrous ice crystal streamers ($7,000\text{m} - 12,000\text{m}$).
+   - Optical phase consists of hexagonal ice columns exhibiting $22^\circ$ solar halos and delicate sun ray filtering.
+4. **Stratocumulus (`Sc`)**:
+   - Broad low-level marine rolling sheets and patchy convective rolls ($600\text{m} - 2,000\text{m}$).
+   - Strong multi-scattering radiative transfer preventing dark undersides.
+5. **Stratus (`St`)**:
+   - Featureless low gray overcast sheet ($200\text{m} - 800\text{m}$) diffusing direct sunlight into uniform ambient illumination.
+6. **Altocumulus (`Ac`)**:
+   - Mid-level undulating fleece rolls and lenticular wave patches ($2,500\text{m} - 6,000\text{m}$).
+7. **Nimbostratus (`Ns`)**:
+   - Thick, dark diffuse continuous rain blankets ($500\text{m} - 3,500\text{m}$) accompanied by persistent precipitation and ground wetness.
+
+#### Interactive HUD Features
+- **Genera Quick-Filter**: Instant filtering between all detected clouds or isolating specific genera (`Cb`, `Cu`, `St`, `Sc`, `Ci`, `Ac`, `Ns`).
+- **Target Tracking & Focus Mode**: Tapping **"Focus View"** immediately engages an animated viewport target lock, smoothly interpolating camera pitch, yaw, and distance to inspect the selected cloud volume with bounding cage wireframes and localized microphysics telemetry.
+
+---
+
+### 3. Unified Vulkan 3D Scene Top Bar Across All Studios
+
+To ensure seamless navigation and contextual awareness across all engine studios (**Atmospheric Sky Studio**, **Volumetric Weather Studio**, **Material Inspector**, and **GlyphCore Studio**), a standardized Vulkan 3D Scene Top Bar is anchored to the top of the viewport:
+
+- **Global Solar & Environmental Telemetry**:
+  - **Solar Time**: Live UTC time readout (e.g., `14:30 UTC`) synchronized with astronomical solar progression.
+  - **Sun Elevation & Azimuth**: Live angular altitude ($El: 38.0^\circ$) driving shadow projection matrices and Perez daylight luminance.
+  - **Camera Yaw**: Real-time orientation angle ($Cam Yaw: 145^\circ$) showing observer azimuth.
+  - **Scanner Status Badge**: Indicator pill signaling active LiDAR & computer vision cloud tracking.
+- **Interactive Quick-Action Controls**:
+  - **Stage Mode Switcher Modal**: Quick-action modal button to seamlessly switch between the 5 surface scene modes (`Flat Piece`, `Endless Ground`, `Void`, `Water Piece`, `Broken Slab`) without leaving the active studio.
+  - **Animation Play / Pause**: Toggles physical simulation, wind advection, wave ripple cycles, and precipitation particle updates.
+  - **Camera Reset**: Instantly returns orbit camera pitch, yaw, and zoom to optimal framing defaults.
+
+---
+
+### 4. 3D Viewport & Surface Scene Modes
 
 Sphere Studio features a 3D perspective viewport supporting five distinct surface environments designed for various inspection and simulation scenarios:
 
@@ -359,7 +548,7 @@ When switching assets or adjusting the item scale:
 
 ---
 
-### 2. Directional Shadow Mapping & PCF Subsystem (Sascha Willems Reference Architecture)
+### 5. Directional Shadow Mapping & PCF Subsystem (Sascha Willems Reference Architecture)
 
 Directly referencing the official [SaschaWillems/Vulkan/shadowmapping](https://github.com/SaschaWillems/Vulkan/tree/master/examples/shadowmapping) pipeline, the engine implements true directional shadow mapping with Percentage Closer Filtering (PCF), contact ambient occlusion, and dynamic depth bias:
 
@@ -390,29 +579,34 @@ Directly referencing the official [SaschaWillems/Vulkan/shadowmapping](https://g
 
 ---
 
-### 3. Volumetric Clouds Subsystem (Robert Beckebans Nubis-Decima Port)
+### 6. Volumetric Clouds Subsystem (AmanSachan1/Meteoros Vulkan Architecture)
 
-Adapted from [Robert Beckebans's OpenGL-VolumetricClouds](https://github.com/RobertBeckebans/OpenGL-VolumetricClouds), the cloudscape engine implements true 3D perspective raymarching across a curved planetary atmosphere:
+Adapted and converted from [AmanSachan1/Meteoros](https://github.com/AmanSachan1/Meteoros) (Aman Sachan & Meghana Seshadri, CIS 565 UPenn), based on Guerrilla Games' Decima Engine ('Nubis' SIGGRAPH 2015 & 2017 papers), the cloudscape engine implements high-performance 3D perspective raymarching across a curved planetary atmosphere:
 
-- **Dual-Sphere Planetary Geometry**:
+- **Dual-Sphere Planetary Atmosphere Geometry**:
   $$\text{Earth Radius} = 6,371,000\,\text{m}, \quad R_{\text{inner}} = 705,000\,\text{m}, \quad R_{\text{outer}} = 722,000\,\text{m}$$
-  Raymarching executes strictly within this 17-kilometer atmospheric shell.
-- **Nubis Density Gradients**:
+  Raymarching executes inside this 17-kilometer atmospheric shell with altitude wind shear and advection.
+- **Meteoros Cloud Species Gradients**:
   - `Stratus`: Low, thin horizontal layers $(0.0, 0.10, 0.20, 0.30)$.
   - `Stratocumulus`: Broad rolling sheets $(0.02, 0.20, 0.48, 0.625)$.
   - `Cumulus`: Towering billowy cauliflowers with dark, flat condensation bases $(0.00, 0.1625, 0.88, 0.98)$.
-- **Optical Radiative Transfer**:
-  - **Beer's Law Extinction**: $T(s) = \exp(-\tau(s))$, governing primary line-of-sight and sun shadow ray extinction.
-  - **Beer-Powder Sugar Approximation**: $P(d) = 1.0 - \exp(-2d)$, simulating multiple forward scattering in dense droplet clusters.
-  - **Dual-Lobe Henyey-Greenstein Phase**: Forward peak ($g_1 = 0.82$) producing the intense solar "Silver Lining" halo, combined with backward scattering ($g_2 = -0.20$).
+  - `Cumulonimbus`: Monolithic anvil thunderclouds spanning full atmospheric depth $(0.01, 0.12, 0.92, 1.00)$.
+- **Meteoros Multi-Scattering Optical Radiative Transfer**:
+  - **Dual Beer-Lambert Law Approximation**:
+    $$E_{\text{multi}} = \exp(-\tau) + \exp(-0.25\tau) \cdot 0.7 \cdot k_{\text{multi}}$$
+    Pushes photons deep into thick cloud folds to prevent pitch-black cores and produce luminous cauliflower volume interiors.
+  - **Beer-Powder Sugar Approximation**: $P(d) = 1.0 - \exp(-2d)$, simulating multiple forward in-scattering in dense droplet clusters.
+  - **Dual-Lobe Henyey-Greenstein Phase**: Forward peak ($g_1 = 0.82$) producing radiant solar "Silver Lining" halos, combined with backward scattering ($g_2 = -0.22$).
   - **Cone-Stepped Light Sampling**: 6-vector jittered cone march toward the sun for soft volumetric self-shadowing without expensive multi-pass shadowmaps.
-- **Atmospheric Effects**:
-  - **Crepuscular Rays (God Rays)**: Volumetric sun shafts piercing cloud gaps.
-  - **Cirrus Ice Crystals**: High-altitude wispy ice crystal layer ($>10,000\text{m}$).
+- **Meteoros Pipelines & Post-Processing**:
+  - **Interleaved 4x4 Bayer Ray Jittering**: Offsets initial ray distance per pixel, completely eliminating woodgrain slicing artifacts.
+  - **Crepuscular Rays (`cloud_godrays.comp`)**: Volumetric sun shafts piercing cloud gaps via radial screen-space illumination marching with exponential decay.
+  - **Temporal Reprojection (`cloud_reproject.comp`)**: 3x3 neighborhood bounding box clamping for anti-aliasing and ghosting rejection.
+  - **High Dynamic Range (HDR) & ACES Tone Mapping**: Natural highlight roll-off for solar disk backlighting and bright cloud edges.
 
 ---
 
-### 3. Atmospheric Sky & Solar Corona (Preetham / Hosek-Wilkie Model)
+### 7. Atmospheric Sky & Solar Corona (Preetham / Hosek-Wilkie Model)
 
 - **Daylight Spectrum**: Physically evaluated using the Perez all-weather sky model. Shifts dynamically based on solar elevation, azimuth, and aerosol turbidity ($\tau \in [1.0, 10.0]$).
 - **Golden Hour & Twilight**: Transitions from daytime cerulean to sunset amber/crimson and deep astronomical twilight.
@@ -421,7 +615,7 @@ Adapted from [Robert Beckebans's OpenGL-VolumetricClouds](https://github.com/Rob
 
 ---
 
-### 4. Road Networks & 10 Physical Surface States
+### 8. Road Networks & 10 Physical Surface States
 
 - **Graph & Spline Modeling**: Centerline ribbons with procedural camber, banking angles, curb extrusions, and multi-lane dividers.
 - **Modular Road Kits**: Overpasses, footbridges, tunnel segments with interior lighting, 4-way intersections, and roundabouts.
@@ -440,7 +634,7 @@ Adapted from [Robert Beckebans's OpenGL-VolumetricClouds](https://github.com/Rob
 
 ---
 
-### 5. Vegetation & Biomes (L-System & GPU Blades)
+### 9. Vegetation & Biomes (L-System & GPU Blades)
 
 - **Grammar-Driven Trees**: Procedural branching via Lindenmayer systems (Oak, Pine, Palm, Birch) with automatic LOD decimation and 8-angle billboard impostor baking.
 - **GPU Grass Blade Simulation**: Individual bezier curve blades responding dynamically to wind gusts, vehicle wheel paths, and footstep trampling.
@@ -448,14 +642,26 @@ Adapted from [Robert Beckebans's OpenGL-VolumetricClouds](https://github.com/Rob
 
 ---
 
-### 6. PBR Materials, Buildings & Modular Facades
+### 10. PBR Materials, Buildings & Modular Facades
 
-- **Multi-Layer PBR Materials**: Micro-detail noise, Voronoi cell boundaries, height displacement, roughness, and metalness maps for concrete, weathered metal, timber, and ceramic tiles.
+- **PBR Material & Surface Studio (`MaterialInspectorScreen.kt`)**:
+  - **3D Target Object Switching**:
+    - **3D Photometric Test Cube (`CUBE`)**: Centered 3D calibration cube rendered in perspective with metric crosshairs, corner L-brackets, "+Z FRONT / +Y TOP / +X RIGHT" face telemetry, and true Cook-Torrance specular highlight lobes.
+    - **3D Architectural Wall (`WALL`)**: Vertical wall slab rendered with realistic thickness (300mm), overhanging top coping capstone, foundation curb, and contact floor shadow.
+    - **PBR Sphere (`SPHERE`)**: Curved microfacet BRDF sphere with Snell's law caustics and Fresnel rim.
+    - **Ground Slab (`PLANE`)**: Perspective horizontal floor surface.
+  - **Universal Texture Application**: Any texture or material in the library can be applied directly to either the **Test Cube** or the **Architectural Wall** (e.g., Brick Wall on Cube, Mirror Gold on Wall, Cast Concrete on Cube, Dark Oak on Wall).
+  - **Well-Organized Material Categories**:
+    - **Wall & Masonry**: Rusticated Red Brick (stretcher bond, recessed mortar), Cast Board-Formed Concrete (tie-holes, timber relief), Subway Glazed Ceramic Tile (grout grid), Polished Concrete.
+    - **Metals & PBR**: Mirror Polished 24K Gold (metallic 1.0, roughness 0.08), Brushed Anodized Aluminum, Weathered Rusted Iron (pitting), Oxidized Copper Patina (verdigris).
+    - **Flooring & Stone**: Dark Oak Hardwood Planks (seams & wood grain), Polished Carrara Marble (metamorphic veins), Weathered Bitumen Asphalt (aggregate & yellow lane stripe).
+    - **Nature & Organic**: Mondo Grass Lawn Turf, Moist Organic Loam & Foliage, Subsurface Dermal Skin.
+  - **Channel Modes**: Full Cook-Torrance PBR, Albedo Map (BC7 sRGB), Normal Map (BC5 Tangent RG), ORM Map (Red=AO, Green=Roughness, Blue=Metallic), Height Map (BC4 displacement), and interactive A/B Split Compare.
 - **Grammar-Based Architecture**: Modular building generator attaching wall sockets, windows, entry doors, commercial storefronts, fire escapes, and rooftop HVAC units.
 
 ---
 
-### 7. Terrain & Hydraulic Erosion
+### 11. Terrain & Hydraulic Erosion
 
 - **Fractal Noise**: Multi-octave fractional Brownian motion (fBm) with ridged multifractal peaks.
 - **Hydraulic & Thermal Erosion**: Simulates particle drop trajectories, sediment transport, deposition, and talus scree slopes.
@@ -463,7 +669,7 @@ Adapted from [Robert Beckebans's OpenGL-VolumetricClouds](https://github.com/Rob
 
 ---
 
-### 8. Water Bodies & Tessendorf FFT Ocean
+### 12. Water Bodies & Tessendorf FFT Ocean
 
 - **Phillips Ocean Spectrum**: Evaluated via inverse Fast Fourier Transform (FFT) on compute shaders, generating realistic choppy wave peaks, capillary ripples, and whitecap foam.
 - **Inland Water Bodies**: Meandering river splines with cross-sectional velocity profiles, tranquil mountain lakes, and cascading waterfalls.
@@ -471,7 +677,7 @@ Adapted from [Robert Beckebans's OpenGL-VolumetricClouds](https://github.com/Rob
 
 ---
 
-### 9. Energy, Utility & World Props
+### 13. Energy, Utility & World Props
 
 - **Renewable Energy Infrastructure**:
   - Multi-part wind turbines (hollow steel towers, nacelles, pitch-controlled airfoil blades) with rotation simulation.
@@ -482,7 +688,7 @@ Adapted from [Robert Beckebans's OpenGL-VolumetricClouds](https://github.com/Rob
 
 ---
 
-### 10. GPU Particles & Procedural Audio
+### 14. GPU Particles & Procedural Audio
 
 - **Compute VFX**: GPU bitonic sorting, curl-noise vector fields, and physics simulation for sparks, smoke plumes, fire sheets, and blizzard flurries.
 - **Real-Time Procedural Audio**: Band-limited oscillator synthesis for internal combustion engine RPMs, dynamic rain droplet acoustics, wind howl resonance, and surface-specific footstep impacts.
@@ -545,7 +751,8 @@ ctest --output-on-failure
 
 ## License & Attribution
 
-- **Robert Beckebans**: [OpenGL-VolumetricClouds](https://github.com/RobertBeckebans/OpenGL-VolumetricClouds) (Nubis-Decima volumetric cloud model).
+- **Aman Sachan & Meghana Seshadri**: [Meteoros](https://github.com/AmanSachan1/Meteoros) (Vulkan real-time volumetric cloudscape renderer based on Guerrilla Games' Decima / Nubis architecture).
+- **Robert Beckebans**: [OpenGL-VolumetricClouds](https://github.com/RobertBeckebans/OpenGL-VolumetricClouds) (Nubis-Decima volumetric cloud equations).
 - **Sascha Willems**: [Vulkan](https://github.com/SaschaWillems/Vulkan) (Vulkan 1.3 base infrastructure & allocators).
 - **kentril0**: [WaterSurfaceRendering](https://github.com/kentril0/WaterSurfaceRendering) (Common Scene architecture & Preetham atmospheric model).
 - **Sphere Studio Engine Team**: Procedural road states, modular architecture, L-System vegetation, and Kotlin Multiplatform integration.

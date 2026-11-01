@@ -92,15 +92,17 @@ native_assets/
 │   │   ├── WeatherState.h                          # Live weather conditions (rain, snow, wind, cloud coverage)
 │   │   ├── WeatherSystem.h / .cpp                  # Master weather coordinator updating active generators
 │   │   │
-│   │   ├── clouds/                                 # Nubis-Decima Volumetric Clouds (Robert Beckebans port)
-│   │   │   ├── CloudGen.h / .cpp                   # Cloud shape volume synthesizer
-│   │   │   ├── CloudParams.h                       # Radiative transfer, Henyey-Greenstein, and altitude limits
-│   │   │   ├── CloudRaymarch.h / .cpp              # Raymarcher implementation through curved planetary shell
-│   │   │   ├── README.md                           # Deep dive on Nubis radiative transfer & cone sampling
+│   │   ├── clouds/                                 # AmanSachan1/Meteoros Volumetric Clouds (Decima/Nubis port)
+│   │   │   ├── CloudGen.h / .cpp                   # Cloud shape volume synthesizer with MultiBeer & Nubis gradients
+│   │   │   ├── CloudParams.h                       # Radiative transfer, Multi-Scattering, Henyey-Greenstein, and altitude limits
+│   │   │   ├── CloudRaymarch.h / .cpp              # Raymarcher implementation through curved planetary shell with Bayer dither
+│   │   │   ├── README.md                           # Deep dive on Meteoros radiative transfer, MultiBeer & cone sampling
 │   │   │   ├── shaders/
 │   │   │   │   ├── cloud_noise.comp                # 3D Perlin-Worley noise generation compute shader
 │   │   │   │   ├── cloud_shape.comp                # Low-frequency cloud coverage mask compute shader
-│   │   │   │   └── cloud_raymarch.comp             # Full Vulkan compute shader for perspective raymarching
+│   │   │   │   ├── cloud_raymarch.comp             # Full Vulkan compute shader for perspective raymarching
+│   │   │   │   ├── cloud_godrays.comp              # Meteoros crepuscular volumetric god-rays post-processing
+│   │   │   │   └── cloud_reproject.comp            # Meteoros temporal reprojection & neighborhood clamping
 │   │   │   ├── textures/
 │   │   │   │   ├── cloud_shape_3d.comp             # High-resolution 3D cloud volume baker
 │   │   │   │   └── spec/cloud_spec.h               # Texture formats, 3D resolution bounds, and mipmap specs
@@ -544,14 +546,14 @@ kmp/src/commonMain/kotlin/com/example/sphere/
 │
 ├── weather/                                # Weather Simulation Subsystems
 │   ├── WeatherPreset.kt                    # Weather presets list (Clear, Rain, Blizzard, etc.) (25 lines)
-│   ├── ProceduralCloudSynthesizer.kt       # Robert Beckebans Nubis Volumetric Raymarcher (454 lines)
+│   ├── ProceduralCloudSynthesizer.kt       # AmanSachan1/Meteoros Volumetric Raymarcher (460 lines)
 │   ├── WeatherViewportCanvas.kt            # Sky atmosphere, terrain & cloudscape renderer (421 lines)
 │   ├── WeatherPrecipitationRenderer.kt     # Procedural lightning, rain, snow & fog volume (153 lines)
 │   └── tabs/
 │       ├── WeatherSliderRow.kt             # Reusable weather slider row (45 lines)
 │       ├── PrecipitationTab.kt             # Rain intensity, droplets, splash & puddles (82 lines)
 │       ├── SnowFrostTab.kt                 # Snowfall, flutter, frost glaze & snow cover (73 lines)
-│       ├── CloudsFogTab.kt                 # Beckebans cloud species, erosion & god rays (317 lines)
+│       ├── CloudsFogTab.kt                 # Meteoros cloud species, MultiBeer, Bayer jitter & god rays (325 lines)
 │       ├── WindStormsTab.kt                # Wind velocity, severe storm & lightning strikes (129 lines)
 │       └── NativeEngineTab.kt              # Vulkan compute shader & particle buffer inspector (102 lines)
 │

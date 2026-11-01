@@ -8,20 +8,23 @@ struct CloudRayResult {
     Vec3 radiance{0.0f, 0.0f, 0.0f};
     float cloudAlpha = 0.0f;    // [0..1]
     float depthMeters = 0.0f;
+    float godRayOcclusion = 0.0f; // [0..1] Meteoros sun occlusion map for volumetric shafts
 };
 
 class CloudRaymarch {
 public:
     CloudRaymarch() = default;
 
-    // Primary volumetric raymarcher through planetary cloud layer
+    // Primary volumetric raymarcher through planetary cloud layer (Meteoros pipeline)
     CloudRayResult March(
         const Vec3& origin,
         const Vec3& dir,
         const Vec3& sunDir,
         const Vec3& sunColor,
         const CloudGen& generator,
-        float time
+        float time,
+        int pixelX = 0,
+        int pixelY = 0
     ) const;
 
     // Secondary cone march towards sunlight to calculate self-shadowing and silver lining

@@ -40,74 +40,81 @@ fun NativeEngineTab() {
             modifier = Modifier.padding(bottom = 12.dp)
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
-            Text(
-                text = "Converted Robert Beckebans Vulkan Modules",
-                style = MaterialTheme.typography.titleMedium,
-                color = Color(0xFF4ADE80),
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "AmanSachan1/Meteoros Vulkan Architecture",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color(0xFF4ADE80),
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "High-performance Vulkan 1.3 / C++20 compute pipelines from AmanSachan1/Meteoros",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF94A3B8)
+                )
+                Spacer(modifier = Modifier.height(10.dp))
 
-            val modules = listOf(
-                Triple("CloudRaymarch.cpp", "native_assets/src/weather/clouds/CloudRaymarch.cpp", "Beckebans planetary shell raymarcher & 6-cone light march"),
-                Triple("CloudGen.cpp", "native_assets/src/weather/clouds/CloudGen.cpp", "Nubis Stratus/Cumulus gradients, Beer's law & powder effect"),
-                Triple("cloud_raymarch.comp", "native_assets/src/weather/clouds/shaders/cloud_raymarch.comp", "Vulkan 1.3 compute shader converted from volumetric_clouds.frag"),
-                Triple("CloudParams.h", "native_assets/src/weather/clouds/CloudParams.h", "Dual-lobe HG parameters, earth radius & optical scattering"),
-                Triple("test_clouds.cpp", "native_assets/tests/weather/test_clouds.cpp", "Complete test suite validating Beckebans cloud physics (PASS)"),
-                Triple("WeatherSystem.cpp", "native_assets/src/weather/WeatherSystem.cpp", "Precipitation, wetness integration & world state sync"),
-                Triple("rain_particle.comp", "native_assets/src/weather/rain/shaders/rain_particle.comp", "GPU compute 65,536 rain particles with wind deflection"),
-                Triple("fog_froxel.comp", "native_assets/src/weather/fog/shaders/fog_froxel.comp", "160x90x64 3D froxel volume grid with Mie inscattering")
-            )
+                val modules = listOf(
+                    Triple("cloud_raymarch.comp", "native_assets/src/weather/clouds/shaders/cloud_raymarch.comp", "Meteoros Vulkan compute shader with Dual Beer-Lambert multi-scattering & 4x4 Bayer jitter"),
+                    Triple("cloud_godrays.comp", "native_assets/src/weather/clouds/shaders/cloud_godrays.comp", "Meteoros crepuscular volumetric god-rays post-processing with exponential decay"),
+                    Triple("cloud_reproject.comp", "native_assets/src/weather/clouds/shaders/cloud_reproject.comp", "Meteoros temporal reprojection & 3x3 neighborhood bounding-box clamping"),
+                    Triple("CloudRaymarch.cpp", "native_assets/src/weather/clouds/CloudRaymarch.cpp", "Meteoros planetary shell raymarcher & 6-cone light march with god-ray occlusion map"),
+                    Triple("CloudGen.cpp", "native_assets/src/weather/clouds/CloudGen.cpp", "Nubis Stratus, Stratocumulus, Cumulus & Cumulonimbus gradients with MultiBeer law"),
+                    Triple("CloudParams.h", "native_assets/src/weather/clouds/CloudParams.h", "Dual-lobe HG parameters (g1=0.82, g2=-0.22), MultiBeer factor & ACES tone mapping"),
+                    Triple("test_clouds.cpp", "native_assets/tests/weather/test_clouds.cpp", "Complete test suite validating AmanSachan1/Meteoros cloud physics (PASS)"),
+                    Triple("WeatherSystem.cpp", "native_assets/src/weather/WeatherSystem.cpp", "Precipitation, wetness integration & world state sync"),
+                    Triple("rain_particle.comp", "native_assets/src/weather/rain/shaders/rain_particle.comp", "GPU compute 65,536 rain particles with wind deflection"),
+                    Triple("fog_froxel.comp", "native_assets/src/weather/fog/shaders/fog_froxel.comp", "160x90x64 3D froxel volume grid with Mie inscattering")
+                )
 
-            modules.forEach { (name, path, desc) ->
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFF0F172A),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = name,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF38BDF8)
-                            )
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = Color(0xFF166534).copy(alpha = 0.5f)
+                modules.forEach { (name, path, desc) ->
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFF0F172A),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "VULKAN 1.3",
-                                    fontSize = 9.sp,
+                                    text = name,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF4ADE80),
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                    color = Color(0xFF38BDF8)
                                 )
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = Color(0xFF166534).copy(alpha = 0.5f)
+                                ) {
+                                    Text(
+                                        text = "VULKAN 1.3",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF4ADE80),
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                    )
+                                }
                             }
+                            Text(
+                                text = path,
+                                fontSize = 10.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = Color(0xFF64748B)
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = desc,
+                                fontSize = 11.sp,
+                                color = Color(0xFFCBD5E1)
+                            )
                         }
-                        Text(
-                            text = path,
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace,
-                            color = Color(0xFF64748B)
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = desc,
-                            fontSize = 11.sp,
-                            color = Color(0xFFCBD5E1)
-                        )
                     }
                 }
             }
         }
     }
-}
 }

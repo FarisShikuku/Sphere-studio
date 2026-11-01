@@ -22,23 +22,36 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Radar
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.WbSunny
+import com.example.sphere.model.CloudDetectionRepository
+import com.example.sphere.model.CloudGenus
+import com.example.sphere.model.DetectedCloudFormation
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
@@ -65,13 +78,25 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sin
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SkyStudioScreen(
+    onNavigateBack: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    BackHandler { onNavigateBack() }
+
     // ----------------- TIME & CELESTIAL STATE -----------------
     var timeOfDayHours by remember { mutableFloatStateOf(14.5f) }
     var isCyclePlaying by remember { mutableStateOf(false) }
+
+    // Shared Vulkan Scene Stage state (Default NONE for clean panoramic sky dome)
+    var surfaceMode by remember { mutableStateOf(SurfaceSceneMode.NONE) }
+    var stageWidth by remember { mutableFloatStateOf(3.5f) }
+    var stageLength by remember { mutableFloatStateOf(3.5f) }
+    var stageHeight by remember { mutableFloatStateOf(0.25f) }
+    var showStageGrid by remember { mutableStateOf(true) }
+    var showCalibrationItem by remember { mutableStateOf(false) }
 
     // Atmosphere parameters
     var turbidity by remember { mutableFloatStateOf(2.5f) }
@@ -112,7 +137,30 @@ fun SkyStudioScreen(
     var camPitch by remember { mutableFloatStateOf(15.0f) }
     var camYaw by remember { mutableFloatStateOf(150.0f) }
 
-    // Tab state: 0: Atmosphere, 1: Sun & Corona, 2: Stars, 3: Moon, 4: Tonemap, 5: Native Core
+    // Cloud Detection state
+    var isCloudDetectionEnabled by remember { mutableStateOf(true) }
+    var selectedFilterGenus by remember { mutableStateOf<CloudGenus?>(null) }
+    var selectedFormationId by remember { mutableStateOf<String?>("CLOUD-CB-01") }
+    val detectedFormations = remember { CloudDetectionRepository.defaultFormations }
+
+    // Meteoros Volumetric Cloud parameters (AmanSachan1/Meteoros Decima Raymarcher)
+    var cloudType by remember { mutableIntStateOf(2) } // 0: Stratus, 1: Stratocumulus, 2: Cumulus, 3: Cumulonimbus
+    var cloudCoverage by remember { mutableFloatStateOf(0.65f) }
+    var cloudDensity by remember { mutableFloatStateOf(1.0f) }
+    var multiScatteringFactor by remember { mutableFloatStateOf(0.50f) }
+    var silverLiningG by remember { mutableFloatStateOf(0.82f) }
+    var powderEffect by remember { mutableFloatStateOf(0.35f) }
+    var sunAbsorption by remember { mutableFloatStateOf(0.65f) }
+    var detailErosion by remember { mutableFloatStateOf(0.35f) }
+    var enableGodRays by remember { mutableStateOf(true) }
+    var godRaysIntensity by remember { mutableFloatStateOf(0.65f) }
+    var enableCirrus by remember { mutableStateOf(true) }
+    var cirrusCoverage by remember { mutableFloatStateOf(0.35f) }
+    var windSpeed by remember { mutableFloatStateOf(18.0f) }
+    var windAzimuth by remember { mutableFloatStateOf(240.0f) }
+    var enableBayerJitter by remember { mutableStateOf(true) }
+
+    // Tab state: 0: Detected Clouds, 1: Meteoros Volumetrics, 2: Vulkan Stage, 3: Atmosphere, 4: Sun & Flare, 5: Stars, 6: Moon, 7: Tonemap, 8: Native Core
     var activeTab by remember { mutableIntStateOf(0) }
 
     // Auto diurnal cycle progression
@@ -140,43 +188,211 @@ fun SkyStudioScreen(
         label = "twinkle_phase"
     )
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color(0xFF090B10))
-            .testTag("sky_studio_screen")
+    // Volumetric cloudscape rendering via ProceduralCloudSynthesizer (Meteoros raymarcher)
+    val cloudImageBitmap = remember(
+        camYaw.toInt(),
+        camPitch.toInt(),
+        cloudType,
+        cloudCoverage,
+        cloudDensity,
+        multiScatteringFactor,
+        silverLiningG,
+        powderEffect,
+        sunAbsorption,
+        detailErosion,
+        enableBayerJitter,
+        sunAzimuth.toInt(),
+        sunElevation.toInt(),
+        (twinkleCycle * 1.5f).toInt()
     ) {
-        // -------------------------------------------------------------
-        // 1. SKY DOME PANORAMIC VIEWPORT
-        // -------------------------------------------------------------
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1.08f)
-                .background(Color(0xFF05070B))
-                .testTag("sky_dome_viewport")
-        ) {
-            SkyViewportCanvas(
-                sunElevation = sunElevation,
-                sunAzimuth = sunAzimuth,
-                sunAngularRadius = sunAngularRadius,
-                coronaFlareIntensity = coronaFlareIntensity,
-                moonPhase = moonPhase,
-                moonElevation = moonElevation,
-                moonAzimuth = moonAzimuth,
-                earthshine = earthshine,
-                starCount = starCount,
-                twinkleSpeed = twinkleSpeed,
-                twinkleCycle = twinkleCycle,
-                camYaw = camYaw,
-                camPitch = camPitch,
-                onDrag = { dx, dy ->
-                    camYaw = (camYaw - dx * 0.35f + 360f) % 360f
-                    camPitch = (camPitch + dy * 0.25f).coerceIn(-15f, 85f)
-                }
-            )
+        val bmp = ProceduralCloudSynthesizer.renderPerspectiveSky(
+            width = 240,
+            height = 140,
+            camYaw = camYaw,
+            camPitch = camPitch,
+            timeSeconds = twinkleCycle * 4.0f,
+            windSpeed = windSpeed,
+            windAzimuth = windAzimuth,
+            cloudType = cloudType,
+            coverage = cloudCoverage,
+            density = cloudDensity,
+            silverLiningG = silverLiningG,
+            powderEffect = powderEffect,
+            sunAbsorption = sunAbsorption,
+            detailErosion = detailErosion,
+            cloudBaseAltitude = 2.0f,
+            isStorm = (cloudType == 3 && cloudCoverage > 0.65f),
+            horizonYFrac = 0.52f,
+            multiScatteringFactor = multiScatteringFactor,
+            enableBayerJitter = enableBayerJitter,
+            sunAzimuth = sunAzimuth,
+            sunElevation = sunElevation
+        )
+        bmp.asImageBitmap()
+    }
 
-            // Viewport Top HUD: Time & Orientation Badges
+    Scaffold(
+        modifier = modifier.fillMaxSize().testTag("sky_studio_screen"),
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column {
+                        Text(
+                            "Atmospheric Sky Studio",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            "Preetham & Hosek-Wilkie Model • Vulkan 3D Scene",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 11.sp
+                            )
+                        )
+                    }
+                },
+                navigationIcon = {
+                    IconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.testTag("sky_studio_back_button")
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back to Studio"
+                        )
+                    }
+                },
+                actions = {
+                    // Quick Stage mode cycle button
+                    IconButton(
+                        onClick = {
+                            val modes = SurfaceSceneMode.entries
+                            val nextIdx = (modes.indexOf(surfaceMode) + 1) % modes.size
+                            surfaceMode = modes[nextIdx]
+                        },
+                        modifier = Modifier.testTag("toggle_stage_mode_top_button")
+                    ) {
+                        Icon(
+                            Icons.Default.Layers,
+                            contentDescription = "Switch Vulkan Scene Stage",
+                            tint = if (surfaceMode != SurfaceSceneMode.NONE) MaterialTheme.colorScheme.primary else Color.Gray
+                        )
+                    }
+                    IconButton(
+                        onClick = { isCyclePlaying = !isCyclePlaying },
+                        modifier = Modifier.testTag("toggle_cycle_top_button")
+                    ) {
+                        Icon(
+                            imageVector = if (isCyclePlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = "Play/Pause diurnal cycle",
+                            tint = if (isCyclePlaying) MaterialTheme.colorScheme.primary else Color.White
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            timeOfDayHours = 14.5f
+                            sunElevation = 38.0f
+                            sunAzimuth = 152.0f
+                            camPitch = 15.0f
+                            camYaw = 150.0f
+                            surfaceMode = SurfaceSceneMode.NONE
+                            stageWidth = 3.5f
+                            stageLength = 3.5f
+                            stageHeight = 0.25f
+                            showStageGrid = true
+                            showCalibrationItem = false
+                            isCloudDetectionEnabled = true
+                            selectedFilterGenus = null
+                            cloudType = 2
+                            cloudCoverage = 0.65f
+                            cloudDensity = 1.0f
+                            multiScatteringFactor = 0.50f
+                            silverLiningG = 0.82f
+                            powderEffect = 0.35f
+                            sunAbsorption = 0.65f
+                            detailErosion = 0.35f
+                            enableGodRays = true
+                            godRaysIntensity = 0.65f
+                            enableCirrus = true
+                            cirrusCoverage = 0.35f
+                            windSpeed = 18.0f
+                            windAzimuth = 240.0f
+                            enableBayerJitter = true
+                        },
+                        modifier = Modifier.testTag("reset_sky_defaults_button")
+                    ) {
+                        Icon(Icons.Default.RestartAlt, contentDescription = "Reset Defaults")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            )
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .background(Color(0xFF090B10))
+        ) {
+            // -------------------------------------------------------------
+            // 1. SKY DOME PANORAMIC VIEWPORT
+            // -------------------------------------------------------------
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1.08f)
+                    .background(Color(0xFF05070B))
+                    .testTag("sky_dome_viewport")
+            ) {
+                SkyViewportCanvas(
+                    sunElevation = sunElevation,
+                    sunAzimuth = sunAzimuth,
+                    sunAngularRadius = sunAngularRadius,
+                    coronaFlareIntensity = coronaFlareIntensity,
+                    moonPhase = moonPhase,
+                    moonElevation = moonElevation,
+                    moonAzimuth = moonAzimuth,
+                    earthshine = earthshine,
+                    starCount = starCount,
+                    twinkleSpeed = twinkleSpeed,
+                    twinkleCycle = twinkleCycle,
+                    camYaw = camYaw,
+                    camPitch = camPitch,
+                    onDrag = { dx, dy ->
+                        camYaw = (camYaw - dx * 0.35f + 360f) % 360f
+                        camPitch = (camPitch + dy * 0.25f).coerceIn(-15f, 85f)
+                    },
+                    cloudImage = cloudImageBitmap,
+                    cloudCoverage = cloudCoverage,
+                    cloudDensity = cloudDensity,
+                    enableGodRays = enableGodRays,
+                    godRaysIntensity = godRaysIntensity,
+                    enableCirrus = enableCirrus,
+                    cirrusCoverage = cirrusCoverage,
+                    timeSeconds = twinkleCycle * 4.0f,
+                    surfaceMode = surfaceMode,
+                    stageWidth = stageWidth,
+                    stageLength = stageLength,
+                    stageHeight = stageHeight,
+                    showStageGrid = showStageGrid,
+                    showCalibrationItem = showCalibrationItem,
+                    isDetectionEnabled = isCloudDetectionEnabled,
+                    detectedFormations = detectedFormations,
+                    selectedFormationId = selectedFormationId,
+                    selectedFilterGenus = selectedFilterGenus,
+                    onSelectFormation = { formation ->
+                        selectedFormationId = formation.id
+                        cloudType = when (formation.genus) {
+                            CloudGenus.STRATUS -> 0
+                            CloudGenus.STRATOCUMULUS, CloudGenus.ALTOCUMULUS -> 1
+                            CloudGenus.CUMULUS, CloudGenus.CIRROCUMULUS, CloudGenus.CIRRUS -> 2
+                            CloudGenus.CUMULONIMBUS, CloudGenus.NIMBOSTRATUS -> 3
+                        }
+                    }
+                )
+
+            // Viewport Top HUD: Time, Orientation & Cloud Scanner Badges
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -207,6 +423,36 @@ fun SkyStudioScreen(
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                             color = Color.White,
                             fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+
+                // Cloud Detection Scanner Toggle Pill
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (isCloudDetectionEnabled) Color(0xFF0284C7).copy(alpha = 0.85f) else Color(0xCC0F172A),
+                    border = CardDefaults.outlinedCardBorder(),
+                    modifier = Modifier
+                        .clickable { isCloudDetectionEnabled = !isCloudDetectionEnabled }
+                        .testTag("toggle_cloud_detection_hud")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Radar,
+                            contentDescription = null,
+                            tint = if (isCloudDetectionEnabled) Color.White else Color(0xFF64748B),
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (isCloudDetectionEnabled) "SCANNER ON" else "SCANNER OFF",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = if (isCloudDetectionEnabled) Color.White else Color(0xFF94A3B8),
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 9.sp
                         )
                     }
                 }
@@ -261,6 +507,62 @@ fun SkyStudioScreen(
                             tint = Color(0xFF94A3B8),
                             modifier = Modifier.size(16.dp)
                         )
+                    }
+                }
+            }
+
+            // Quick Cloud Species Selector Strip (pinned right above presets bar)
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(bottom = 38.dp, start = 8.dp, end = 8.dp)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                detectedFormations.forEach { formation ->
+                    val isTargeted = formation.id == selectedFormationId
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (isTargeted) formation.genus.badgeColor.copy(alpha = 0.90f) else Color(0xDE0B111D),
+                        border = CardDefaults.outlinedCardBorder().copy(
+                            brush = Brush.linearGradient(
+                                if (isTargeted) listOf(Color.White, formation.genus.badgeColor)
+                                else listOf(Color(0xFF334155), Color(0xFF1E293B))
+                            )
+                        ),
+                        modifier = Modifier
+                            .clickable {
+                                selectedFormationId = formation.id
+                                selectedFilterGenus = formation.genus
+                                camYaw = formation.azimuthDegrees
+                                camPitch = formation.elevationDegrees.coerceIn(0f, 65f)
+                                cloudType = when (formation.genus) {
+                                    CloudGenus.STRATUS -> 0
+                                    CloudGenus.STRATOCUMULUS, CloudGenus.ALTOCUMULUS -> 1
+                                    CloudGenus.CUMULONIMBUS, CloudGenus.NIMBOSTRATUS -> 3
+                                    else -> 2
+                                }
+                            }
+                            .testTag("quick_cloud_chip_${formation.id}")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = formation.genus.iconEmoji,
+                                fontSize = 11.sp
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "${formation.genus.displayName} (${formation.genus.symbolCode})",
+                                fontSize = 10.sp,
+                                fontWeight = if (isTargeted) FontWeight.Bold else FontWeight.SemiBold,
+                                color = if (isTargeted) Color.White else Color(0xFFE2E8F0)
+                            )
+                        }
                     }
                 }
             }
@@ -344,7 +646,7 @@ fun SkyStudioScreen(
                     },
                     modifier = Modifier.fillMaxWidth().testTag("sky_tabs_row")
                 ) {
-                    val tabTitles = listOf("Atmosphere", "Sun & Flare", "Stars & Cosmos", "Moon & Phases", "Tonemap & LUT", "Native C++ Core")
+                    val tabTitles = listOf("Detected Clouds", "Meteoros Volumetrics", "Vulkan Stage", "Atmosphere", "Sun & Flare", "Stars & Cosmos", "Moon & Phases", "Tonemap & LUT", "Native C++ Core")
                     tabTitles.forEachIndexed { index, title ->
                         Tab(
                             selected = activeTab == index,
@@ -368,7 +670,76 @@ fun SkyStudioScreen(
                         .padding(16.dp)
                 ) {
                     when (activeTab) {
-                        0 -> {
+                        0 -> CloudDetectionTab(
+                            isDetectionEnabled = isCloudDetectionEnabled,
+                            onToggleDetection = { isCloudDetectionEnabled = it },
+                            selectedFilterGenus = selectedFilterGenus,
+                            onFilterGenusChange = { selectedFilterGenus = it },
+                            selectedFormationId = selectedFormationId,
+                            onSelectFormation = { formation ->
+                                selectedFormationId = formation.id
+                                cloudType = when (formation.genus) {
+                                    CloudGenus.STRATUS -> 0
+                                    CloudGenus.STRATOCUMULUS, CloudGenus.ALTOCUMULUS -> 1
+                                    CloudGenus.CUMULONIMBUS, CloudGenus.NIMBOSTRATUS -> 3
+                                    else -> 2
+                                }
+                            },
+                            onFocusCamera = { az, el ->
+                                camYaw = az
+                                camPitch = el.coerceIn(0f, 65f)
+                            },
+                            cloudCoverage = cloudCoverage,
+                            onCloudCoverageChange = { cloudCoverage = it },
+                            detectedFormations = detectedFormations
+                        )
+                        1 -> MeteorosVolumetricsTab(
+                            cloudType = cloudType,
+                            onCloudTypeChange = { cloudType = it },
+                            cloudCoverage = cloudCoverage,
+                            onCloudCoverageChange = { cloudCoverage = it },
+                            cloudDensity = cloudDensity,
+                            onCloudDensityChange = { cloudDensity = it },
+                            multiScatteringFactor = multiScatteringFactor,
+                            onMultiScatteringFactorChange = { multiScatteringFactor = it },
+                            silverLiningG = silverLiningG,
+                            onSilverLiningGChange = { silverLiningG = it },
+                            powderEffect = powderEffect,
+                            onPowderEffectChange = { powderEffect = it },
+                            sunAbsorption = sunAbsorption,
+                            onSunAbsorptionChange = { sunAbsorption = it },
+                            detailErosion = detailErosion,
+                            onDetailErosionChange = { detailErosion = it },
+                            enableGodRays = enableGodRays,
+                            onEnableGodRaysChange = { enableGodRays = it },
+                            godRaysIntensity = godRaysIntensity,
+                            onGodRaysIntensityChange = { godRaysIntensity = it },
+                            enableCirrus = enableCirrus,
+                            onEnableCirrusChange = { enableCirrus = it },
+                            cirrusCoverage = cirrusCoverage,
+                            onCirrusCoverageChange = { cirrusCoverage = it },
+                            windSpeed = windSpeed,
+                            onWindSpeedChange = { windSpeed = it },
+                            windAzimuth = windAzimuth,
+                            onWindAzimuthChange = { windAzimuth = it },
+                            enableBayerJitter = enableBayerJitter,
+                            onEnableBayerJitterChange = { enableBayerJitter = it }
+                        )
+                        2 -> VulkanStageTab(
+                            surfaceMode = surfaceMode,
+                            onSurfaceModeChange = { surfaceMode = it },
+                            stageWidth = stageWidth,
+                            onStageWidthChange = { stageWidth = it },
+                            stageLength = stageLength,
+                            onStageLengthChange = { stageLength = it },
+                            stageHeight = stageHeight,
+                            onStageHeightChange = { stageHeight = it },
+                            showGrid = showStageGrid,
+                            onShowGridChange = { showStageGrid = it },
+                            showCalibrationItem = showCalibrationItem,
+                            onShowCalibrationItemChange = { showCalibrationItem = it }
+                        )
+                        3 -> {
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = Color(0xFF131722)),
                                 shape = RoundedCornerShape(12.dp),
@@ -428,7 +799,7 @@ fun SkyStudioScreen(
                                 onOzoneToggle = { ozoneAbsorption = it }
                             )
                         }
-                        1 -> SunAndFlareTab(
+                        4 -> SunAndFlareTab(
                             sunElevation = sunElevation,
                             onElevationChange = { sunElevation = it },
                             sunAzimuth = sunAzimuth,
@@ -442,7 +813,7 @@ fun SkyStudioScreen(
                             coronaFlare = coronaFlareIntensity,
                             onCoronaFlareChange = { coronaFlareIntensity = it }
                         )
-                        2 -> StarsAndCosmosTab(
+                        5 -> StarsAndCosmosTab(
                             starCount = starCount,
                             onStarCountChange = { starCount = it },
                             twinkleSpeed = twinkleSpeed,
@@ -452,7 +823,7 @@ fun SkyStudioScreen(
                             milkyWayIntensity = milkyWayIntensity,
                             onMilkyWayChange = { milkyWayIntensity = it }
                         )
-                        3 -> MoonAndPhasesTab(
+                        6 -> MoonAndPhasesTab(
                             moonPhase = moonPhase,
                             onMoonPhaseChange = { moonPhase = it },
                             moonElevation = moonElevation,
@@ -464,7 +835,7 @@ fun SkyStudioScreen(
                             moonAlbedo = moonAlbedo,
                             onMoonAlbedoChange = { moonAlbedo = it }
                         )
-                        4 -> TonemapAndLUTTab(
+                        7 -> TonemapAndLUTTab(
                             selectedMode = tonemapMode,
                             onModeSelect = { tonemapMode = it },
                             exposureEv = exposureEv,
@@ -474,10 +845,12 @@ fun SkyStudioScreen(
                             contrast = contrast,
                             onContrastChange = { contrast = it }
                         )
-                        5 -> SkyNativeCodeViewerTab()
+                        8 -> SkyNativeCodeViewerTab()
                     }
                 }
             }
         }
     }
 }
+}
+

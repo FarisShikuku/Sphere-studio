@@ -1,28 +1,32 @@
 package com.example.sphere.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Science
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.sphere.model.CompositeSurface
-import com.example.sphere.model.MaterialChannelMode
-import com.example.sphere.model.PbrMaterial
-import com.example.sphere.model.defaultCompositeSurfaces
-import com.example.sphere.model.defaultPbrMaterials
+import com.example.sphere.model.*
 import com.example.sphere.tabs.MaterialChannelSelectorRow
 import com.example.sphere.tabs.MaterialOpticsTab
 import com.example.sphere.tabs.MaterialProceduralDetailTab
@@ -33,9 +37,12 @@ import com.example.sphere.tabs.SurfaceCompositeLayersTab
 import com.example.sphere.viewport.MaterialPreviewViewport
 import com.example.sphere.viewport.PreviewMeshShape
 
-enum class InspectorMode(val label: String, val subtitle: String) {
-    SURFACES("Composite Surfaces", "Heterogeneous macro-structures (Brick Wall, Car Paint, Wood Floor)"),
-    MATERIALS("Pure Materials", "Homogeneous atomic physical matter (Iron, Clay, Chlorophyll, Glass)")
+enum class MaterialCategoryFilter(val label: String, val iconDescription: String) {
+    ALL("All Textures", "All procedural PBR materials"),
+    WALL("🧱 Wall & Masonry", "Bricks, concrete, tiles, mortar"),
+    METALS("✨ Metals & PBR", "Gold, brushed steel, rusted iron, copper"),
+    FLOORING("🌲 Flooring & Stone", "Oak planks, marble, bitumen asphalt"),
+    NATURE("🌿 Nature & Organic", "Lawn turf, moist earth loam, skin")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -46,39 +53,70 @@ fun MaterialInspectorScreen(
 ) {
     BackHandler { onNavigateBack() }
 
-    var inspectorMode by remember { mutableStateOf(InspectorMode.SURFACES) }
+    // Selected Target Object: Default to 3D Test Cube as requested
+    var previewShape by remember { mutableStateOf(PreviewMeshShape.CUBE) }
 
-    // Surface State
-    var selectedSurfaceIndex by remember { mutableIntStateOf(0) }
-    var currentSurface by remember(selectedSurfaceIndex) {
-        mutableStateOf(defaultCompositeSurfaces[selectedSurfaceIndex])
-    }
-
-    // Material State
+    // Material & Surface State
     var selectedMaterialIndex by remember { mutableIntStateOf(0) }
     var currentMaterial by remember(selectedMaterialIndex) {
         mutableStateOf(defaultPbrMaterials[selectedMaterialIndex])
     }
 
-    var previewShape by remember { mutableStateOf(PreviewMeshShape.PLANE) }
+    var selectedSurfaceIndex by remember { mutableIntStateOf(0) }
+    var currentSurface by remember(selectedSurfaceIndex) {
+        mutableStateOf(defaultCompositeSurfaces[selectedSurfaceIndex])
+    }
+
+    var selectedCategoryFilter by remember { mutableStateOf(MaterialCategoryFilter.ALL) }
     var selectedChannel by remember { mutableStateOf(MaterialChannelMode.COMPOSITE_PBR) }
     var selectedTab by remember { mutableIntStateOf(0) }
 
-    val surfaceTabTitles = listOf("Composite Layers", "PBR Channels", "Vulkan Specs")
-    val materialTabTitles = listOf("Physical Constants", "Procedural Details", "Refraction & SSS", "Vulkan Shader")
+    // Filtered materials based on category
+    val filteredMaterials = remember(selectedCategoryFilter) {
+        when (selectedCategoryFilter) {
+            MaterialCategoryFilter.ALL -> defaultPbrMaterials
+            MaterialCategoryFilter.WALL -> defaultPbrMaterials.filter { it.category == "Masonry" }
+            MaterialCategoryFilter.METALS -> defaultPbrMaterials.filter { it.category == "Metals" }
+            MaterialCategoryFilter.FLOORING -> defaultPbrMaterials.filter { it.category == "Flooring" || it.category == "Infrastructure" }
+            MaterialCategoryFilter.NATURE -> defaultPbrMaterials.filter { it.category == "Nature" || it.category == "Organics" || it.category == "Refractive" }
+        }
+    }
+
+    val tabTitles = listOf("🎨 Texture Library", "⚙️ PBR Parameters", "🔬 Micro-Details", "🗺️ Channel Maps", "⚡ Vulkan C++")
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "PBR Material & Surface Studio",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Surface(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    "14:30 UTC",
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                )
+                            }
+                        }
                         Text(
-                            if (inspectorMode == InspectorMode.SURFACES) "Surface & Assembly Inspector" else "Pure Material Physics",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                        )
-                        Text(
-                            if (inspectorMode == InspectorMode.SURFACES) "${currentSurface.name} • ${currentSurface.category.label}" else "${currentMaterial.name} • ${currentMaterial.category}",
-                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                            "Target: ${previewShape.label} • Active: ${currentMaterial.name}",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 11.sp
+                            )
                         )
                     }
                 },
@@ -93,18 +131,18 @@ fun MaterialInspectorScreen(
                 actions = {
                     IconButton(
                         onClick = {
-                            if (inspectorMode == InspectorMode.SURFACES) {
-                                currentSurface = defaultCompositeSurfaces[selectedSurfaceIndex]
-                            } else {
-                                currentMaterial = defaultPbrMaterials[selectedMaterialIndex]
-                            }
+                            currentMaterial = defaultPbrMaterials[selectedMaterialIndex]
+                            currentSurface = defaultCompositeSurfaces[selectedSurfaceIndex]
                             selectedChannel = MaterialChannelMode.COMPOSITE_PBR
                         },
-                        modifier = Modifier.testTag("reset_preset_button")
+                        modifier = Modifier.testTag("reset_material_preset_button")
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = "Reset Preset")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
             )
         },
         modifier = modifier.testTag("material_inspector_screen")
@@ -114,178 +152,389 @@ fun MaterialInspectorScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // 1. High-Level Mode Switcher: Composite Surface vs Pure Material
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            // 1. Target Object Selector Bar (Cube, Wall, Sphere, Slab)
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                InspectorMode.entries.forEach { mode ->
-                    val isSelected = mode == inspectorMode
-                    FilledTonalButton(
-                        onClick = {
-                            inspectorMode = mode
-                            selectedTab = 0
-                        },
-                        modifier = Modifier.weight(1f).testTag("mode_${mode.name.lowercase()}"),
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                            contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            if (mode == InspectorMode.SURFACES) Icons.Default.Layers else Icons.Default.Science,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.ViewInAr,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                "Target 3D Object:",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                        }
+
+                        Text(
+                            "Tap object, then apply any texture below",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 10.sp
+                            )
                         )
-                        Spacer(Modifier.width(6.dp))
-                        Text(mode.label, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
+                    }
+
+                    Spacer(Modifier.height(4.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        PreviewMeshShape.entries.forEach { shapeOption ->
+                            val isSelected = previewShape == shapeOption
+                            FilledTonalButton(
+                                onClick = { previewShape = shapeOption },
+                                modifier = Modifier.weight(1f).testTag("select_shape_${shapeOption.id}"),
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                    contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                ),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = when (shapeOption) {
+                                        PreviewMeshShape.CUBE -> Icons.Default.ViewInAr
+                                        PreviewMeshShape.WALL -> Icons.Default.Layers
+                                        PreviewMeshShape.SPHERE -> Icons.Default.Circle
+                                        PreviewMeshShape.PLANE -> Icons.Default.SquareFoot
+                                    },
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    shapeOption.label,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
                     }
                 }
             }
 
-            // 2. Horizontal Item Selector Chips
+            // 2. Texture Category Filter & Quick Material Selection
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .padding(horizontal = 12.dp, vertical = 3.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (inspectorMode == InspectorMode.SURFACES) {
-                    defaultCompositeSurfaces.forEachIndexed { index, surf ->
-                        val isSelected = selectedSurfaceIndex == index
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = {
-                                selectedSurfaceIndex = index
-                                currentSurface = surf
-                                previewShape = PreviewMeshShape.PLANE
-                            },
-                            label = { Text(surf.name, fontSize = 12.sp) },
-                            modifier = Modifier.testTag("chip_surface_${surf.id}"),
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
+                MaterialCategoryFilter.entries.forEach { cat ->
+                    val isSelected = selectedCategoryFilter == cat
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { selectedCategoryFilter = cat },
+                        label = { Text(cat.label, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                        modifier = Modifier.testTag("filter_cat_${cat.name.lowercase()}"),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
                         )
-                    }
-                } else {
-                    defaultPbrMaterials.forEachIndexed { index, mat ->
-                        val isSelected = selectedMaterialIndex == index
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = {
-                                selectedMaterialIndex = index
-                                currentMaterial = mat
-                            },
-                            label = { Text(mat.name, fontSize = 12.sp) },
-                            modifier = Modifier.testTag("chip_material_${mat.id}"),
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        )
-                    }
+                    )
                 }
             }
 
-            // 3. Texture Channel Bar (when in PBR Channels or Material mode)
+            // 3. Compact Horizontal Texture Quick-Chips
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                filteredMaterials.forEach { mat ->
+                    val isSelected = currentMaterial.id == mat.id
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = {
+                            currentMaterial = mat
+                            selectedMaterialIndex = defaultPbrMaterials.indexOfFirst { it.id == mat.id }.coerceAtLeast(0)
+
+                            val matchingSurface = defaultCompositeSurfaces.find { surf ->
+                                surf.id.contains(mat.id) || mat.id.contains(surf.id) || surf.category.name == mat.category.uppercase()
+                            }
+                            if (matchingSurface != null) {
+                                currentSurface = matchingSurface
+                                selectedSurfaceIndex = defaultCompositeSurfaces.indexOf(matchingSurface)
+                            }
+                        },
+                        leadingIcon = {
+                            Box(
+                                modifier = Modifier
+                                    .size(12.dp)
+                                    .clip(CircleShape)
+                                    .background(mat.baseColor)
+                            )
+                        },
+                        label = {
+                            Text(
+                                mat.name,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            )
+                        },
+                        modifier = Modifier.testTag("chip_mat_${mat.id}"),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    )
+                }
+            }
+
+            // 4. Texture Channel Selector (Full PBR, Albedo, Normal, ORM, Height)
             MaterialChannelSelectorRow(
                 selectedChannel = selectedChannel,
                 onChannelSelect = { selectedChannel = it }
             )
 
-            // 4. Viewport
-            val activeMat = if (inspectorMode == InspectorMode.SURFACES) {
-                currentSurface.layers.firstOrNull { it.isEnabled }?.material ?: defaultPbrMaterials.first()
-            } else {
-                currentMaterial
-            }
-
+            // 5. Expansive 3D Viewport with the chosen Object & Applied Texture
             MaterialPreviewViewport(
-                material = activeMat,
-                compositeSurface = if (inspectorMode == InspectorMode.SURFACES) currentSurface else null,
+                material = currentMaterial,
+                compositeSurface = currentSurface,
                 channelMode = selectedChannel,
                 shape = previewShape,
                 onShapeChange = { previewShape = it },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1.02f)
+                    .weight(1.30f)
             )
 
-            // 5. Tabs
-            val activeTabTitles = if (inspectorMode == InspectorMode.SURFACES) surfaceTabTitles else materialTabTitles
+            // 6. Navigation Tabs for In-Depth Customization
             PrimaryScrollableTabRow(
-                selectedTabIndex = selectedTab.coerceIn(0, activeTabTitles.size - 1),
+                selectedTabIndex = selectedTab.coerceIn(0, tabTitles.size - 1),
                 modifier = Modifier.fillMaxWidth(),
                 edgePadding = 8.dp
             ) {
-                activeTabTitles.forEachIndexed { index, title ->
+                tabTitles.forEachIndexed { index, title ->
                     Tab(
                         selected = selectedTab == index,
                         onClick = { selectedTab = index },
-                        text = { Text(title, fontSize = 12.sp, fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal) },
-                        modifier = Modifier.testTag("inspector_tab_$index")
+                        text = {
+                            Text(
+                                title,
+                                fontSize = 11.sp,
+                                fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal
+                            )
+                        },
+                        modifier = Modifier.testTag("material_tab_$index")
                     )
                 }
             }
 
-            // 6. Active Tab Panel
+            // 7. Active Tab Panel
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1.18f)
+                    .weight(1.15f)
             ) {
-                if (inspectorMode == InspectorMode.SURFACES) {
-                    when (selectedTab) {
-                        0 -> SurfaceCompositeLayersTab(
-                            surface = currentSurface,
-                            onSurfaceChange = { currentSurface = it },
-                            onDrillDownMaterial = { drilledMat ->
-                                val foundIdx = defaultPbrMaterials.indexOfFirst { it.name == drilledMat.name }
-                                if (foundIdx >= 0) {
-                                    selectedMaterialIndex = foundIdx
-                                    currentMaterial = defaultPbrMaterials[foundIdx]
-                                } else {
-                                    currentMaterial = drilledMat
-                                }
-                                inspectorMode = InspectorMode.MATERIALS
-                                selectedTab = 0
-                            }
-                        )
-                        1 -> MaterialProceduralDetailTab(
-                            material = activeMat,
-                            onMaterialChange = { updated ->
-                                val updatedLayers = currentSurface.layers.map { layer ->
-                                    if (layer.material.id == updated.id) layer.copy(material = updated) else layer
-                                }
-                                currentSurface = currentSurface.copy(layers = updatedLayers)
-                            }
-                        )
-                        2 -> MaterialVulkanSpecTab(
-                            material = activeMat
-                        )
+                when (selectedTab) {
+                    0 -> MaterialLibraryBrowserTab(
+                        materials = defaultPbrMaterials,
+                        activeMaterial = currentMaterial,
+                        targetShape = previewShape,
+                        onSelectMaterial = { selectedMat ->
+                            currentMaterial = selectedMat
+                            selectedMaterialIndex = defaultPbrMaterials.indexOfFirst { it.id == selectedMat.id }.coerceAtLeast(0)
+                        }
+                    )
+                    1 -> MaterialPropertiesTab(
+                        material = currentMaterial,
+                        onMaterialChange = { currentMaterial = it }
+                    )
+                    2 -> MaterialProceduralDetailTab(
+                        material = currentMaterial,
+                        onMaterialChange = { currentMaterial = it }
+                    )
+                    3 -> MaterialVulkanSpecTab(
+                        material = currentMaterial
+                    )
+                    4 -> MaterialShaderTab(
+                        material = currentMaterial
+                    )
+                }
+            }
+        }
+    }
+}
+
+// -------------------------------------------------------------
+// VISUAL MATERIAL LIBRARY BROWSER TAB
+// -------------------------------------------------------------
+@Composable
+private fun MaterialLibraryBrowserTab(
+    materials: List<PbrMaterial>,
+    activeMaterial: PbrMaterial,
+    targetShape: PreviewMeshShape,
+    onSelectMaterial: (PbrMaterial) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // Quick Apply Notice
+        Surface(
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+        ) {
+            Row(
+                modifier = Modifier.padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.TouchApp,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "Tap any texture card below to apply it to the active ${targetShape.label}.",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                )
+            }
+        }
+
+        materials.forEach { mat ->
+            val isSelected = mat.id == activeMaterial.id
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSelectMaterial(mat) }
+                    .testTag("mat_card_${mat.id}"),
+                shape = RoundedCornerShape(10.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                ),
+                border = BorderStroke(
+                    1.dp,
+                    if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Color / Material Swatch Thumbnail
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(mat.baseColor)
+                            .padding(2.dp)
+                    ) {
+                        if (isSelected) {
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = "Active",
+                                tint = Color.White,
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .align(Alignment.Center)
+                            )
+                        }
                     }
-                } else {
-                    when (selectedTab) {
-                        0 -> MaterialPropertiesTab(
-                            material = currentMaterial,
-                            onMaterialChange = { currentMaterial = it }
+
+                    Spacer(Modifier.width(12.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                mat.name,
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Surface(
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    mat.category,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp)
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(2.dp))
+
+                        Text(
+                            mat.description,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 11.sp
+                            ),
+                            maxLines = 2
                         )
-                        1 -> MaterialProceduralDetailTab(
-                            material = currentMaterial,
-                            onMaterialChange = { currentMaterial = it }
-                        )
-                        2 -> MaterialOpticsTab(
-                            material = currentMaterial,
-                            onMaterialChange = { currentMaterial = it }
-                        )
-                        3 -> MaterialShaderTab(
-                            material = currentMaterial
-                        )
+
+                        Spacer(Modifier.height(4.dp))
+
+                        // Physical PBR Telemetry Badges
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                "Rough: ${(mat.roughness * 100).toInt()}%",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                    color = Color(0xFF38BDF8),
+                                    fontSize = 10.sp
+                                )
+                            )
+                            Text(
+                                "Metal: ${(mat.metallic * 100).toInt()}%",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                    color = Color(0xFFFBBF24),
+                                    fontSize = 10.sp
+                                )
+                            )
+                            Text(
+                                "IOR: ${mat.ior}",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                    color = Color(0xFFA78BFA),
+                                    fontSize = 10.sp
+                                )
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.width(8.dp))
+
+                    FilledTonalButton(
+                        onClick = { onSelectMaterial(mat) },
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(if (isSelected) "Applied" else "Apply", fontSize = 11.sp)
                     }
                 }
             }

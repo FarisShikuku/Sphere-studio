@@ -1,0 +1,54 @@
+#version 460
+// Compute shader for high-performance normal/roughness derivation from KTX2 albedo textures
+// Uses Sobel spatial filtering and variance analysis directly in Vulkan Compute
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(binding = 0) uniform sampler2D u_InputAlbedo;
+layout(binding = 1, rgba8) uniform writeonly image2D u_OutputNormalMap;
+layout(binding = 2, r8) uniform writeonly image2D u_OutputRoughnessMap;
+
+layout(push_constant) uniform FilterPush {
+    float normalStrength;
+    float roughnessScale;
+    float roughnessBias;
+} push;
+
+float Luminance(vec3 color) {
+    return dot(color, vec3(0.2126, 0.7152, 0.0722));
+}
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(u_OutputNormalMap);
+    if (pixel.x >= size.x || pixel.y >= size.y) return;
+
+    vec2 texelSize = 1.0 / vec2(size);
+    vec2 uv = (vec2(pixel) + 0.5) * texelSize;
+
+    // Sobel 3x3 filter kernel for height gradient extraction
+    float tl = Luminance(texture(u_InputAlbedo, uv + vec2(-texelSize.x, -texelSize.y)).rgb);
+    float t  = Luminance(texture(u_InputAlbedo, uv + vec2(0.0,          -texelSize.y)).rgb);
+    float tr = Luminance(texture(u_InputAlbedo, uv + vec2( texelSize.x, -texelSize.y)).rgb);
+    float l  = Luminance(texture(u_InputAlbedo, uv + vec2(-texelSize.x,  0.0)).rgb);
+    float c  = Luminance(texture(u_InputAlbedo, uv).rgb);
+    float r  = Luminance(texture(u_InputAlbedo, uv + vec2( texelSize.x,  0.0)).rgb);
+    float bl = Luminance(texture(u_InputAlbedo, uv + vec2(-texelSize.x,  texelSize.y)).rgb);
+    float b  = Luminance(texture(u_InputAlbedo, uv + vec2(0.0,           texelSize.y)).rgb);
+    float br = Luminance(texture(u_InputAlbedo, uv + vec2( texelSize.x,  texelSize.y)).rgb);
+
+    // Horizontal & vertical gradients
+    float dX = (tr + 2.0 * r + br) - (tl + 2.0 * l + bl);
+    float dY = (bl + 2.0 * b + br) - (tl + 2.0 * t + tr);
+
+    // Compute surface normal in tangent space
+    vec3 normal = normalize(vec3(-dX * push.normalStrength, -dY * push.normalStrength, 1.0));
+    // Pack normal to [0, 1] range for unorm image
+    vec3 packedNormal = normal * 0.5 + 0.5;
+
+    // Estimate roughness from local high-frequency micro-contrast
+    float localContrast = abs(c - (tl + t + tr + l + r + bl + b + br) * 0.125);
+    float roughness = clamp(localContrast * push.roughnessScale + push.roughnessBias, 0.04, 1.0);
+
+    imageStore(u_OutputNormalMap, pixel, vec4(packedNormal, 1.0));
+    imageStore(u_OutputRoughnessMap, pixel, vec4(roughness, 0.0, 0.0, 1.0));
+}

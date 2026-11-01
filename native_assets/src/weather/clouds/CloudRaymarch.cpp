@@ -5,7 +5,7 @@
 namespace sphere::weather {
 
 namespace {
-// Beckebans 6-cone sampling kernel for light extinction
+// Meteoros 6-cone sampling kernel for light extinction
 constexpr float NOISE_KERNEL[6][3] = {
     { 0.38051305f,  0.92453449f, -0.02111345f},
     {-0.50625799f, -0.03590792f, -0.86163418f},
@@ -15,9 +15,17 @@ constexpr float NOISE_KERNEL[6][3] = {
     {-0.16852403f,  0.14748697f,  0.97460106f}
 };
 
-// Beckebans ambient illumination palette for sky / earth ambient bounce
-constexpr Vec3 AMBIENT_TOP{0.66f, 0.58f, 0.58f};
-constexpr Vec3 AMBIENT_BOTTOM{0.25f, 0.27f, 0.31f};
+// Meteoros 4x4 Bayer matrix for ray offset jittering to eliminate stepping artifacts
+constexpr float BAYER_4X4[4][4] = {
+    { 0.0f / 16.0f,  8.0f / 16.0f,  2.0f / 16.0f, 10.0f / 16.0f},
+    {12.0f / 16.0f,  4.0f / 16.0f, 14.0f / 16.0f,  6.0f / 16.0f},
+    { 3.0f / 16.0f, 11.0f / 16.0f,  1.0f / 16.0f,  9.0f / 16.0f},
+    {15.0f / 16.0f,  7.0f / 16.0f, 13.0f / 16.0f,  5.0f / 16.0f}
+};
+
+// Meteoros ambient illumination palette for sky / earth ambient bounce
+constexpr Vec3 AMBIENT_TOP{0.68f, 0.62f, 0.64f};
+constexpr Vec3 AMBIENT_BOTTOM{0.24f, 0.26f, 0.32f};
 } // namespace
 
 bool CloudRaymarch::IntersectAtmosphere(
@@ -55,7 +63,7 @@ float CloudRaymarch::RaymarchToLight(
     float stepSize
 ) const {
     float lightDensity = 0.0f;
-    float ds = stepSize * 4.0f;
+    float ds = stepSize * 3.5f;
 
     for (int i = 0; i < 6; ++i) {
         float coneScale = (i + 1) * 0.5f;
@@ -77,7 +85,9 @@ CloudRayResult CloudRaymarch::March(
     const Vec3& sunDir,
     const Vec3& sunColor,
     const CloudGen& generator,
-    float time
+    float time,
+    int pixelX,
+    int pixelY
 ) const {
     CloudRayResult result;
     const auto& params = generator.GetParams();
@@ -99,7 +109,13 @@ CloudRayResult CloudRaymarch::March(
     float transmittance = 1.0f;
     Vec3 accumulatedRadiance{0.0f, 0.0f, 0.0f};
 
-    float t = tNear;
+    // Apply Meteoros 4x4 Bayer interleaved ray jitter
+    float bayerOffset = 0.0f;
+    if (params.enableBayerJitter) {
+        bayerOffset = BAYER_4X4[pixelY & 3][pixelX & 3];
+    }
+    float t = tNear + bayerOffset * stepSize;
+
     for (int i = 0; i < steps; ++i) {
         if (transmittance < 0.01f) break;
 
@@ -109,16 +125,16 @@ CloudRayResult CloudRaymarch::March(
         if (sampleDensity > 0.001f) {
             float opticalDepth = sampleDensity * stepSize * 0.005f;
 
-            // 1. Beer's Law light extinction
-            float beerAtten = generator.Beer(opticalDepth);
+            // 1. Meteoros Multi-Scattering Dual Beer-Lambert law
+            float multiBeerAtten = generator.MultiBeer(opticalDepth, params.multiScatteringFactor);
 
-            // 2. Powder sugar effect (Robert Beckebans's Nubis approximation)
+            // 2. Powder sugar effect (AmanSachan1/Meteoros approximation)
             float powderAtten = generator.Powder(opticalDepth);
-            float energyFactor = beerAtten * (1.0f - (1.0f - powderAtten) * params.powderEffect);
+            float energyFactor = multiBeerAtten * (1.0f - (1.0f - powderAtten) * params.powderEffect);
 
             // 3. March towards sun to calculate cloud self-shadowing
             float lightDepth = RaymarchToLight(p, sunDir, generator, time, stepSize);
-            float sunEnergy = generator.Beer(lightDepth * params.sunAbsorption * 0.005f);
+            float sunEnergy = generator.MultiBeer(lightDepth * params.sunAbsorption * 0.005f, params.multiScatteringFactor * 0.5f);
 
             // 4. Ambient light combination (sky hemisphere + ground bounce)
             float hFrac = generator.GetHeightFraction(p);
@@ -155,6 +171,8 @@ CloudRayResult CloudRaymarch::March(
     result.cloudAlpha = std::clamp(1.0f - transmittance, 0.0f, 1.0f);
     result.radiance = accumulatedRadiance;
     result.depthMeters = tNear;
+    // Meteoros god-ray occlusion factor (1.0 = clear sunlight beam, 0.0 = occluded by thick cloud)
+    result.godRayOcclusion = transmittance;
     return result;
 }
 

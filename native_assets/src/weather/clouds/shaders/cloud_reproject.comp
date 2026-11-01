@@ -1,0 +1,57 @@
+#version 460
+// ==============================================================================
+// Vulkan 1.3 Compute Shader: Temporal Reprojection & Neighborhood Clamping
+// Converted from AmanSachan1/Meteoros (Aman Sachan & Meghana Seshadri, CIS 565 UPenn)
+// ==============================================================================
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(set = 0, binding = 0, rgba16f) uniform readonly image2D u_CurrentFrame;
+layout(set = 0, binding = 1, rgba16f) uniform readonly image2D u_HistoryFrame;
+layout(set = 0, binding = 2, rg16f) uniform readonly image2D u_VelocityMap;
+layout(set = 0, binding = 3, rgba16f) uniform image2D u_ReprojectedOutput;
+
+layout(push_constant) uniform ReprojectPushConstants {
+    float feedbackMin; // e.g. 0.88
+    float feedbackMax; // e.g. 0.96
+    vec2 invScreenSize;
+} pc;
+
+void main() {
+    ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 screenSize = imageSize(u_ReprojectedOutput);
+    if (pixelCoord.x >= screenSize.x || pixelCoord.y >= screenSize.y) return;
+
+    vec2 uv = (vec2(pixelCoord) + 0.5) * pc.invScreenSize;
+    vec4 current = imageLoad(u_CurrentFrame, pixelCoord);
+    vec2 velocity = imageLoad(u_VelocityMap, pixelCoord).xy;
+
+    vec2 historyUV = uv - velocity;
+    ivec2 historyPixel = ivec2(historyUV * vec2(screenSize));
+
+    if (historyPixel.x < 0 || historyPixel.x >= screenSize.x ||
+        historyPixel.y < 0 || historyPixel.y >= screenSize.y) {
+        imageStore(u_ReprojectedOutput, pixelCoord, current);
+        return;
+    }
+
+    // 3x3 Neighborhood bounding box clamping to reject ghosting
+    vec4 boxMin = current;
+    vec4 boxMax = current;
+    for (int dy = -1; dy <= 1; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            ivec2 tapPixel = clamp(pixelCoord + ivec2(dx, dy), ivec2(0), screenSize - ivec2(1));
+            vec4 tapColor = imageLoad(u_CurrentFrame, tapPixel);
+            boxMin = min(boxMin, tapColor);
+            boxMax = max(boxMax, tapColor);
+        }
+    }
+
+    vec4 history = imageLoad(u_HistoryFrame, historyPixel);
+    history = clamp(history, boxMin, boxMax);
+
+    float blend = mix(pc.feedbackMin, pc.feedbackMax, smoothstep(0.0, 0.05, length(velocity)));
+    vec4 resolved = mix(current, history, blend);
+
+    imageStore(u_ReprojectedOutput, pixelCoord, resolved);
+}

@@ -185,7 +185,12 @@ fun SphereStudioApp() {
     ) {
         when (currentCategory.id) {
             "sky" -> {
-                SkyStudioScreen(modifier = Modifier.fillMaxSize())
+                SkyStudioScreen(
+                    onNavigateBack = {
+                        selectedCategoryIndex = 0
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
             }
             "weather" -> {
                 WeatherStudioScreen(

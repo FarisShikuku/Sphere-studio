@@ -46,4 +46,11 @@ class ExampleUnitTest {
     assertTrue(presets.any { it.id == "billboard_stage_anchor" })
     assertTrue(presets.any { it.id == "scifi_cyber_terminal" })
   }
+
+  @Test
+  fun `TextureManager rejects corrupted or truncated KTX2 headers`() {
+    val invalidBytes = byteArrayOf(0x00, 0x01, 0x02, 0x03)
+    val parsed = com.example.sphere.viewport.TextureManager.parseKtx2(invalidBytes)
+    assertNull(parsed)
+  }
 }

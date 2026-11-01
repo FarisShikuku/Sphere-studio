@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 // -------------------------------------------------------------
-// CONTROL TAB 3: NATIVE STRUCTURE INSPECTOR
+// CONTROL TAB 3: NATIVE STRUCTURE & SCENE GEOMETRY INSPECTOR
 // -------------------------------------------------------------
 @Composable
 fun NativeStructureTab() {
@@ -47,7 +47,7 @@ fun NativeStructureTab() {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Native Engine Architecture",
+                text = "Native C++ Scene & Geometry Core",
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                 color = Color.White
             )
@@ -67,7 +67,7 @@ fun NativeStructureTab() {
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Vulkan 1.3 Verified",
+                        text = "Vulkan 1.3 C++ Active",
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFF6EE7B7),
                         fontWeight = FontWeight.Bold
@@ -79,15 +79,16 @@ fun NativeStructureTab() {
         Spacer(modifier = Modifier.height(10.dp))
 
         val nativeFiles = listOf(
-            Triple("Sky & Atmosphere Core", "src/scene/SkyModel.cpp", "Preetham / Hosek-Wilkie scattering model & solar extinction"),
-            Triple("Sun Disk & Corona", "src/sky/sun/SunDisk.cpp", "Direct solar disk, limb darkening & Mie forward halo"),
-            Triple("Atmospheric Perez", "src/sky/atmosphere/PreethamModel.cpp", "All-weather daylight spectrum & zenith luminance"),
-            Triple("Common Scene", "src/scene/Scene.cpp", "Root viewport container holding Camera, SkyModel, Light & Nodes"),
-            Triple("Camera & Controls", "src/scene/Camera.cpp", "Perspective projection, reverse-Z & orbit controllers"),
-            Triple("Vulkan Device & Allocator", "base/VulkanDevice.cpp", "Physical/logical device, queue families & staging buffer pool"),
-            Triple("Bindless Heap", "src/vulkan/BindlessHeap.cpp", "VK_EXT_descriptor_indexing unbounded descriptor heap"),
-            Triple("Pipeline Builder", "src/vulkan/PipelineBuilder.cpp", "Vulkan 1.3 dynamic rendering graphics & compute pipelines"),
-            Triple("Sky Shaders", "shaders/glsl/sky.comp", "GLSL 460 compute shader evaluating atmospheric LUT")
+            Triple("Procedural Geometry Core", "src/scene/Geometry.cpp", "C++ PBR cube, calibration cube, stage plane, infinite grid, and sky dome generators"),
+            Triple("Common Vulkan Scene", "src/scene/Scene.cpp", "Unified root scene holding stage modes (Flat/Boundary/Grid/Cube), lights, camera & assets"),
+            Triple("Hierarchical Scene Graph", "src/scene/SceneGraph.cpp", "C++ parent-child transform hierarchy, dirty matrix caching, and visibility traversal"),
+            Triple("Vulkan Stage Pipeline", "src/scene/VulkanStage.cpp", "Multi-pass Vulkan 1.3 coordinator (shadows, atmosphere, PBR, debug grid & post-fx)"),
+            Triple("Transform & 3D Math", "src/scene/Transform.cpp", "Column-major Mat4, Quat, Vec3 vector arithmetic and Vulkan clip projection"),
+            Triple("Mesh & Tangent Calculation", "src/scene/Mesh.cpp", "Gram-Schmidt tangent space, smooth area-weighted normal synthesis, AABB bounds"),
+            Triple("Atmospheric Sky & Sun Core", "src/scene/SkyModel.cpp", "Preetham / Hosek-Wilkie scattering model & solar extinction calculation"),
+            Triple("Camera & 6-DOF Orbit", "src/scene/Camera.cpp", "Perspective projection, reverse-Z depth & spherical orbit controller"),
+            Triple("Bindless Heap Manager", "src/vulkan/BindlessHeap.cpp", "VK_EXT_descriptor_indexing unbounded descriptor heap for textures & buffers"),
+            Triple("Decima Raymarching Compute", "src/weather/clouds/CloudRaymarch.cpp", "Meteoros multi-scattering dual Beer-Lambert and Henyey-Greenstein solver")
         )
 
         nativeFiles.forEach { (name, path, desc) ->

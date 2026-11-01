@@ -18,28 +18,30 @@ set(SHADER_SOURCES
     glsl/pbr.frag
     glsl/shadow.vert
     glsl/shadow.frag
+    glsl/shadow_cascade.vert
     glsl/sky.vert
     glsl/sky.frag
     glsl/sky.comp
-    glsl/cull.comp
-    glsl/meshlet.comp
-    glsl/debug/debug_line.vert
-    glsl/debug/debug_line.frag
-    glsl/debug/debug_text.frag
+    glsl/brdf_lut.comp
+    glsl/texture_processor.comp
+    glsl/text_sdf.vert
+    glsl/text_sdf.frag
 )
 
 set(SPV_OUTPUTS "")
 foreach(SHADER ${SHADER_SOURCES})
-    get_filename_component(SHADER_NAME ${SHADER} NAME)
-    set(SPV_FILE ${SPV_OUTPUT_DIR}/${SHADER_NAME}.spv)
-    add_custom_command(
-        OUTPUT ${SPV_FILE}
-        COMMAND ${GLSLC} -I ${SHADER_INCLUDE_DIR} --target-env=vulkan1.3 -O ${CMAKE_CURRENT_SOURCE_DIR}/${SHADER} -o ${SPV_FILE}
-        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${SHADER}
-        COMMENT "Compiling SPIR-V: ${SHADER} -> ${SPV_FILE}"
-        VERBATIM
-    )
-    list(APPEND SPV_OUTPUTS ${SPV_FILE})
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${SHADER})
+        get_filename_component(SHADER_NAME ${SHADER} NAME)
+        set(SPV_FILE ${SPV_OUTPUT_DIR}/${SHADER_NAME}.spv)
+        add_custom_command(
+            OUTPUT ${SPV_FILE}
+            COMMAND ${GLSLC} -I ${SHADER_INCLUDE_DIR} --target-env=vulkan1.3 -O ${CMAKE_CURRENT_SOURCE_DIR}/${SHADER} -o ${SPV_FILE}
+            DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${SHADER}
+            COMMENT "Compiling SPIR-V: ${SHADER} -> ${SPV_FILE}"
+            VERBATIM
+        )
+        list(APPEND SPV_OUTPUTS ${SPV_FILE})
+    endif()
 endforeach()
 
 add_custom_target(compile_shaders ALL DEPENDS ${SPV_OUTPUTS})

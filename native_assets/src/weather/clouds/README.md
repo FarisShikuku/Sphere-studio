@@ -1,16 +1,29 @@
-# Volumetric Clouds Subsystem (Nubis-Decima Engine)
+# Meteoros Volumetric Cloudscape Subsystem
 
-Converted from [Robert Beckebans's OpenGL-VolumetricClouds](https://github.com/RobertBeckebans/OpenGL-VolumetricClouds) into Sphere Studio's Vulkan 1.3 / C++20 compute pipeline.
+Vulkan 1.3 / C++20 real-time volumetric cloudscape renderer converted and adapted from [AmanSachan1/Meteoros](https://github.com/AmanSachan1/Meteoros) (Aman Sachan & Meghana Seshadri, CIS 565 GPU Programming and Architecture, University of Pennsylvania), based on Guerrilla Games' Decima Engine ('Nubis' SIGGRAPH 2015 & 2017 papers).
 
-## Architectural Improvements & Features
-- **Spherical Atmosphere Shell**: Dual-boundary planetary geometry (`SPHERE_INNER_RADIUS = 705,000m`, `SPHERE_OUTER_RADIUS = 722,000m`).
-- **Nubis Cloud Types & Density Gradients**:
-  - `STRATUS_GRADIENT` $(0.0, 0.10, 0.20, 0.30)$ — thin horizontal low-altitude fog veils.
-  - `STRATOCUMULUS_GRADIENT` $(0.02, 0.20, 0.48, 0.625)$ — rolling fluffy blanket sheets.
-  - `CUMULUS_GRADIENT` $(0.00, 0.1625, 0.88, 0.98)$ — towering 3D cauliflower heaps with flat dark bases.
-- **Physically-Based Optical Radiative Transfer**:
-  - **Beer's Law**: $T = \exp(-d)$ exponential extinction along sightline and sun shadow rays.
-  - **Beer-Powder Sugar Effect**: $P = (1.0 - \exp(-2d))$ representing multiple forward scattering in dense droplet clusters.
-  - **Dual-Lobe Henyey-Greenstein**: Forward peak ($g_1 = 0.8$) producing vibrant solar "Silver Lining" halos, blended with backscattering ($g_2 = -0.2$).
-- **Cone-Stepped Light Sampling**: 6-vector jittered cone sampling towards the sun for soft volumetric self-shadowing without expensive multi-pass shadowmaps.
-- **Multi-Octave 3D Perlin-Worley Noise**: Low-frequency billowy shapes eroded by high-frequency 3D cellular Worley noise with altitude-dependent wind shear deflection.
+## Key Innovations & Rendering Architecture
+
+### 1. Multi-Scattering Optical Radiative Transfer
+- **Dual Beer-Lambert Law Approximation**:
+  $$E_{\text{multi}} = \exp(-d) + \exp(-0.25 d) \cdot 0.5 \cdot k_{\text{multi}}$$
+  Unlike single-scattering Beer's Law ($e^{-d}$), which plunges cloud interiors into unnatural pitch-black darkness, the secondary Beer-Lambert octave pushes scattered light deep into thick cloud cauliflower heaps, simulating forward multiple scattering.
+- **Beer-Powder Sugar Effect**:
+  $$P(d) = 1.0 - \exp(-2.0 \cdot d \cdot k_{\text{powder}})$$
+  Simulates in-scattering near droplet boundaries and prevents thick cloud centers from collapsing into dark silhouettes.
+- **Dual-Lobe Henyey-Greenstein (HG) Directional Phase**:
+  $$P(\theta) = (1 - \alpha) \cdot HG(\cos\theta, g_1) + \alpha \cdot HG(\cos\theta, g_2)$$
+  With $g_1 = 0.82$ (forward peak creating radiant solar "Silver Lining" halos) and $g_2 = -0.22$ (backscattering ambient bounce).
+
+### 2. Planetary Atmosphere Shell & Species Gradients
+- Dual-boundary concentric planetary geometry (`SPHERE_INNER_RADIUS = 705,000m`, `SPHERE_OUTER_RADIUS = 722,000m`).
+- Decima/Meteoros height density profiles:
+  - `STRATUS_GRADIENT`: $(0.0, 0.10, 0.20, 0.30)$ — flat overcast sheet veil.
+  - `STRATOCUMULUS_GRADIENT`: $(0.02, 0.20, 0.48, 0.625)$ — undulating rolling waves.
+  - `CUMULUS_GRADIENT`: $(0.00, 0.1625, 0.88, 0.98)$ — towering cauliflower piles with flat dark bases.
+  - `CUMULONIMBUS_GRADIENT`: $(0.01, 0.12, 0.92, 1.00)$ — monolithic anvil thunderclouds spanning full atmospheric depth.
+
+### 3. Meteoros Compute Pipeline & Post-Processing
+- **`cloud_raymarch.comp`**: Primary Vulkan 1.3 compute shader dispatching 16x16 workgroups with Bayer interleaved jitter to eliminate woodgrain slicing artifacts. Outputs 32-bit HDR color and a sun-occlusion channel.
+- **`cloud_godrays.comp`**: Meteoros volumetric crepuscular ray generator performing radial screen-space illumination marching from the sun coordinate with exponential decay, density weighting, and exposure scaling.
+- **`cloud_reproject.comp`**: Temporal reprojection and neighborhood clamping compute shader for stable, high-performance rendering.

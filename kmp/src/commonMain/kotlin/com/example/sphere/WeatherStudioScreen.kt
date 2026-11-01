@@ -73,6 +73,8 @@ fun WeatherStudioScreen(
     var sunBacklight by remember { mutableFloatStateOf(0.70f) }
     var fogDensity by remember { mutableFloatStateOf(selectedPreset.fogDensity) }
     var groundMist by remember { mutableFloatStateOf(0.15f) }
+    var multiScatteringFactor by remember { mutableFloatStateOf(0.55f) }
+    var enableBayerJitter by remember { mutableStateOf(true) }
 
     // Wind & Storms parameters
     var windSpeed by remember { mutableFloatStateOf(selectedPreset.windSpeed) }
@@ -98,7 +100,7 @@ fun WeatherStudioScreen(
         }
     }
 
-    // Procedural Beckebans Nubis cloud bitmap
+    // Procedural AmanSachan1/Meteoros volumetric cloud bitmap
     val cloudImage = remember(
         cloudCoverage,
         cloudDensity,
@@ -107,7 +109,9 @@ fun WeatherStudioScreen(
         powderEffect,
         sunAbsorption,
         detailErosion,
-        isStormActive
+        isStormActive,
+        multiScatteringFactor,
+        enableBayerJitter
     ) {
         ProceduralCloudSynthesizer.renderPerspectiveSky(
             width = 240,
@@ -126,7 +130,9 @@ fun WeatherStudioScreen(
             detailErosion = detailErosion,
             cloudBaseAltitude = cloudBaseAltitude,
             isStorm = isStormActive,
-            horizonYFrac = 0.62f
+            horizonYFrac = 0.62f,
+            multiScatteringFactor = multiScatteringFactor,
+            enableBayerJitter = enableBayerJitter
         ).asImageBitmap()
     }
 
@@ -184,7 +190,7 @@ fun WeatherStudioScreen(
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                         )
                         Text(
-                            "Beckebans Volumetric Clouds & Vulkan Simulation",
+                            "AmanSachan1/Meteoros Volumetric Clouds & Vulkan Engine",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 11.sp
@@ -383,10 +389,23 @@ fun WeatherStudioScreen(
                             fontSize = 12.sp,
                             fontFamily = FontFamily.Monospace
                         )
+                        val detectedCloudLabel = when (cloudType) {
+                            0 -> "🌫 [St] Stratus Overcast Veil"
+                            1 -> "🌊 [Sc] Stratocumulus Waves"
+                            2 -> "⛅ [Cu] Cumulus Cauliflower"
+                            else -> "⛈ [Cb] Cumulonimbus Nimbus"
+                        }
                         Text(
                             "Wind: ${"%.1f".format(windSpeed)} m/s • Rain: ${"%.0f".format(rainIntensity * 100)}% • Clouds: ${"%.0f".format(cloudCoverage * 100)}%",
                             color = Color.Cyan.copy(alpha = 0.9f),
                             fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            "Detected: $detectedCloudLabel",
+                            color = Color(0xFFA78BFA),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
                         )
                     }
@@ -453,7 +472,11 @@ fun WeatherStudioScreen(
                         billowDepth = billowDepth, onBillowDepthChange = { billowDepth = it },
                         sunBacklight = sunBacklight, onSunBacklightChange = { sunBacklight = it },
                         fogDensity = fogDensity, onFogDensityChange = { fogDensity = it },
-                        groundMist = groundMist, onGroundMistChange = { groundMist = it }
+                        groundMist = groundMist, onGroundMistChange = { groundMist = it },
+                        multiScatteringFactor = multiScatteringFactor,
+                        onMultiScatteringFactorChange = { multiScatteringFactor = it },
+                        enableBayerJitter = enableBayerJitter,
+                        onEnableBayerJitterChange = { enableBayerJitter = it }
                     )
                     3 -> WindStormsTab(
                         windSpeed = windSpeed, onWindSpeedChange = { windSpeed = it },

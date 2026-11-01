@@ -5,11 +5,12 @@
 namespace sphere::weather {
 
 namespace {
-// Beckebans Nubis height gradients for distinct cloud species
+// Meteoros / Decima height gradients for distinct cloud species
 // vec4(bottom_fade_start, bottom_fade_end, top_fade_start, top_fade_end)
 constexpr float STRATUS_GRADIENT[4] = {0.0f, 0.10f, 0.20f, 0.30f};
 constexpr float STRATOCUMULUS_GRADIENT[4] = {0.02f, 0.20f, 0.48f, 0.625f};
 constexpr float CUMULUS_GRADIENT[4] = {0.00f, 0.1625f, 0.88f, 0.98f};
+constexpr float CUMULONIMBUS_GRADIENT[4] = {0.01f, 0.12f, 0.92f, 1.00f};
 
 float Smoothstep(float edge0, float edge1, float x) {
     float t = std::clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
@@ -40,12 +41,15 @@ float CloudGen::GetDensityForCloud(float heightFraction, CloudType type) const {
             grad = STRATOCUMULUS_GRADIENT;
             break;
         case CloudType::Cumulus:
-        default:
             grad = CUMULUS_GRADIENT;
+            break;
+        case CloudType::Cumulonimbus:
+        default:
+            grad = CUMULONIMBUS_GRADIENT;
             break;
     }
 
-    // Nubis Decima smoothstep height gradient curve
+    // Meteoros smoothstep height gradient curve
     float bottomFade = Smoothstep(grad[0], grad[1], heightFraction);
     float topFade = 1.0f - Smoothstep(grad[2], grad[3], heightFraction);
     return std::max(0.0f, bottomFade * topFade);
@@ -55,8 +59,16 @@ float CloudGen::Beer(float opticalDepth) const {
     return std::exp(-opticalDepth);
 }
 
+float CloudGen::MultiBeer(float opticalDepth, float multiScatteringFactor) const {
+    // Meteoros Dual Beer-Lambert multi-scattering approximation
+    // Combines primary extinction with secondary lobe allowing light deep into thick cloud folds
+    float primary = std::exp(-opticalDepth);
+    float secondary = std::exp(-opticalDepth * 0.25f) * 0.7f;
+    return primary + secondary * multiScatteringFactor;
+}
+
 float CloudGen::Powder(float opticalDepth) const {
-    // Robert Beckebans powder sugar effect: highlights outer edges, darkens dense cores
+    // Meteoros powder sugar effect: highlights outer edges, simulates multiple in-scattering
     return 1.0f - std::exp(-2.0f * opticalDepth);
 }
 
@@ -71,7 +83,7 @@ float CloudGen::DualPhaseHG(float cosTheta) const {
     // Dual-lobe Henyey-Greenstein: forward peak for silver lining + subtle backscattering
     float forward = HenyeyGreenstein(cosTheta, m_params.forwardScatteringG1);
     float backward = HenyeyGreenstein(cosTheta, m_params.backwardScatteringG2);
-    return forward * 0.7f + backward * 0.3f;
+    return forward * 0.72f + backward * 0.28f;
 }
 
 float CloudGen::SampleCloudDensity(const Vec3& p, float time, bool expensive) const {
@@ -80,7 +92,7 @@ float CloudGen::SampleCloudDensity(const Vec3& p, float time, bool expensive) co
         return 0.0f;
     }
 
-    // Wind advection animation & height shear offset (Beckebans Nubis wind model)
+    // Wind advection animation & height shear offset (Meteoros wind model)
     Vec3 wind = m_params.windDirection;
     float shear = heightFraction * m_params.cloudTopOffset;
     float drift = time * (m_params.windSpeed * (1000.0f / 3600.0f) * 0.2f);

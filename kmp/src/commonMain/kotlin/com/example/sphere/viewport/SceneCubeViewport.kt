@@ -90,7 +90,8 @@ fun SceneCubeViewport(
             val y2 = v.y * cosX - z1 * sinX
             val z2 = v.y * sinX + z1 * cosX
 
-            val zView = (z2 + cameraDist).coerceAtLeast(0.1f)
+            // Sascha Willems Vulkan depth: camera at +cameraDist looking along -Z
+            val zView = (cameraDist - z2).coerceAtLeast(0.1f)
             val px = cx + (x1 / zView) * fovFactor
             val py = cy - (y2 / zView) * fovFactor
             return Point2D(px, py, zView)
@@ -312,36 +313,53 @@ fun SceneCubeViewport(
         val projected = rawVertices.map { projectPoint(it) }
 
         val facesData = listOf(
-            Triple(listOf(0, 3, 2, 1), Vec3D(0f, 0f, -1f), 0),
-            Triple(listOf(7, 4, 5, 6), Vec3D(0f, 0f, 1f), 1),
-            Triple(listOf(4, 7, 3, 0), Vec3D(0f, 1f, 0f), 2),
-            Triple(listOf(1, 2, 6, 5), Vec3D(0f, -1f, 0f), 3),
-            Triple(listOf(3, 7, 6, 2), Vec3D(1f, 0f, 0f), 4),
-            Triple(listOf(4, 0, 1, 5), Vec3D(-1f, 0f, 0f), 5)
+            Triple(listOf(3, 0, 1, 2), Vec3D( 0f,  0f, -1f), 0), // Back (-Z)
+            Triple(listOf(4, 7, 6, 5), Vec3D( 0f,  0f,  1f), 1), // Front (+Z)
+            Triple(listOf(0, 3, 7, 4), Vec3D( 0f,  1f,  0f), 2), // Top (+Y)
+            Triple(listOf(5, 6, 2, 1), Vec3D( 0f, -1f,  0f), 3), // Bottom (-Y)
+            Triple(listOf(7, 3, 2, 6), Vec3D( 1f,  0f,  0f), 4), // Right (+X)
+            Triple(listOf(0, 4, 5, 1), Vec3D(-1f,  0f,  0f), 5)  // Left (-X)
         )
 
         val quads = mutableListOf<FaceQuad>()
 
         for ((indices, rawNorm, faceIdx) in facesData) {
-            val p0 = projected[indices[0]]
-            val p1 = projected[indices[1]]
-            val p2 = projected[indices[2]]
-            val p3 = projected[indices[3]]
-
             val rotNorm = transformNormal(rawNorm)
-            val avgDepth = (p0.depth + p1.depth + p2.depth + p3.depth) / 4f
+            val vA = rawVertices[indices[0]]
+            val vB = rawVertices[indices[2]]
+            val fcX = (vA.x + vB.x) * 0.5f
+            val fcY = (vA.y + vB.y) * 0.5f
+            val fcZ = (vA.z + vB.z) * 0.5f
 
-            quads.add(
-                FaceQuad(
-                    p0 = p0,
-                    p1 = p1,
-                    p2 = p2,
-                    p3 = p3,
-                    avgDepth = avgDepth,
-                    normal = rotNorm,
-                    faceIndex = faceIdx
+            val c1 = fcX * cosY + fcZ * sinY
+            val cz1 = -fcX * sinY + fcZ * cosY
+            val cy2 = fcY * cosX - cz1 * sinX
+            val cz2 = fcY * sinX + cz1 * cosX
+
+            val toEyeX = -c1
+            val toEyeY = -cy2
+            val toEyeZ = cameraDist - cz2
+            val isVis = (rotNorm.x * toEyeX + rotNorm.y * toEyeY + rotNorm.z * toEyeZ) > 0.01f
+
+            if (isVis) {
+                val p0 = projected[indices[0]]
+                val p1 = projected[indices[1]]
+                val p2 = projected[indices[2]]
+                val p3 = projected[indices[3]]
+                val avgDepth = (p0.depth + p1.depth + p2.depth + p3.depth) / 4f
+
+                quads.add(
+                    FaceQuad(
+                        p0 = p0,
+                        p1 = p1,
+                        p2 = p2,
+                        p3 = p3,
+                        avgDepth = avgDepth,
+                        normal = rotNorm,
+                        faceIndex = faceIdx
+                    )
                 )
-            )
+            }
         }
 
         quads.sortByDescending { it.avgDepth }

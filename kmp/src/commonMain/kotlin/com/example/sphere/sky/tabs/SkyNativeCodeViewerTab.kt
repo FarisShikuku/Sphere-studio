@@ -38,6 +38,119 @@ import androidx.compose.ui.unit.sp
 fun SkyNativeCodeViewerTab() {
     var selectedFileIdx by remember { mutableIntStateOf(0) }
     val files = listOf(
+        "cloud_raymarch.comp" to """// shaders/cloud_raymarch.comp (AmanSachan1/Meteoros Decima Engine)
+#version 460
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(set = 0, binding = 0, rgba16f) uniform image2D u_CloudOutput;
+layout(set = 0, binding = 1) uniform sampler3D u_PerlinWorleyNoise;
+layout(set = 0, binding = 2) uniform sampler3D u_WorleyDetailNoise;
+layout(set = 0, binding = 3) uniform sampler2D u_WeatherMap;
+
+// Meteoros Dual Beer-Lambert multi-scattering approximation
+float MultiBeer(float d, float multiFactor) {
+    float primary = exp(-d);
+    float secondary = exp(-d * 0.25) * 0.7;
+    return primary + secondary * multiFactor;
+}
+
+// Henyey-Greenstein dual-phase silver lining
+float HenyeyGreenstein(float cosTheta, float g) {
+    float gg = g * g;
+    return (1.0 - gg) / (4.0 * PI * pow(max(0.0001, 1.0 + gg - 2.0 * g * cosTheta), 1.5));
+}
+
+// 4x4 Bayer matrix temporal ray jittering
+const float BAYER_4X4[16] = float[16](
+     0.0/16.0,  8.0/16.0,  2.0/16.0, 10.0/16.0,
+    12.0/16.0,  4.0/16.0, 14.0/16.0,  6.0/16.0,
+     3.0/16.0, 11.0/16.0,  1.0/16.0,  9.0/16.0,
+    15.0/16.0,  7.0/16.0, 13.0/16.0,  5.0/16.0
+);""",
+        "Geometry.h" to """// scene/Geometry.h - Native C++ Procedural Geometry Generator
+#pragma once
+#include "Mesh.h"
+#include "Transform.h"
+
+namespace sphere {
+class GeometryGenerator {
+public:
+    static Mesh GenerateCube(float width, float height, float depth, const Vec3& center = {0, 0, 0});
+    static Mesh GenerateCalibrationCube(float size = 1.0f, float bevel = 0.04f);
+    static Mesh GenerateStagePlatform(float width, float length, float height, float bevel = 0.05f);
+    static Mesh GenerateGridLines(int lineCount = 20, float spacing = 0.5f, bool addAxes = true);
+    static Mesh GenerateSphere(float radius = 1.0f, uint32_t rings = 32, uint32_t sectors = 32);
+    static Mesh GenerateSkyDome(float radius = 500.0f, uint32_t rings = 24, uint32_t sectors = 48);
+    static Mesh GenerateAtmosphereCloudHull(float innerRadius, float outerRadius, float spanDeg);
+    static void CalculateNormals(Mesh& mesh);
+    static void CalculateTangents(Mesh& mesh);
+};
+}""",
+        "Scene.h" to """// scene/Scene.h - Native C++ Common Vulkan Scene
+#pragma once
+#include "Camera.h"
+#include "Light.h"
+#include "SkyModel.h"
+#include "SceneGraph.h"
+#include "Geometry.h"
+
+namespace sphere {
+class Scene {
+public:
+    void InitializeDefaultStage();
+    void SetStageMode(StageMode mode); // FlatPiece, Boundary, InfiniteGrid, CalibrationCube
+    void Update(float deltaTime);
+    
+    Camera& GetCamera() { return m_Camera; }
+    SkyModel& GetSky() { return m_Sky; }
+    SceneGraph& GetSceneGraph() { return m_SceneGraph; }
+    const std::vector<Light>& GetLights() const { return m_Lights; }
+    std::shared_ptr<Mesh> GetStageMesh() const { return m_StageMesh; }
+    std::shared_ptr<Mesh> GetCalibrationCubeMesh() const { return m_CalibrationCubeMesh; }
+};
+}""",
+        "VulkanStage.h" to """// scene/VulkanStage.h - Native Vulkan 1.3 Stage Pipeline Coordinator
+#pragma once
+#include "Scene.h"
+#include <vulkan/vulkan.h>
+
+namespace sphere {
+struct alignas(16) GlobalSceneUBO {
+    Mat4 viewMatrix;
+    Mat4 projMatrix;
+    Mat4 viewProjMatrix;
+    Mat4 lightSpaceMatrix;
+    Vec4 cameraPosition;
+    Vec4 sunDirection;
+    Vec4 sunColor;
+    Vec4 ambientSkyColor;
+    Vec4 worldParams;
+};
+
+class VulkanStage {
+public:
+    void RecordShadowPass(VkCommandBuffer cmd);
+    void RecordSkyAtmospherePass(VkCommandBuffer cmd);
+    void RecordOpaqueGeometryPass(VkCommandBuffer cmd);
+    void RecordDebugGridPass(VkCommandBuffer cmd);
+};
+}""",
+        "CloudGen.h" to """// weather/clouds/CloudGen.h (AmanSachan1/Meteoros C++ Core)
+#pragma once
+#include "CloudParams.h"
+
+namespace sphere::weather {
+class CloudGen {
+public:
+    void SetParams(const CloudParams& params);
+    float GetHeightFraction(const Vec3& pos) const;
+    float GetDensityForCloud(float hFrac, CloudType type) const;
+    float Beer(float opticalDepth) const;
+    float MultiBeer(float opticalDepth, float multiFactor) const;
+    float HenyeyGreenstein(float cosTheta, float g) const;
+    float Powder(float density) const;
+};
+}""",
         "SkySystem.h" to """// SkySystem.h - Primary Atmospheric Coordinator (kentril0 reference)
 namespace sphere::sky {
 class SkySystem {
