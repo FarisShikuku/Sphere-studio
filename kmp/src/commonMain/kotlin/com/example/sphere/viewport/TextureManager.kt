@@ -144,6 +144,7 @@ object TextureManager {
 
     /**
      * Renders a perspective-mapped photographic texture onto an arbitrary 3D quadrilateral.
+     * Incorporates architectural PBR real-world physical dimensions (mm to meters) and seamless UV tiling.
      */
     fun drawTexturedQuad(
         drawScope: DrawScope,
@@ -153,20 +154,45 @@ object TextureManager {
         material: PbrMaterial,
         diffuse: Float,
         specular: Float,
-        channelMode: MaterialChannelMode
+        channelMode: MaterialChannelMode,
+        surfaceWidthMeters: Float = 1.0f,
+        surfaceHeightMeters: Float = 1.0f,
+        useRealWorldScale: Boolean = true,
+        uvTilingMultiplierX: Float = 1.0f,
+        uvTilingMultiplierY: Float = 1.0f
     ) {
         if (pts.size < 4) return
+
+        // Physical tile scale in meters (e.g. 0.90m for brick, 0.30m for grass, 0.70m for earth)
+        val tileMeters = if (material.tileScaleMeters > 0.05f) material.tileScaleMeters else 1.0f
+
+        val (repeatX, repeatY) = if (useRealWorldScale) {
+            val rx = ((surfaceWidthMeters / tileMeters) * uvTilingMultiplierX).coerceIn(0.15f, 32f)
+            val ry = ((surfaceHeightMeters / tileMeters) * uvTilingMultiplierY).coerceIn(0.15f, 32f)
+            Pair(rx, ry)
+        } else {
+            Pair(uvTilingMultiplierX.coerceIn(0.15f, 32f), uvTilingMultiplierY.coerceIn(0.15f, 32f))
+        }
 
         drawScope.drawIntoCanvas { canvas ->
             val nativeCanvas = canvas.nativeCanvas
             nativeCanvas.save()
             nativeCanvas.clipPath(facePath.asAndroidPath())
 
+            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG)
+            paint.isDither = true
+
+            val shader = android.graphics.BitmapShader(
+                bitmap,
+                android.graphics.Shader.TileMode.REPEAT,
+                android.graphics.Shader.TileMode.REPEAT
+            )
+
             val src = floatArrayOf(
                 0f, 0f,
-                bitmap.width.toFloat(), 0f,
-                bitmap.width.toFloat(), bitmap.height.toFloat(),
-                0f, bitmap.height.toFloat()
+                bitmap.width.toFloat() * repeatX, 0f,
+                bitmap.width.toFloat() * repeatX, bitmap.height.toFloat() * repeatY,
+                0f, bitmap.height.toFloat() * repeatY
             )
             val dst = floatArrayOf(
                 pts[0].x, pts[0].y,
@@ -178,8 +204,10 @@ object TextureManager {
             val matrix = android.graphics.Matrix()
             val valid = matrix.setPolyToPoly(src, 0, dst, 0, 4)
 
-            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG)
-            paint.isDither = true
+            if (valid) {
+                shader.setLocalMatrix(matrix)
+                paint.shader = shader
+            }
 
             when (channelMode) {
                 MaterialChannelMode.ALBEDO_MAP -> {
@@ -217,6 +245,8 @@ object TextureManager {
             }
 
             if (valid) {
+                nativeCanvas.drawPath(facePath.asAndroidPath(), paint)
+            } else {
                 nativeCanvas.drawBitmap(bitmap, matrix, paint)
             }
 
@@ -227,7 +257,7 @@ object TextureManager {
                     color = android.graphics.Color.argb(specAlpha, 255, 255, 255)
                     xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SCREEN)
                 }
-                nativeCanvas.drawPaint(specPaint)
+                nativeCanvas.drawPath(facePath.asAndroidPath(), specPaint)
             }
 
             nativeCanvas.restore()
@@ -235,14 +265,25 @@ object TextureManager {
     }
 
     /**
-     * Renders a circular-clipped photographic texture onto a 3D sphere.
+     * Renders a circular-clipped photographic texture onto a 3D sphere with physical real-world repeat.
      */
     fun drawTexturedSphere(
         drawScope: DrawScope,
         bitmap: Bitmap,
         center: androidx.compose.ui.geometry.Offset,
-        radius: Float
+        radius: Float,
+        sphereDiameterMeters: Float = 1.6f,
+        material: PbrMaterial? = null,
+        useRealWorldScale: Boolean = true,
+        uvTilingMultiplier: Float = 1.0f
     ) {
+        val tileMeters = (material?.tileScaleMeters ?: 1.0f).coerceAtLeast(0.10f)
+        val repeatCount = if (useRealWorldScale) {
+            ((sphereDiameterMeters * 3.14159f / tileMeters) * uvTilingMultiplier).coerceIn(1.0f, 12f)
+        } else {
+            uvTilingMultiplier.coerceIn(1.0f, 12f)
+        }
+
         drawScope.drawIntoCanvas { canvas ->
             val nativeCanvas = canvas.nativeCanvas
             nativeCanvas.save()
@@ -250,9 +291,24 @@ object TextureManager {
                 addCircle(center.x, center.y, radius, android.graphics.Path.Direction.CW)
             }
             nativeCanvas.clipPath(spherePath)
-            val dstRect = android.graphics.RectF(center.x - radius, center.y - radius, center.x + radius, center.y + radius)
+
             val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG)
-            nativeCanvas.drawBitmap(bitmap, null, dstRect, paint)
+            paint.isDither = true
+
+            val shader = android.graphics.BitmapShader(
+                bitmap,
+                android.graphics.Shader.TileMode.REPEAT,
+                android.graphics.Shader.TileMode.REPEAT
+            )
+
+            val matrix = android.graphics.Matrix()
+            val scale = (radius * 2f / (bitmap.width / repeatCount))
+            matrix.setScale(scale, scale)
+            matrix.postTranslate(center.x - radius, center.y - radius)
+            shader.setLocalMatrix(matrix)
+            paint.shader = shader
+
+            nativeCanvas.drawPath(spherePath, paint)
             nativeCanvas.restore()
         }
     }

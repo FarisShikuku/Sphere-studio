@@ -1,22 +1,17 @@
 #include "MaterialRegistry.h"
 #include <algorithm>
-
 namespace sphere {
-
 MaterialRegistry& MaterialRegistry::Get() {
     static MaterialRegistry instance;
     return instance;
 }
-
 MaterialRegistry::MaterialRegistry() {
     RegisterDefaultPresets();
 }
-
 void MaterialRegistry::Initialize() {
     std::lock_guard<std::mutex> lock(m_Mutex);
     RegisterDefaultPresets();
 }
-
 const MaterialDef& MaterialRegistry::GetMaterial(MaterialID id) const {
     std::lock_guard<std::mutex> lock(m_Mutex);
     auto it = m_Materials.find(id);
@@ -25,17 +20,14 @@ const MaterialDef& MaterialRegistry::GetMaterial(MaterialID id) const {
     }
     return m_Fallback;
 }
-
 void MaterialRegistry::SetMaterial(MaterialID id, const MaterialDef& def) {
     std::lock_guard<std::mutex> lock(m_Mutex);
     m_Materials[id] = def;
 }
-
 bool MaterialRegistry::HasMaterial(MaterialID id) const {
     std::lock_guard<std::mutex> lock(m_Mutex);
     return m_Materials.find(id) != m_Materials.end();
 }
-
 std::vector<MaterialID> MaterialRegistry::GetAllMaterialIDs() const {
     std::lock_guard<std::mutex> lock(m_Mutex);
     std::vector<MaterialID> result;
@@ -45,7 +37,6 @@ std::vector<MaterialID> MaterialRegistry::GetAllMaterialIDs() const {
     }
     return result;
 }
-
 std::vector<MaterialID> MaterialRegistry::GetMaterialsByCategory(const std::string& category) const {
     std::lock_guard<std::mutex> lock(m_Mutex);
     std::vector<MaterialID> result;
@@ -56,7 +47,6 @@ std::vector<MaterialID> MaterialRegistry::GetMaterialsByCategory(const std::stri
     }
     return result;
 }
-
 void MaterialRegistry::RegisterDefaultPresets() {
     m_Fallback.id = MaterialID::BRICK_RED;
     m_Fallback.name = "Default Neutral Material";
@@ -65,7 +55,6 @@ void MaterialRegistry::RegisterDefaultPresets() {
     m_Fallback.metallic = 0.0f;
     m_Fallback.roughness = 0.5f;
     m_Fallback.ior = 1.5f;
-
     // 1. Rusticated Red Brick (From user attachment 900mm stretcher)
     MaterialDef brickRusticated;
     brickRusticated.id = MaterialID::BRICK_RUSTICATED;
@@ -82,7 +71,6 @@ void MaterialRegistry::RegisterDefaultPresets() {
     brickRusticated.surfaceMode = SurfaceMode::SURFACE_FLAT_TEXTURE;
     brickRusticated.textureAssetPath = "textures/rusticated-red-brick.jpg";
     m_Materials[MaterialID::BRICK_RUSTICATED] = brickRusticated;
-
     // 2. Mondo Grass (Surface Only - user explicit requirement)
     MaterialDef grassSurface;
     grassSurface.id = MaterialID::GRASS_SURFACE;
@@ -102,7 +90,6 @@ void MaterialRegistry::RegisterDefaultPresets() {
     grassSurface.surfaceMode = SurfaceMode::SURFACE_FLAT_TEXTURE;
     grassSurface.textureAssetPath = "textures/mondo-grass.jpg";
     m_Materials[MaterialID::GRASS_SURFACE] = grassSurface;
-
     // 3. Mondo Grass (3D Instanced Blades)
     MaterialDef grass3D;
     grass3D.id = MaterialID::GRASS_3D_BLADES;
@@ -118,7 +105,6 @@ void MaterialRegistry::RegisterDefaultPresets() {
     grass3D.surfaceMode = SurfaceMode::GEOMETRY_3D_INSTANCED;
     grass3D.tileScaleMeters = 0.30f;
     m_Materials[MaterialID::GRASS_3D_BLADES] = grass3D;
-
     // 4. Earth with Foliage (From user attachment 700mm)
     MaterialDef earthFoliage;
     earthFoliage.id = MaterialID::EARTH_FOLIAGE;
@@ -137,7 +123,6 @@ void MaterialRegistry::RegisterDefaultPresets() {
     earthFoliage.surfaceMode = SurfaceMode::SURFACE_FLAT_TEXTURE;
     earthFoliage.textureAssetPath = "textures/earth-foliage.jpg";
     m_Materials[MaterialID::EARTH_FOLIAGE] = earthFoliage;
-
     // 5. Refractive Architectural Glass (Sascha Willems refraction & Snell's law)
     MaterialDef glassClear;
     glassClear.id = MaterialID::GLASS_CLEAR;
@@ -152,7 +137,6 @@ void MaterialRegistry::RegisterDefaultPresets() {
     glassClear.absorptionColor = Vec3{0.88f, 0.96f, 0.94f};
     glassClear.absorptionDensity = 0.1f;
     m_Materials[MaterialID::GLASS_CLEAR] = glassClear;
-
     // 6. Frosted Glass
     MaterialDef glassFrosted;
     glassFrosted.id = MaterialID::GLASS_FROSTED;
@@ -166,7 +150,6 @@ void MaterialRegistry::RegisterDefaultPresets() {
     glassFrosted.refractionRoughness = 0.35f;
     glassFrosted.normalScale = 0.4f;
     m_Materials[MaterialID::GLASS_FROSTED] = glassFrosted;
-
     // 7. Water Surface (Refraction + Wave normal)
     MaterialDef waterSurface;
     waterSurface.id = MaterialID::WATER_SURFACE;
@@ -181,7 +164,6 @@ void MaterialRegistry::RegisterDefaultPresets() {
     waterSurface.absorptionColor = Vec3{0.05f, 0.40f, 0.55f};
     waterSurface.absorptionDensity = 0.3f;
     m_Materials[MaterialID::WATER_SURFACE] = waterSurface;
-
     // 8. Brushed Anodized Aluminum (Anisotropic)
     MaterialDef metalBrushed;
     metalBrushed.id = MaterialID::METAL_BRUSHED;
@@ -193,7 +175,6 @@ void MaterialRegistry::RegisterDefaultPresets() {
     metalBrushed.anisotropy = 0.75f;
     metalBrushed.ior = 2.40f;
     m_Materials[MaterialID::METAL_BRUSHED] = metalBrushed;
-
     // 9. Glacial Ice (Refractive dielectric + SSS)
     MaterialDef iceGlacial;
     iceGlacial.id = MaterialID::ICE_GLACIAL;
@@ -207,7 +188,6 @@ void MaterialRegistry::RegisterDefaultPresets() {
     iceGlacial.subsurface = 0.45f;
     iceGlacial.subsurfaceColor = Vec3{0.40f, 0.78f, 0.92f};
     m_Materials[MaterialID::ICE_GLACIAL] = iceGlacial;
-
     // 10. Subsurface Human Skin
     MaterialDef skin;
     skin.id = MaterialID::SKIN_HUMAN;
@@ -222,5 +202,4 @@ void MaterialRegistry::RegisterDefaultPresets() {
     skin.subsurfaceRadius = 3.8f;
     m_Materials[MaterialID::SKIN_HUMAN] = skin;
 }
-
-} // namespace sphere
+} // namespace spher

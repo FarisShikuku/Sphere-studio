@@ -1,5 +1,4 @@
 #pragma once
-
 namespace sphere {
 class Timestep {
 public:
@@ -10,4 +9,4 @@ public:
 private:
     float m_Time;
 };
-}\n
+}

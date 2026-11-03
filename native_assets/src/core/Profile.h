@@ -1,7 +1,6 @@
 #pragma once
 #include "Timer.h"
 #include <string>
-
 namespace sphere {
 class ScopeProfiler {
 public:
@@ -12,5 +11,4 @@ private:
     Timer m_Timer;
 };
 }
-
-#define SPHERE_PROFILE_SCOPE(name) sphere::ScopeProfiler profiler##__LINE__(name)\n
+#define SPHERE_PROFILE_SCOPE(name) sphere::ScopeProfiler profiler##__LINE__(name)

@@ -1,5 +1,4 @@
 #include "VulkanTools.hpp"
-
 namespace sphere::base::tools {
 std::string ErrorString(VkResult errorCode) {
     switch (errorCode) {
@@ -16,7 +15,6 @@ std::string ErrorString(VkResult errorCode) {
         default: return "VK_UNKNOWN_ERROR";
     }
 }
-
 uint32_t FindMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties) {
     VkPhysicalDeviceMemoryProperties memProperties;
     vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
@@ -27,4 +25,4 @@ uint32_t FindMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter, Vk
     }
     throw std::runtime_error("Failed to find suitable memory type!");
 }
-}\n
+}

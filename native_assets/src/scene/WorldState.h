@@ -1,6 +1,5 @@
 #pragma once
 #include "Transform.h"
-
 namespace sphere {
 struct WorldState {
     float time = 0.0f;
@@ -11,4 +10,4 @@ struct WorldState {
     float wetness = 0.0f;
     float snowDepth = 0.0f;
 };
-}\n
+}

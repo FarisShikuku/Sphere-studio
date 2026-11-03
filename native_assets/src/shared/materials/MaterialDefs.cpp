@@ -1,7 +1,5 @@
 #include "MaterialDef.h"
-
 namespace sphere {
-
 const char* GetMaterialName(MaterialID id) {
     switch (id) {
         case MaterialID::BRICK_RED: return "Red Clay Brick";
@@ -38,7 +36,6 @@ const char* GetMaterialName(MaterialID id) {
         default: return "Custom PBR Material";
     }
 }
-
 const char* GetMaterialCategory(MaterialID id) {
     switch (id) {
         case MaterialID::BRICK_RED:
@@ -50,7 +47,6 @@ const char* GetMaterialCategory(MaterialID id) {
         case MaterialID::STONE_MARBLE:
         case MaterialID::STONE_GRANITE:
             return "Masonry & Architecture";
-
         case MaterialID::GRASS_SURFACE:
         case MaterialID::GRASS_3D_BLADES:
         case MaterialID::EARTH_FOLIAGE:
@@ -61,7 +57,6 @@ const char* GetMaterialCategory(MaterialID id) {
         case MaterialID::BARK_OAK:
         case MaterialID::FOLIAGE_LEAF:
             return "Nature & Ground Surfaces";
-
         case MaterialID::METAL_STEEL:
         case MaterialID::METAL_BRUSHED:
         case MaterialID::METAL_RUSTED:
@@ -70,16 +65,13 @@ const char* GetMaterialCategory(MaterialID id) {
         case MaterialID::PAINT_GLOSS:
         case MaterialID::ASPHALT_WET:
             return "Metals & Polymers";
-
         case MaterialID::GLASS_CLEAR:
         case MaterialID::GLASS_FROSTED:
         case MaterialID::ICE_GLACIAL:
         case MaterialID::WATER_SURFACE:
             return "Optical & Refractive";
-
         default:
             return "Specialized & Organics";
     }
 }
-
-} // namespace sphere
+} // namespace spher

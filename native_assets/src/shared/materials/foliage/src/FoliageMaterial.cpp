@@ -1,12 +1,9 @@
 #include "../include/FoliageMaterial.h"
 #include "../textures/spec/foliage_spec.h"
-
 namespace sphere {
-
 FoliageMaterial::FoliageMaterial(FoliageVariant variant) {
     SetVariant(variant);
 }
-
 void FoliageMaterial::SetVariant(FoliageVariant variant) {
     m_Variant = variant;
     m_Def.id = MaterialID::FOLIAGE_LEAF;
@@ -19,7 +16,6 @@ void FoliageMaterial::SetVariant(FoliageVariant variant) {
     m_Def.subsurface = 0.65f;
     m_Def.subsurfaceColor = Vec3{0.45f, 0.85f, 0.20f};
     m_Def.subsurfaceRadius = 2.0f; // mm
-
     switch (variant) {
         case FoliageVariant::DECIDUOUS_OAK:
             m_Def.baseColorFactor = Vec4{0.28f, 0.52f, 0.16f, 1.0f};
@@ -38,7 +34,6 @@ void FoliageMaterial::SetVariant(FoliageVariant variant) {
             break;
     }
 }
-
 bool FoliageMaterial::GenerateTextures(GeneratorContext& context) {
     m_TextureIndices[static_cast<size_t>(MaterialChannel::Albedo)] = 601;
     m_TextureIndices[static_cast<size_t>(MaterialChannel::Normal)] = 602;
@@ -46,7 +41,6 @@ bool FoliageMaterial::GenerateTextures(GeneratorContext& context) {
     m_IsGenerated = true;
     return true;
 }
-
 uint32_t FoliageMaterial::GetTextureIndex(MaterialChannel channel) const {
     auto idx = static_cast<size_t>(channel);
     if (idx < m_TextureIndices.size()) {
@@ -54,5 +48,4 @@ uint32_t FoliageMaterial::GetTextureIndex(MaterialChannel channel) const {
     }
     return 0;
 }
-
-} // namespace sphere
+} // namespace spher

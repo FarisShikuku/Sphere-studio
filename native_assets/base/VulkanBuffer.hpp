@@ -1,6 +1,5 @@
 #pragma once
 #include <vulkan/vulkan.h>
-
 namespace sphere::base {
 class VulkanBuffer {
 public:
@@ -13,7 +12,6 @@ public:
     void* mapped = nullptr;
     VkBufferUsageFlags usageFlags = 0;
     VkMemoryPropertyFlags memoryPropertyFlags = 0;
-
     VkResult Map(VkDeviceSize size = VK_WHOLE_SIZE, VkDeviceSize offset = 0);
     void Unmap();
     VkResult Bind(VkDeviceSize offset = 0);
@@ -22,4 +20,4 @@ public:
     VkResult Flush(VkDeviceSize size = VK_WHOLE_SIZE, VkDeviceSize offset = 0);
     void Destroy();
 };
-}\n
+}

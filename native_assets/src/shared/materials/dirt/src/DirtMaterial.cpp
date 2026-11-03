@@ -1,12 +1,9 @@
 #include "../include/DirtMaterial.h"
 #include "../textures/spec/dirt_spec.h"
-
 namespace sphere {
-
 DirtMaterial::DirtMaterial(DirtVariant variant) {
     SetVariant(variant);
 }
-
 void DirtMaterial::SetVariant(DirtVariant variant) {
     m_Variant = variant;
     m_Def.id = MaterialID::EARTH_FOLIAGE;
@@ -21,7 +18,6 @@ void DirtMaterial::SetVariant(DirtVariant variant) {
     m_Def.subsurfaceColor = Vec3{0.45f, 0.55f, 0.15f};
     m_Def.normalScale = 1.15f;
     m_Def.displacementDepth = 0.032f;
-
     switch (variant) {
         case DirtVariant::EARTH_WITH_FOLIAGE:
             m_Def.baseColorFactor = Vec4{0.42f, 0.32f, 0.21f, 1.0f};
@@ -41,7 +37,6 @@ void DirtMaterial::SetVariant(DirtVariant variant) {
             break;
     }
 }
-
 bool DirtMaterial::GenerateTextures(GeneratorContext& context) {
     m_TextureIndices[static_cast<size_t>(MaterialChannel::Albedo)] = 301;
     m_TextureIndices[static_cast<size_t>(MaterialChannel::Normal)] = 302;
@@ -50,7 +45,6 @@ bool DirtMaterial::GenerateTextures(GeneratorContext& context) {
     m_IsGenerated = true;
     return true;
 }
-
 uint32_t DirtMaterial::GetTextureIndex(MaterialChannel channel) const {
     auto idx = static_cast<size_t>(channel);
     if (idx < m_TextureIndices.size()) {
@@ -58,5 +52,4 @@ uint32_t DirtMaterial::GetTextureIndex(MaterialChannel channel) const {
     }
     return 0;
 }
-
-} // namespace sphere
+} // namespace spher

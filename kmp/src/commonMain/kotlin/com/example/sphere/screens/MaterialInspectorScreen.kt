@@ -33,9 +33,11 @@ import com.example.sphere.tabs.MaterialProceduralDetailTab
 import com.example.sphere.tabs.MaterialPropertiesTab
 import com.example.sphere.tabs.MaterialShaderTab
 import com.example.sphere.tabs.MaterialVulkanSpecTab
+import com.example.sphere.tabs.ObjectDimensionsControlTab
 import com.example.sphere.tabs.SurfaceCompositeLayersTab
 import com.example.sphere.viewport.MaterialPreviewViewport
 import com.example.sphere.viewport.PreviewMeshShape
+import kotlin.math.*
 
 enum class MaterialCategoryFilter(val label: String, val iconDescription: String) {
     ALL("All Textures", "All procedural PBR materials"),
@@ -55,6 +57,18 @@ fun MaterialInspectorScreen(
 
     // Selected Target Object: Default to 3D Test Cube as requested
     var previewShape by remember { mutableStateOf(PreviewMeshShape.CUBE) }
+
+    // Dimensions & Size Modification State for Wall, Box, Floor, Sphere
+    var objectScale by remember { mutableFloatStateOf(1.0f) }
+    var objectWidthScale by remember { mutableFloatStateOf(1.0f) }
+    var objectHeightScale by remember { mutableFloatStateOf(1.0f) }
+    var objectDepthScale by remember { mutableFloatStateOf(1.0f) }
+    var isQuickSizeBarExpanded by remember { mutableStateOf(false) }
+
+    // Real-World Physical PBR Scaling & UV Tiling (Architextures / BIM standard)
+    var useRealWorldScale by remember { mutableStateOf(true) }
+    var uvTilingMultiplierX by remember { mutableFloatStateOf(1.0f) }
+    var uvTilingMultiplierY by remember { mutableFloatStateOf(1.0f) }
 
     // Material & Surface State
     var selectedMaterialIndex by remember { mutableIntStateOf(0) }
@@ -82,7 +96,7 @@ fun MaterialInspectorScreen(
         }
     }
 
-    val tabTitles = listOf("🎨 Texture Library", "⚙️ PBR Parameters", "🔬 Micro-Details", "🗺️ Channel Maps", "⚡ Vulkan C++")
+    val tabTitles = listOf("📐 Dimensions", "🎨 Texture Library", "⚙️ PBR Parameters", "🔬 Micro-Details", "🗺️ Channel Maps", "⚡ Vulkan C++")
 
     Scaffold(
         topBar = {
@@ -134,6 +148,13 @@ fun MaterialInspectorScreen(
                             currentMaterial = defaultPbrMaterials[selectedMaterialIndex]
                             currentSurface = defaultCompositeSurfaces[selectedSurfaceIndex]
                             selectedChannel = MaterialChannelMode.COMPOSITE_PBR
+                            objectScale = 1.0f
+                            objectWidthScale = 1.0f
+                            objectHeightScale = 1.0f
+                            objectDepthScale = 1.0f
+                            useRealWorldScale = true
+                            uvTilingMultiplierX = 1.0f
+                            uvTilingMultiplierY = 1.0f
                         },
                         modifier = Modifier.testTag("reset_material_preset_button")
                     ) {
@@ -219,6 +240,174 @@ fun MaterialInspectorScreen(
                                     fontSize = 11.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                 )
+                            }
+                        }
+                    }
+
+                    // Quick Size & Dimensions Toolbar
+                    Spacer(Modifier.height(6.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.65f),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("quick_size_toolbar")
+                    ) {
+                        Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Straighten,
+                                        contentDescription = null,
+                                        tint = Color(0xFFF59E0B),
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(Modifier.width(5.dp))
+                                    Text(
+                                        text = when (previewShape) {
+                                            PreviewMeshShape.WALL -> "Wall: ${(1.85f * objectScale * objectWidthScale * 10).roundToInt() / 10f}m(W) × ${(1.45f * objectScale * objectHeightScale * 10).roundToInt() / 10f}m(H) × ${(0.34f * objectScale * objectDepthScale * 1000).toInt()}mm(T)"
+                                            PreviewMeshShape.PLANE -> "Floor: ${(2.40f * objectScale * objectWidthScale * 10).roundToInt() / 10f}m × ${(2.40f * objectScale * objectDepthScale * 10).roundToInt() / 10f}m (Slab: ${(0.20f * objectScale * objectHeightScale * 1000).toInt()}mm)"
+                                            PreviewMeshShape.CUBE -> "Box: ${(1.92f * objectScale * objectWidthScale * 10).roundToInt() / 10f}m × ${(1.92f * objectScale * objectHeightScale * 10).roundToInt() / 10f}m × ${(1.92f * objectScale * objectDepthScale * 10).roundToInt() / 10f}m"
+                                            PreviewMeshShape.SPHERE -> "Sphere: Ø ${(1.60f * objectScale * objectWidthScale * 10).roundToInt() / 10f}m"
+                                        },
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontFamily = FontFamily.Monospace,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontSize = 10.sp
+                                        ),
+                                        maxLines = 1
+                                    )
+                                }
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    IconButton(
+                                        onClick = { objectScale = (objectScale - 0.15f).coerceAtLeast(0.40f) },
+                                        modifier = Modifier.size(26.dp).testTag("button_decrease_size")
+                                    ) {
+                                        Icon(Icons.Default.Remove, contentDescription = "Decrease Size", modifier = Modifier.size(13.dp))
+                                    }
+
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                        shape = RoundedCornerShape(4.dp),
+                                        modifier = Modifier.clickable { selectedTab = 0 }
+                                    ) {
+                                        Text(
+                                            "${(objectScale * 100).toInt()}%",
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontFamily = FontFamily.Monospace,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                fontSize = 10.sp
+                                            )
+                                        )
+                                    }
+
+                                    IconButton(
+                                        onClick = { objectScale = (objectScale + 0.15f).coerceAtMost(2.50f) },
+                                        modifier = Modifier.size(26.dp).testTag("button_increase_size")
+                                    ) {
+                                        Icon(Icons.Default.Add, contentDescription = "Increase Size", modifier = Modifier.size(13.dp))
+                                    }
+
+                                    IconButton(
+                                        onClick = { isQuickSizeBarExpanded = !isQuickSizeBarExpanded },
+                                        modifier = Modifier.size(26.dp).testTag("toggle_size_sliders")
+                                    ) {
+                                        Icon(
+                                            if (isQuickSizeBarExpanded) Icons.Default.ExpandLess else Icons.Default.Tune,
+                                            contentDescription = "Tune Dimensions",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (isQuickSizeBarExpanded) {
+                                Spacer(Modifier.height(4.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    FilterChip(
+                                        selected = useRealWorldScale,
+                                        onClick = { useRealWorldScale = !useRealWorldScale },
+                                        label = {
+                                            Text(
+                                                if (useRealWorldScale) "PBR ${(currentMaterial.tileScaleMeters * 1000).toInt()}mm" else "Stretch Fit",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                if (useRealWorldScale) Icons.Default.GridOn else Icons.Default.FitScreen,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(11.dp)
+                                            )
+                                        },
+                                        modifier = Modifier.testTag("quick_toggle_real_world_scale")
+                                    )
+                                    AssistChip(
+                                        onClick = {
+                                            objectScale = 0.70f
+                                            objectWidthScale = 1.0f
+                                            objectHeightScale = 1.0f
+                                            objectDepthScale = 1.0f
+                                        },
+                                        label = { Text("Compact 0.7x", fontSize = 10.sp) },
+                                        modifier = Modifier.testTag("preset_compact")
+                                    )
+                                    AssistChip(
+                                        onClick = {
+                                            objectScale = 1.0f
+                                            objectWidthScale = 1.0f
+                                            objectHeightScale = 1.0f
+                                            objectDepthScale = 1.0f
+                                        },
+                                        label = { Text("Default 1.0x", fontSize = 10.sp) },
+                                        modifier = Modifier.testTag("preset_default")
+                                    )
+                                    AssistChip(
+                                        onClick = {
+                                            objectScale = 1.40f
+                                            objectWidthScale = 1.0f
+                                            objectHeightScale = 1.0f
+                                            objectDepthScale = 1.0f
+                                        },
+                                        label = { Text("Expanded 1.4x", fontSize = 10.sp) },
+                                        modifier = Modifier.testTag("preset_expanded")
+                                    )
+                                    AssistChip(
+                                        onClick = {
+                                            objectScale = 2.0f
+                                            objectWidthScale = 1.0f
+                                            objectHeightScale = 1.0f
+                                            objectDepthScale = 1.0f
+                                        },
+                                        label = { Text("Massive 2.0x", fontSize = 10.sp) },
+                                        modifier = Modifier.testTag("preset_massive")
+                                    )
+                                    Button(
+                                        onClick = { selectedTab = 0 },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                        modifier = Modifier.height(26.dp)
+                                    ) {
+                                        Icon(Icons.Default.OpenInFull, contentDescription = null, modifier = Modifier.size(11.dp))
+                                        Spacer(Modifier.width(3.dp))
+                                        Text("All Parametric Sliders", fontSize = 10.sp)
+                                    }
+                                }
                             }
                         }
                     }
@@ -310,6 +499,14 @@ fun MaterialInspectorScreen(
                 compositeSurface = currentSurface,
                 channelMode = selectedChannel,
                 shape = previewShape,
+                objectScale = objectScale,
+                objectWidthScale = objectWidthScale,
+                objectHeightScale = objectHeightScale,
+                objectDepthScale = objectDepthScale,
+                useRealWorldScale = useRealWorldScale,
+                uvTilingMultiplierX = uvTilingMultiplierX,
+                uvTilingMultiplierY = uvTilingMultiplierY,
+                onScaleChange = { objectScale = it },
                 onShapeChange = { previewShape = it },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -345,7 +542,36 @@ fun MaterialInspectorScreen(
                     .weight(1.15f)
             ) {
                 when (selectedTab) {
-                    0 -> MaterialLibraryBrowserTab(
+                    0 -> ObjectDimensionsControlTab(
+                        shape = previewShape,
+                        material = currentMaterial,
+                        scale = objectScale,
+                        widthScale = objectWidthScale,
+                        heightScale = objectHeightScale,
+                        depthScale = objectDepthScale,
+                        useRealWorldScale = useRealWorldScale,
+                        onToggleRealWorldScale = { useRealWorldScale = it },
+                        uvTilingMultiplierX = uvTilingMultiplierX,
+                        uvTilingMultiplierY = uvTilingMultiplierY,
+                        onUvTilingChange = { ux, uy ->
+                            uvTilingMultiplierX = ux
+                            uvTilingMultiplierY = uy
+                        },
+                        onScaleChange = { objectScale = it },
+                        onWidthScaleChange = { objectWidthScale = it },
+                        onHeightScaleChange = { objectHeightScale = it },
+                        onDepthScaleChange = { objectDepthScale = it },
+                        onReset = {
+                            objectScale = 1.0f
+                            objectWidthScale = 1.0f
+                            objectHeightScale = 1.0f
+                            objectDepthScale = 1.0f
+                            useRealWorldScale = true
+                            uvTilingMultiplierX = 1.0f
+                            uvTilingMultiplierY = 1.0f
+                        }
+                    )
+                    1 -> MaterialLibraryBrowserTab(
                         materials = defaultPbrMaterials,
                         activeMaterial = currentMaterial,
                         targetShape = previewShape,
@@ -354,18 +580,18 @@ fun MaterialInspectorScreen(
                             selectedMaterialIndex = defaultPbrMaterials.indexOfFirst { it.id == selectedMat.id }.coerceAtLeast(0)
                         }
                     )
-                    1 -> MaterialPropertiesTab(
+                    2 -> MaterialPropertiesTab(
                         material = currentMaterial,
                         onMaterialChange = { currentMaterial = it }
                     )
-                    2 -> MaterialProceduralDetailTab(
+                    3 -> MaterialProceduralDetailTab(
                         material = currentMaterial,
                         onMaterialChange = { currentMaterial = it }
                     )
-                    3 -> MaterialVulkanSpecTab(
+                    4 -> MaterialVulkanSpecTab(
                         material = currentMaterial
                     )
-                    4 -> MaterialShaderTab(
+                    5 -> MaterialShaderTab(
                         material = currentMaterial
                     )
                 }

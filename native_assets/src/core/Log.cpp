@@ -1,1 +1,1 @@
-#include "Log.h"\n
+#include "Log.h"

@@ -1,6 +1,5 @@
 #pragma once
 #include <cstdint>
-
 namespace sphere {
 class Seed {
 public:
@@ -8,4 +7,4 @@ public:
     static float HashToFloat(uint32_t h);
     static float RandomFloat(uint32_t& state);
 };
-}\n
+}

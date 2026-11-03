@@ -1,12 +1,9 @@
 #include "../include/BrickMaterial.h"
 #include "../textures/spec/brick_spec.h"
-
 namespace sphere {
-
 BrickMaterial::BrickMaterial(BrickVariant variant) {
     SetVariant(variant);
 }
-
 void BrickMaterial::SetVariant(BrickVariant variant) {
     m_Variant = variant;
     m_Def.id = (variant == BrickVariant::RED_RUSTICATED) ? MaterialID::BRICK_RUSTICATED : MaterialID::BRICK_RED;
@@ -19,7 +16,6 @@ void BrickMaterial::SetVariant(BrickVariant variant) {
     m_Def.normalScale = 1.25f;
     m_Def.displacementDepth = 0.028f;
     m_Def.surfaceMode = SurfaceMode::SURFACE_FLAT_TEXTURE;
-
     switch (variant) {
         case BrickVariant::RED_RUSTICATED:
             m_Def.baseColorFactor = Vec4{0.78f, 0.36f, 0.24f, 1.0f};
@@ -41,15 +37,12 @@ void BrickMaterial::SetVariant(BrickVariant variant) {
             break;
     }
 }
-
 MaterialID BrickMaterial::GetID() const {
     return m_Def.id;
 }
-
 const char* BrickMaterial::GetName() const {
     return m_Def.name.c_str();
 }
-
 bool BrickMaterial::GenerateTextures(GeneratorContext& context) {
     // In actual Vulkan runtime, dispatches brick_albedo.comp, brick_normal.comp, brick_orm.comp, brick_height.comp
     // and registers allocated VkImageViews with BindlessHeap.
@@ -60,7 +53,6 @@ bool BrickMaterial::GenerateTextures(GeneratorContext& context) {
     m_IsGenerated = true;
     return true;
 }
-
 uint32_t BrickMaterial::GetTextureIndex(MaterialChannel channel) const {
     auto idx = static_cast<size_t>(channel);
     if (idx < m_TextureIndices.size()) {
@@ -68,5 +60,4 @@ uint32_t BrickMaterial::GetTextureIndex(MaterialChannel channel) const {
     }
     return 0;
 }
-
-} // namespace sphere
+} // namespace spher

@@ -1,12 +1,9 @@
 #include "../include/GlassMaterial.h"
 #include "../textures/spec/glass_spec.h"
-
 namespace sphere {
-
 GlassMaterial::GlassMaterial(GlassVariant variant) {
     SetVariant(variant);
 }
-
 void GlassMaterial::SetVariant(GlassVariant variant) {
     m_Variant = variant;
     m_Def.id = MaterialID::GLASS_CLEAR;
@@ -20,7 +17,6 @@ void GlassMaterial::SetVariant(GlassVariant variant) {
     m_Def.roughness = 0.03f;
     m_Def.absorptionColor = Vec3{0.88f, 0.96f, 0.94f};
     m_Def.absorptionDensity = 0.1f;
-
     switch (variant) {
         case GlassVariant::CLEAR_ARCHITECTURAL:
             m_Def.baseColorFactor = Vec4{0.95f, 0.97f, 1.0f, 0.05f};
@@ -41,14 +37,12 @@ void GlassMaterial::SetVariant(GlassVariant variant) {
             break;
     }
 }
-
 bool GlassMaterial::GenerateTextures(GeneratorContext& context) {
     m_TextureIndices[static_cast<size_t>(MaterialChannel::Refraction)] = 401;
     m_TextureIndices[static_cast<size_t>(MaterialChannel::Albedo)] = 402;
     m_IsGenerated = true;
     return true;
 }
-
 uint32_t GlassMaterial::GetTextureIndex(MaterialChannel channel) const {
     auto idx = static_cast<size_t>(channel);
     if (idx < m_TextureIndices.size()) {
@@ -56,5 +50,4 @@ uint32_t GlassMaterial::GetTextureIndex(MaterialChannel channel) const {
     }
     return 0;
 }
-
-} // namespace sphere
+} // namespace spher

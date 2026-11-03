@@ -1,8 +1,6 @@
 #pragma once
 #include <cstdint>
-
 namespace sphere {
-
 enum class BrickVariant : uint32_t {
     RED_RUSTICATED = 0,
     GREY_ENGINEERING,
@@ -10,5 +8,4 @@ enum class BrickVariant : uint32_t {
     WEATHERED_RECLAIMED,
     BLACK_BASALT
 };
-
-} // namespace sphere
+} // namespace spher

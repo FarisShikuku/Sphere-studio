@@ -2,7 +2,6 @@
 #include <vulkan/vulkan.h>
 #include <vector>
 #include "Pipeline.h"
-
 namespace sphere::vk {
 class PipelineBuilder {
 public:
@@ -16,8 +15,7 @@ public:
     VkPipelineMultisampleStateCreateInfo multisampling{};
     VkPipelineDepthStencilStateCreateInfo depthStencil{};
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-
     Pipeline BuildGraphics(VkDevice device, VkRenderPass renderPass);
     Pipeline BuildCompute(VkDevice device, VkPipelineLayout layout, VkShaderModule computeShader);
 };
-}\n
+}

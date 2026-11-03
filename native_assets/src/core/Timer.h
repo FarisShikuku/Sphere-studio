@@ -1,6 +1,5 @@
 #pragma once
 #include <chrono>
-
 namespace sphere {
 class Timer {
 public:
@@ -15,4 +14,4 @@ public:
 private:
     std::chrono::time_point<std::chrono::high_resolution_clock> m_Start;
 };
-}\n
+}

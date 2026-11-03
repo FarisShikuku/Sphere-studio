@@ -1,18 +1,14 @@
 #include "TextRegistry.h"
 #include <cmath>
 #include <algorithm>
-
 namespace sphere {
-
 TextRegistry& TextRegistry::get() {
     static TextRegistry instance;
     return instance;
 }
-
 TextRegistry::TextRegistry() {
     initializeDefaults();
 }
-
 void TextRegistry::initializeDefaults() {
     // 1. Build default SDF Font Atlas: Roboto Flex / JetBrains Mono metrics
     FontAtlas robotoSdf;
@@ -26,7 +22,6 @@ void TextRegistry::initializeDefaults() {
     robotoSdf.ascender = 40.0f;
     robotoSdf.descender = -12.0f;
     robotoSdf.distanceRange = 8.0f;
-
     // Populate standard 16x16 grid for ASCII 32 - 126
     const int cols = 16;
     const float cellUvSize = 1.0f / cols;
@@ -34,7 +29,6 @@ void TextRegistry::initializeDefaults() {
         int idx = c - 32;
         int row = idx / cols;
         int col = idx % cols;
-
         GlyphMetric gm;
         gm.charCode = c;
         gm.uvMinX = col * cellUvSize;
@@ -46,11 +40,9 @@ void TextRegistry::initializeDefaults() {
         gm.bearingX = 2.0f;
         gm.bearingY = 38.0f;
         gm.advanceX = (c == ' ' ? 22.0f : (c == 'i' || c == 'l' || c == '!' || c == '.' ? 18.0f : (c == 'm' || c == 'w' || c == 'W' ? 44.0f : 30.0f)));
-
         robotoSdf.glyphs[c] = gm;
     }
     registerAtlas("roboto_bold", robotoSdf);
-
     // 2. Monospace Atlas for Developer HUD / Telemetry
     FontAtlas monoSdf = robotoSdf;
     monoSdf.fontName = "JetBrains Mono SDF";
@@ -59,7 +51,6 @@ void TextRegistry::initializeDefaults() {
         pair.second.advanceX = 28.0f; // Fixed advance
     }
     registerAtlas("jetbrains_mono", monoSdf);
-
     // Preset 1: Vulkan Telemetry HUD (Sascha Willems classic FPS overlay)
     {
         TextDef hud;
@@ -67,7 +58,10 @@ void TextRegistry::initializeDefaults() {
         hud.name = "Vulkan GPU Telemetry HUD";
         hud.category = "Engine HUD";
         hud.description = "Real-time engine performance metrics overlay showing FPS, VRAM allocation, and draw call counts.";
-        hud.textContent = "VK_DEVICE: Mali-G78 / Adreno 740\nFRAME: 6.94 ms (144 FPS)\nVRAM: 1,420 MB / 4,096 MB\nPIPELINES: 48 (Bindless Descriptor Set 0)";
+        hud.textContent = "VK_DEVICE: Mali-G78 / Adreno 740
+FRAME: 6.94 ms (144 FPS)
+VRAM: 1,420 MB / 4,096 MB
+PIPELINES: 48 (Bindless Descriptor Set 0)";
         hud.fontId = "jetbrains_mono";
         hud.renderMode = TextRenderMode::SCREEN_OVERLAY_HUD;
         hud.alignment = TextAlign::LEFT;
@@ -84,7 +78,6 @@ void TextRegistry::initializeDefaults() {
         hud.badgeBorderColor = {0.15f, 0.60f, 0.35f, 0.50f};
         registerTextDef(hud);
     }
-
     // Preset 2: 3D Scene Anchor Billboard (Hovering over 3D item in world space)
     {
         TextDef billboard;
@@ -92,7 +85,9 @@ void TextRegistry::initializeDefaults() {
         billboard.name = "3D Stage Coordinate Anchor";
         billboard.category = "3D World Labels";
         billboard.description = "In-world 3D billboard with spherical camera locking, floating directly above the calibration cube.";
-        billboard.textContent = "PBR STAGE ORIGIN [0.0, 1.25, 0.0]\nMATERIAL: RUSTICATED BRICK MASONRY\nSHADOW: 4-CASCADE PCF 5x5";
+        billboard.textContent = "PBR STAGE ORIGIN [0.0, 1.25, 0.0]
+MATERIAL: RUSTICATED BRICK MASONRY
+SHADOW: 4-CASCADE PCF 5x5";
         billboard.fontId = "roboto_bold";
         billboard.renderMode = TextRenderMode::BILLBOARD_3D_WORLD;
         billboard.alignment = TextAlign::CENTER;
@@ -110,7 +105,6 @@ void TextRegistry::initializeDefaults() {
         billboard.badgeBorderColor = {0.30f, 0.65f, 1.0f, 0.75f};
         registerTextDef(billboard);
     }
-
     // Preset 3: Sci-Fi Cyberpunk Terminal (Emissive neon glow)
     {
         TextDef terminal;
@@ -118,7 +112,9 @@ void TextRegistry::initializeDefaults() {
         terminal.name = "Cyberpunk Quantum Terminal";
         terminal.category = "Sci-Fi Displays";
         terminal.description = "High-energy cyan emissive text with multi-channel signed distance field glow and soft drop shadow.";
-        terminal.textContent = "SYNCHRONIZATION COMPLETE\nATMOSPHERIC COHERENCE: 99.8%\nVULKAN RENDER PASS #04: OK";
+        terminal.textContent = "SYNCHRONIZATION COMPLETE
+ATMOSPHERIC COHERENCE: 99.8%
+VULKAN RENDER PASS #04: OK";
         terminal.fontId = "jetbrains_mono";
         terminal.renderMode = TextRenderMode::SDF_DISTANCE_FIELD_2D;
         terminal.alignment = TextAlign::CENTER;
@@ -135,7 +131,6 @@ void TextRegistry::initializeDefaults() {
         terminal.badgeBorderColor = {0.15f, 0.75f, 0.95f, 0.80f};
         registerTextDef(terminal);
     }
-
     // Preset 4: Cinematic Golden Title
     {
         TextDef title;
@@ -143,7 +138,8 @@ void TextRegistry::initializeDefaults() {
         title.name = "Cinematic Golden Serif";
         title.category = "Cinematics";
         title.description = "Deep warm gold typography with elegant drop shadow and smooth antialiased outlines.";
-        title.textContent = "SPHERE ENGINE\nCHRONICLES OF VULKAN";
+        title.textContent = "SPHERE ENGINE
+CHRONICLES OF VULKAN";
         title.fontId = "roboto_bold";
         title.renderMode = TextRenderMode::SDF_DISTANCE_FIELD_2D;
         title.alignment = TextAlign::CENTER;
@@ -160,7 +156,6 @@ void TextRegistry::initializeDefaults() {
         title.showBackgroundBadge = false;
         registerTextDef(title);
     }
-
     // Preset 5: Critical Warning Holo-Decal
     {
         TextDef warning;
@@ -168,7 +163,9 @@ void TextRegistry::initializeDefaults() {
         warning.name = "Critical Hazard Holo-Banner";
         warning.category = "Industrial & Alerts";
         warning.description = "High-contrast warning banner with thick black stroke and amber/crimson alert color.";
-        warning.textContent = "CAUTION: HIGH VOLTAGE RAY TRACING\nUNIFORM BUFFER OVERFLOW IMMINENT\nREDUCE CASCADE COUNT";
+        warning.textContent = "CAUTION: HIGH VOLTAGE RAY TRACING
+UNIFORM BUFFER OVERFLOW IMMINENT
+REDUCE CASCADE COUNT";
         warning.fontId = "jetbrains_mono";
         warning.renderMode = TextRenderMode::SDF_DISTANCE_FIELD_2D;
         warning.alignment = TextAlign::CENTER;
@@ -185,33 +182,27 @@ void TextRegistry::initializeDefaults() {
         registerTextDef(warning);
     }
 }
-
 void TextRegistry::registerAtlas(const std::string& fontId, const FontAtlas& atlas) {
     m_atlases[fontId] = atlas;
 }
-
 const FontAtlas* TextRegistry::getAtlas(const std::string& fontId) const {
     auto it = m_atlases.find(fontId);
     if (it != m_atlases.end()) return &it->second;
     if (!m_atlases.empty()) return &m_atlases.begin()->second;
     return nullptr;
 }
-
 void TextRegistry::registerTextDef(const TextDef& textDef) {
     m_textDefs[textDef.id] = textDef;
     m_orderedDefs.push_back(textDef);
 }
-
 const TextDef* TextRegistry::getTextDef(const std::string& id) const {
     auto it = m_textDefs.find(id);
     if (it != m_textDefs.end()) return &it->second;
     return nullptr;
 }
-
 const std::vector<TextDef>& TextRegistry::getAllTextDefs() const {
     return m_orderedDefs;
 }
-
 std::vector<TextVertex> TextRegistry::generateTextQuads(
     const std::string& text,
     const std::string& fontId,
@@ -224,16 +215,15 @@ std::vector<TextVertex> TextRegistry::generateTextQuads(
     std::vector<TextVertex> vertices;
     const FontAtlas* atlas = getAtlas(fontId);
     if (!atlas || text.empty()) return vertices;
-
     float scale = targetSize / atlas->fontSize;
     float currentY = 0.0f;
     float lineStep = atlas->lineHeight * lineHeightMultiplier * scale;
-
     // Split text by lines
     std::vector<std::string> lines;
     size_t start = 0;
     while (start < text.length()) {
-        size_t end = text.find('\n', start);
+        size_t end = text.find('
+', start);
         if (end == std::string::npos) {
             lines.push_back(text.substr(start));
             break;
@@ -242,7 +232,6 @@ std::vector<TextVertex> TextRegistry::generateTextQuads(
             start = end + 1;
         }
     }
-
     for (const auto& line : lines) {
         // Calculate line total width for alignment
         float lineWidth = 0.0f;
@@ -253,46 +242,36 @@ std::vector<TextVertex> TextRegistry::generateTextQuads(
                 lineWidth += gm->advanceX * scale * letterSpacing;
             }
         }
-
         float cursorX = 0.0f;
         if (align == TextAlign::CENTER) {
             cursorX = -lineWidth * 0.5f;
         } else if (align == TextAlign::RIGHT) {
             cursorX = -lineWidth;
         }
-
         for (char c : line) {
             uint32_t codepoint = static_cast<unsigned char>(c);
             const GlyphMetric* gm = atlas->getGlyph(codepoint);
             if (!gm) continue;
-
             float x0 = cursorX + gm->bearingX * scale;
             float y0 = currentY + (atlas->ascender - gm->bearingY) * scale;
             float x1 = x0 + gm->widthPixels * scale;
             float y1 = y0 + gm->heightPixels * scale;
-
             float u0 = gm->uvMinX;
             float v0 = gm->uvMinY;
             float u1 = gm->uvMaxX;
             float v1 = gm->uvMaxY;
-
             // Quad Triangle 1
             vertices.push_back({{x0, y0, 0.0f}, {u0, v0}, tintColor});
             vertices.push_back({{x1, y0, 0.0f}, {u1, v0}, tintColor});
             vertices.push_back({{x0, y1, 0.0f}, {u0, v1}, tintColor});
-
             // Quad Triangle 2
             vertices.push_back({{x1, y0, 0.0f}, {u1, v0}, tintColor});
             vertices.push_back({{x1, y1, 0.0f}, {u1, v1}, tintColor});
             vertices.push_back({{x0, y1, 0.0f}, {u0, v1}, tintColor});
-
             cursorX += gm->advanceX * scale * letterSpacing;
         }
-
         currentY += lineStep;
     }
-
     return vertices;
 }
-
-} // namespace sphere
+} // namespace spher

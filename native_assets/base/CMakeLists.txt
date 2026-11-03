@@ -6,5 +6,5 @@ add_library(base STATIC
     VulkanSwapChain.cpp
     VulkanDebug.cpp
 )
-target_include_directories(base PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(base PUBLIC Vulkan::Vulkan)\n
+target_include_directories(base PUBLIC )
+target_link_libraries(base PUBLIC Vulkan::Vulkan)

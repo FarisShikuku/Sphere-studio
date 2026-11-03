@@ -1,6 +1,5 @@
 #pragma once
 #include <vulkan/vulkan.h>
-
 namespace sphere::vk {
 class RenderPass {
 public:
@@ -12,4 +11,4 @@ public:
         }
     }
 };
-}\n
+}

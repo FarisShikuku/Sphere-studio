@@ -1,12 +1,9 @@
 #include "../include/WaterSurfaceMaterial.h"
 #include "../textures/spec/water_surface_spec.h"
-
 namespace sphere {
-
 WaterSurfaceMaterial::WaterSurfaceMaterial(WaterVariant variant) {
     SetVariant(variant);
 }
-
 void WaterSurfaceMaterial::SetVariant(WaterVariant variant) {
     m_Variant = variant;
     m_Def.id = MaterialID::WATER_SURFACE;
@@ -19,7 +16,6 @@ void WaterSurfaceMaterial::SetVariant(WaterVariant variant) {
     m_Def.roughness = 0.05f;
     m_Def.dispersion = 0.008f;
     m_Def.normalScale = 1.0f;
-
     switch (variant) {
         case WaterVariant::OCEAN_DEEP:
             m_Def.baseColorFactor = Vec4{0.06f, 0.28f, 0.38f, 0.50f};
@@ -43,7 +39,6 @@ void WaterSurfaceMaterial::SetVariant(WaterVariant variant) {
             break;
     }
 }
-
 bool WaterSurfaceMaterial::GenerateTextures(GeneratorContext& context) {
     m_TextureIndices[static_cast<size_t>(MaterialChannel::Albedo)] = 501;
     m_TextureIndices[static_cast<size_t>(MaterialChannel::Normal)] = 502;
@@ -51,7 +46,6 @@ bool WaterSurfaceMaterial::GenerateTextures(GeneratorContext& context) {
     m_IsGenerated = true;
     return true;
 }
-
 uint32_t WaterSurfaceMaterial::GetTextureIndex(MaterialChannel channel) const {
     auto idx = static_cast<size_t>(channel);
     if (idx < m_TextureIndices.size()) {
@@ -59,5 +53,4 @@ uint32_t WaterSurfaceMaterial::GetTextureIndex(MaterialChannel channel) const {
     }
     return 0;
 }
-
-} // namespace sphere
+} // namespace spher

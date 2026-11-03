@@ -1,7 +1,6 @@
 #pragma once
 #include <vulkan/vulkan.h>
 #include <vector>
-
 namespace sphere::base {
 class VulkanSwapChain {
 public:
@@ -16,11 +15,10 @@ public:
     VkFormat colorFormat = VK_FORMAT_B8G8R8A8_UNORM;
     VkColorSpaceKHR colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
     VkExtent2D extent{1920, 1080};
-
     void InitSurface(void* windowHandle);
     void Create(uint32_t* width, uint32_t* height, bool vsync = true);
     VkResult AcquireNextImage(VkSemaphore presentCompleteSemaphore, uint32_t* imageIndex);
     VkResult QueuePresent(VkQueue queue, uint32_t imageIndex, VkSemaphore waitSemaphore = VK_NULL_HANDLE);
     void Cleanup();
 };
-}\n
+}

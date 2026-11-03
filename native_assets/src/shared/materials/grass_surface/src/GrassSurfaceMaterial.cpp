@@ -1,12 +1,9 @@
 #include "../include/GrassSurfaceMaterial.h"
 #include "../textures/spec/grass_surface_spec.h"
-
 namespace sphere {
-
 GrassSurfaceMaterial::GrassSurfaceMaterial(GrassSurfaceVariant variant) {
     SetVariant(variant);
 }
-
 void GrassSurfaceMaterial::SetVariant(GrassSurfaceVariant variant) {
     m_Variant = variant;
     m_Def.id = MaterialID::GRASS_SURFACE;
@@ -21,7 +18,6 @@ void GrassSurfaceMaterial::SetVariant(GrassSurfaceVariant variant) {
     m_Def.subsurfaceColor = Vec3{0.35f, 0.58f, 0.18f};
     m_Def.normalScale = 0.85f;
     m_Def.displacementDepth = 0.012f;
-
     switch (variant) {
         case GrassSurfaceVariant::MONDO_LAWN_SURFACE:
             m_Def.baseColorFactor = Vec4{0.25f, 0.42f, 0.16f, 1.0f};
@@ -40,7 +36,6 @@ void GrassSurfaceMaterial::SetVariant(GrassSurfaceVariant variant) {
             break;
     }
 }
-
 bool GrassSurfaceMaterial::GenerateTextures(GeneratorContext& context) {
     m_TextureIndices[static_cast<size_t>(MaterialChannel::Albedo)] = 201;
     m_TextureIndices[static_cast<size_t>(MaterialChannel::Normal)] = 202;
@@ -48,7 +43,6 @@ bool GrassSurfaceMaterial::GenerateTextures(GeneratorContext& context) {
     m_IsGenerated = true;
     return true;
 }
-
 uint32_t GrassSurfaceMaterial::GetTextureIndex(MaterialChannel channel) const {
     auto idx = static_cast<size_t>(channel);
     if (idx < m_TextureIndices.size()) {
@@ -56,5 +50,4 @@ uint32_t GrassSurfaceMaterial::GetTextureIndex(MaterialChannel channel) const {
     }
     return 0;
 }
-
-} // namespace sphere
+} // namespace spher

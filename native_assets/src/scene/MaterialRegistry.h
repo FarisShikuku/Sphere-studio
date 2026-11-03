@@ -2,7 +2,6 @@
 #include "Material.h"
 #include <unordered_map>
 #include <memory>
-
 namespace sphere {
 class MaterialRegistry {
 public:
@@ -12,4 +11,4 @@ public:
 private:
     std::unordered_map<std::string, Material> m_Materials;
 };
-}\n
+}

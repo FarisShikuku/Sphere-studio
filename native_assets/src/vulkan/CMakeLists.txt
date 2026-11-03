@@ -9,5 +9,5 @@ add_library(vulkan_wrap STATIC
     BindlessHeap.cpp
     FrameGraph.cpp
 )
-target_include_directories(vulkan_wrap PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../../base)
-target_link_libraries(vulkan_wrap PUBLIC base Vulkan::Vulkan)\n
+target_include_directories(vulkan_wrap PUBLIC  /.. /../../base)
+target_link_libraries(vulkan_wrap PUBLIC base Vulkan::Vulkan)

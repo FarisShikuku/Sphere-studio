@@ -1,6 +1,5 @@
 #pragma once
 #include "Mesh.h"
-
 namespace sphere {
 struct Meshlet {
     uint32_t vertexOffset = 0;
@@ -10,4 +9,4 @@ struct Meshlet {
     Vec4 coneApexAndCutoff{0, 0, 0, -1};
     Vec3 coneAxis{0, 1, 0};
 };
-}\n
+}
