@@ -24,11 +24,13 @@
    - [Atmospheric Sky & Solar Corona (Preetham / Hosek-Wilkie Model)](#7-atmospheric-sky--solar-corona-preetham--hosek-wilkie-model)
    - [Road Networks & 10 Physical Surface States](#8-road-networks--10-physical-surface-states)
    - [Vegetation & Biomes (L-System & GPU Blades)](#9-vegetation--biomes-l-system--gpu-blades)
-   - [PBR Materials, Buildings & Modular Facades](#10-pbr-materials-buildings--modular-facades)
-   - [Terrain & Hydraulic Erosion](#11-terrain--hydraulic-erosion)
-   - [Water Bodies & Tessendorf FFT Ocean](#12-water-bodies--tessendorf-fft-ocean)
-   - [Energy, Utility & World Props](#13-energy-utility--world-props)
-   - [GPU Particles & Procedural Audio](#14-gpu-particles--procedural-audio)
+   - [PBR Materials, Architectural Metric Scale & Parametric Sizing](#10-pbr-materials-architectural-metric-scale--parametric-sizing)
+   - [KTX2 Texture Compression & 65 Registered Architectural Assets](#11-ktx2-texture-compression--65-registered-architectural-assets)
+   - [Vulkan C++ Native Core vs. Kotlin Architecture (Sascha Willems Integration)](#12-vulkan-c-native-core-vs-kotlin-architecture-sascha-willems-integration)
+   - [Terrain & Hydraulic Erosion](#13-terrain--hydraulic-erosion)
+   - [Water Bodies & Tessendorf FFT Ocean](#14-water-bodies--tessendorf-fft-ocean)
+   - [Energy, Utility & World Props](#15-energy-utility--world-props)
+   - [GPU Particles & Procedural Audio](#16-gpu-particles--procedural-audio)
 4. [Generated Assets & Binary Manifest Registry](#generated-assets--binary-manifest-registry)
 5. [Build, Test & Deployment Guide](#build-test--deployment-guide)
 
@@ -106,37 +108,58 @@ sphere-studio/
 │   └── src/
 │       ├── commonMain/kotlin/com/example/sphere/
 │       │   ├── Platform.kt                                 # Multiplatform expect declarations
-│       │   ├── SphereStudioApp.kt                          # Master Application Shell:
-│       │   │                                               #   - 3D Calibration Viewport with Orbit Camera
-│       │   │                                               #   - 5 Surface Scene Modes (Endless, Void, Flat, Water, Broken)
-│       │   │                                               #   - Responsive relative sizing (10x10m, 3x3m, Auto-Fit)
-│       │   │                                               #   - Dimensional sliders (Width, Height, Depth, Scale)
-│       │   │                                               #   - Preetham / Hosek-Wilkie atmospheric sky dome & sun disk
-│       │   │                                               #   - PBR Procedural Surface Patterns (Solid, Grid, Checker, Ripple, Hex)
-│       │   │                                               #   - Native Engine Architecture inspector & 13 category navigation
-│       │   ├── WeatherStudioScreen.kt                      # Volumetric Weather & Cloud Simulator:
-│       │   │                                               #   - ProceduralCloudSynthesizer (AmanSachan1/Meteoros Vulkan port)
-│       │   │                                               #   - True 3D perspective raymarching through planetary shell
-│       │   │                                               #   - Henyey-Greenstein forward solar silver lining
-│       │   │                                               #   - Crepuscular light rays (god rays) streaming through cloud gaps
-│       │   │                                               #   - High-altitude wispy cirrus ice crystal layer
-│       │   │                                               #   - Dynamic lightning bolt generation & thunder flashes
-│       │   │                                               #   - Rain streaks, ground splash impacts & puddle accumulation
-│       │   │                                               #   - Snow flutter, blizzard drifts & ground snowpack
-│       │   │                                               #   - 5 Surface Scene Modes in weather environment
-│       │   │                                               #   - 8 dynamic weather presets (Clear, Overcast, Rain, Downpour, etc.)
-│       │   ├── SkyStudioScreen.kt                          # Atmospheric Sky & Solar Simulator:
-│       │   │                                               #   - Live Sky Cloud Scanner with LiDAR & CV Genera Tracking HUD
-│       │   │                                               #   - 7 Cloud Genera Classification (Cb, Cu, Ci, Sc, St, Ac, Ns)
-│       │   │                                               #   - Multi-category Genera filter pills (All, Cb, Cu, St, Sc, Ci, Ac, Ns)
-│       │   │                                               #   - Interactive cloud focus, optical zoom & microphysics telemetry
-│       │   │                                               #   - Unified Vulkan 3D Scene Top Bar with stage mode switcher
-│       │   │                                               #   - Solar elevation, azimuth, and time-of-day presets
-│       │   │                                               #   - Aerosol turbidity, ozone absorption & Perez parameters
-│       │   │                                               #   - ACES and Reinhard tone-mapping preview
-│       │   │                                               #   - Vulkan Stage & C++ Native Architecture inspection tab
+│       │   ├── SphereStudioApp.kt                          # Master Application Shell & Navigation Host
+│       │   ├── SurfaceSceneMode.kt                         # Surface Scene Mode enum (ENDLESS, NONE, FLAT_PIECE, WATER_BODY, BROKEN_SLAB)
 │       │   ├── SphereStudioWelcomeScreen.kt                # Landing hub & onboarding showcase
-│       │   └── SurfaceSceneMode.kt                         # Surface Scene Mode enum (ENDLESS, NONE, FLAT_PIECE, WATER_BODY, BROKEN_SLAB)
+│       │   ├── GlyphCoreStudioScreen.kt                    # SDF vector glyphs & typography studio
+│       │   ├── SkyStudioScreen.kt                          # Atmospheric Sky & Solar Simulator with LiDAR Cloud Scanner
+│       │   ├── WeatherStudioScreen.kt                      # Volumetric Weather & Nubis Cloud Simulator
+│       │   │
+│       │   ├── screens/                                    # Top-Level Studio Screens
+│       │   │   ├── MaterialInspectorScreen.kt              # Advanced PBR Material, Real-World Scale & Sizing Studio:
+│       │   │   │                                           #   - 3D Target Meshes: Calibration Cube, Wall, Ground Slab, Sphere
+│       │   │   │                                           #   - Architectural PBR metric scale (mm) with seamless UV tiling
+│       │   │   │                                           #   - Real-World Scale vs. Stretch Fit toggle
+│       │   │   │                                           #   - Parametric 3-axis dimension controls & scale presets
+│       │   │   │                                           #   - 6 Texture channel modes (Full PBR, Albedo, Normal, ORM, Height, Split)
+│       │   │   │                                           #   - 4 Category filters (Wall & Masonry, Metals, Flooring, Nature)
+│       │   │   └── EmptyAssetScreen.kt                     # Clean state placeholder for unloaded assets
+│       │   │
+│       │   ├── tabs/                                       # Modular Parameter Control Tabs
+│       │   │   ├── ObjectDimensionsControlTab.kt           # Parametric 3-axis dimensions, PBR metric tile scale & UV tiling
+│       │   │   ├── DimensionsControlTab.kt                 # Surface stage platform dimensions (width, length, skirt thickness)
+│       │   │   ├── MaterialChannelSelectorRow.kt           # Interactive PBR channel mode selector chips
+│       │   │   ├── MaterialPropertiesTab.kt                # Roughness, Metallic, IOR, Normal Strength, Height Displacement
+│       │   │   ├── MaterialOpticsTab.kt                    # Microfacet GGX distribution, Fresnel F0, Smith geometry
+│       │   │   ├── MaterialProceduralDetailTab.kt          # Brick bond patterns, tile grout, mortar offsets, wood grain
+│       │   │   ├── MaterialVulkanSpecTab.kt                # Vulkan 1.3 pipeline state, BC7/BC5/BC4 compression specs, KTX2 slots
+│       │   │   ├── MaterialShaderTab.kt                    # GLSL pbr.vert / pbr.frag shader inspection
+│       │   │   ├── SurfaceCompositeLayersTab.kt            # Multi-layer composite surface stack (e.g. wetness, mud, decals)
+│       │   │   ├── ShadowsControlTab.kt                    # PCF shadow map resolution, softness, and depth bias
+│       │   │   ├── SkyAndSunTab.kt                         # Solar position, Rayleigh/Mie turbidity, ozone absorption
+│       │   │   ├── SurfaceAndStageTab.kt                   # 5 Surface scene modes & procedural ground patterns
+│       │   │   └── NativeStructureTab.kt                   # Native C++ engine architecture & memory stats
+│       │   │
+│       │   ├── viewport/                                   # Real-Time 3D Perspective Viewports & Shaders
+│       │   │   ├── MaterialPreviewViewport.kt              # 3D Material Viewport (Cube, Wall, Slab, Sphere) with lighting & blueprint HUD
+│       │   │   ├── TextureManager.kt                       # Real-World metric UV tiling shader (BitmapShader TileMode.REPEAT)
+│       │   │   ├── SceneCubeViewport.kt                    # Multi-face photometric 3D cube rasterizer
+│       │   │   ├── SceneStageRenderer.kt                   # 5 Surface scene stage modes renderer
+│       │   │   └── DirectionalShadowRenderer.kt            # Monotone-chain convex hull shadow projector & PCF soft penumbra
+│       │   │
+│       │   ├── model/                                      # Data Models & Schemas
+│       │   │   ├── MaterialModels.kt                       # PbrMaterial models with real-world metric tileScaleMeters
+│       │   │   ├── SurfaceModels.kt                        # CompositeSurface models, categories, and layer stacks
+│       │   │   ├── GeometryModels.kt                       # Vec3D, Mat4, Vertex, and 3D mesh definitions
+│       │   │   ├── ShadowModels.kt                         # Shadow quality, PCF kernels, and depth bias params
+│       │   │   ├── SolarModels.kt                          # Solar coordinates, atmospheric parameters, and LUTs
+│       │   │   ├── CloudDetectionModels.kt                 # Cloud genera (Cb, Cu, Sc, St, Ci, Ac, Ns) and LiDAR tracking
+│       │   │   ├── TextModels.kt                           # SDF glyph metrics, kerning pairs, and font atlases
+│       │   │   └── AssetCategory.kt                        # 13 Studio asset category enumerations
+│       │   │
+│       │   ├── sky/                                        # Sky & Solar Subsystem UI & Viewports
+│       │   ├── weather/                                    # Weather & Cloud Subsystem UI & Viewports
+│       │   └── text/                                       # Typography & SDF Subsystem UI & Viewports
 │       │
 │       ├── androidMain/kotlin/com/example/sphere/
 │       │   └── Platform.android.kt                         # Android-specific actual platform bindings
@@ -187,6 +210,9 @@ sphere-studio/
 │   │   │   ├── Shader.h / .cpp                             # SPIR-V binary module compiler and reflection
 │   │   │   ├── SwapChain.h / .cpp                          # Presentation engine wrapper
 │   │   │   └── Texture.h / .cpp                            # RAII texture with anisotropic filtering samplers
+│   │   │
+│   │   ├── jni/                                            # JNI C-ABI Bridge between Kotlin & Vulkan C++
+│   │   │   └── SphereStudioJni.cpp                         # Native lifecycle, registered KTX2 textures, Cook-Torrance BRDF
 │   │   │
 │   │   ├── scene/                                          # Scene Graph & World Representation (C++20 / Vulkan 1.3)
 │   │   │   ├── CMakeLists.txt                              # Compiles libscene.a (Geometry, SceneGraph, VulkanStage, Scene, Mesh, Transform)
@@ -335,8 +361,8 @@ sphere-studio/
 │   │   ├── profiles/shared_profile.h                       # Shared spline cross-sections
 │   │   └── spec/shared_mesh_spec.h                         # Vertex buffer layouts (positions, normals, UVs, tangents)
 │   │
-│   ├── textures/                                           # Shared Textures & Specs
-│   │   └── spec/shared_spec.h                              # BC7/BC5/BC4 texture format choices
+│   ├── textures/                                           # Shared Textures & KTX2 Texture Specifications
+│   │   └── spec/shared_spec.h                              # 65 registered KTX2 architectural textures with real-world metric dimensions (Architextures standard)
 │   │
 │   └── tests/                                              # Native GoogleTest Test Suites
 │       └── weather/
@@ -642,26 +668,111 @@ Adapted and converted from [AmanSachan1/Meteoros](https://github.com/AmanSachan1
 
 ---
 
-### 10. PBR Materials, Buildings & Modular Facades
+### 10. PBR Materials, Architectural Metric Scale & Parametric Sizing
 
-- **PBR Material & Surface Studio (`MaterialInspectorScreen.kt`)**:
-  - **3D Target Object Switching**:
-    - **3D Photometric Test Cube (`CUBE`)**: Centered 3D calibration cube rendered in perspective with metric crosshairs, corner L-brackets, "+Z FRONT / +Y TOP / +X RIGHT" face telemetry, and true Cook-Torrance specular highlight lobes.
-    - **3D Architectural Wall (`WALL`)**: Vertical wall slab rendered with realistic thickness (300mm), overhanging top coping capstone, foundation curb, and contact floor shadow.
-    - **PBR Sphere (`SPHERE`)**: Curved microfacet BRDF sphere with Snell's law caustics and Fresnel rim.
-    - **Ground Slab (`PLANE`)**: Perspective horizontal floor surface.
-  - **Universal Texture Application**: Any texture or material in the library can be applied directly to either the **Test Cube** or the **Architectural Wall** (e.g., Brick Wall on Cube, Mirror Gold on Wall, Cast Concrete on Cube, Dark Oak on Wall).
-  - **Well-Organized Material Categories**:
-    - **Wall & Masonry**: Rusticated Red Brick (stretcher bond, recessed mortar), Cast Board-Formed Concrete (tie-holes, timber relief), Subway Glazed Ceramic Tile (grout grid), Polished Concrete.
-    - **Metals & PBR**: Mirror Polished 24K Gold (metallic 1.0, roughness 0.08), Brushed Anodized Aluminum, Weathered Rusted Iron (pitting), Oxidized Copper Patina (verdigris).
-    - **Flooring & Stone**: Dark Oak Hardwood Planks (seams & wood grain), Polished Carrara Marble (metamorphic veins), Weathered Bitumen Asphalt (aggregate & yellow lane stripe).
-    - **Nature & Organic**: Mondo Grass Lawn Turf, Moist Organic Loam & Foliage, Subsurface Dermal Skin.
-  - **Channel Modes**: Full Cook-Torrance PBR, Albedo Map (BC7 sRGB), Normal Map (BC5 Tangent RG), ORM Map (Red=AO, Green=Roughness, Blue=Metallic), Height Map (BC4 displacement), and interactive A/B Split Compare.
-- **Grammar-Based Architecture**: Modular building generator attaching wall sockets, windows, entry doors, commercial storefronts, fire escapes, and rooftop HVAC units.
+The PBR Material & Surface Studio (`MaterialInspectorScreen.kt`) provides a production-grade inspection environment for physically based rendering, architectural materials, real-world metric scale tiling, and parametric object sizing:
+
+#### 3D Target Meshes
+- **3D Photometric Test Cube (`CUBE`)**: Standard 3D calibration cube ($1.92\text{m} \times 1.92\text{m} \times 1.92\text{m}$ default) rendered in 3D perspective with corner registration brackets, metric crosshairs, "+Z FRONT / +Y TOP / +X RIGHT" face telemetry, and true Cook-Torrance specular highlight lobes.
+- **3D Architectural Wall (`WALL`)**: Vertical wall slab ($1.85\text{m(W)} \times 1.45\text{m(H)} \times 340\text{mm(T)}$ default) with realistic physical thickness, bevelled top coping capstone, foundation curb, and contact drop shadows.
+- **3D Ground / Floor Slab (`PLANE`)**: Perspective architectural slab ($2.40\text{m} \times 2.40\text{m} \times 200\text{mm}$ thickness default) with side skirt extrusion and 1-meter reference grid.
+- **PBR Microfacet Sphere (`SPHERE`)**: Curved calibration sphere ($\varnothing 1.60\text{m}$ default) evaluating Fresnel rims, microfacet roughness gradients, and Snell's law reflections.
+
+#### Architectural Real-World Metric Scale (Architextures / BIM Standard)
+In real-world architectural design (BIM, Architextures, Unreal Engine, 3ds Max), PBR materials have known physical sample dimensions (e.g., standard UK/US stretcher brick pattern: $900\text{mm} \times 748\text{mm}$; rich organic loam: $700\text{mm}$; mondo grass: $300\text{mm}$; flamed granite paving: $1208\text{mm}$).
+- **Anti-Distortion Guarantee**: Applying a texture to an object avoids arbitrary single-quad stretching or fit-to-box distortion. Instead, the surface dimensions directly govern UV repetition:
+  $$\text{repeat}_U = \frac{\text{Surface Width (m)}}{\text{Material Tile Scale (m)}} \times \text{Multiplier}_U, \quad \text{repeat}_V = \frac{\text{Surface Height (m)}}{\text{Material Tile Scale (m)}} \times \text{Multiplier}_V$$
+- **Seamless BitmapShader Tiling**: Implemented via Android `BitmapShader(..., TileMode.REPEAT, TileMode.REPEAT)` mapped to perspective quad polygons via `Matrix.setPolyToPoly` and `setLocalMatrix`. When the user expands a wall from $1.8\text{m}$ to $3.6\text{m}$, the texture seamlessly adds more brick courses and paver units at exact 1:1 metric scale.
+- **Sphere Circumference Tiling**: UV repetition around the sphere equator is physically coupled to diameter: $\text{repeat}_U = \frac{\pi \cdot D}{\text{Tile Scale}} \times \text{Multiplier}_U$.
+- **Real-World vs. Stretch Fit Toggle**: Instant toggle between physical metric tiling and single-fit stretching.
+- **UV Multipliers & Presets**: Quick $1.0\times$, $2.0\times$, and $0.5\times$ presets, with independent parametric $U$ and $V$ sliders.
+- **Live Telemetry & Blueprint Plaques**: Each mesh displays live physical dimensions ($mm$/meters) and $(U \times V)$ repetition coordinates directly on 3D blueprint HUD plaques.
+
+#### Parametric 3-Axis Object Sizing Controls (`ObjectDimensionsControlTab.kt`)
+- **Independent 3-Axis Sliders**:
+  - **Wall**: Width ($0.5\text{m} - 5.0\text{m}$), Height ($0.5\text{m} - 4.0\text{m}$), Thickness ($100\text{mm} - 800\text{mm}$).
+  - **Cube**: Width ($0.4\text{m} - 4.0\text{m}$), Height ($0.4\text{m} - 4.0\text{m}$), Depth ($0.4\text{m} - 4.0\text{m}$).
+  - **Floor / Slab**: Width ($0.5\text{m} - 6.0\text{m}$), Depth ($0.5\text{m} - 6.0\text{m}$), Slab Thickness ($50\text{mm} - 600\text{mm}$).
+  - **Sphere**: Diameter ($\varnothing 0.4\text{m} - 4.0\text{m}$).
+- **Global Sizing Presets**: Quick-switch buttons for **Compact (0.7x)**, **Default (1.0x)**, **Expanded (1.4x)**, and **Massive (2.0x)**.
+- **Quick Size Toolbar**: Top-anchored expander bar allowing rapid dimension tweaking and real-world scale toggles without leaving the 3D viewport.
+
+#### Channel Modes & Parameter Inspection
+- **Channel Modes**:
+  1. `Full Composite PBR`: Complete lighting with diffuse albedo, normal perturbation, and specular microfacets.
+  2. `Albedo Map`: Unlit diffuse surface reflectance.
+  3. `Normal Map`: Tangent-space normal vector field with chromatic normal vectors.
+  4. `ORM Map`: Composite channel packed (Red = Ambient Occlusion, Green = Roughness, Blue = Metallic).
+  5. `Height / Displacement`: Grayscale elevation / parallax displacement map.
+  6. `Split Compare`: Interactive A/B split slider comparing raw albedo against final lit PBR output.
+- **Physical Optical Properties**: Roughness ($0.0 - 1.0$), Metallic ($0.0 - 1.0$), Index of Refraction (IOR $1.0 - 3.0$), Normal Strength ($0.0 - 3.0\times$), Height Displacement ($0 - 50\text{mm}$), Ambient Occlusion intensity, and Base Color tinting.
 
 ---
 
-### 11. Terrain & Hydraulic Erosion
+### 11. KTX2 Texture Compression & 65 Registered Architectural Assets
+
+Sphere Studio incorporates the **Khronos Texture 2.0 (`.ktx2`)** specification using **Basis Universal supercompression** (UASTC / ETC1S) for GPU memory optimization and multiplatform texture streaming:
+
+#### Basis Universal & Native Transcoding Pipeline
+- **Storage & Bandwidth**: Texture file sizes are compressed by $60\% - 80\%$ compared to uncompressed RGBA8, allowing 65 high-resolution architectural PBR texture sets to fit into mobile memory.
+- **Zero-CPU GPU Transcoding**: KTX2 textures are transcoded at load time directly into the target GPU's native hardware block compression format:
+  - **Desktop / Vulkan PC**: Transcoded to **BC7** (Albedo/ORM) and **BC5** (Normal maps).
+  - **Mobile / Android**: Transcoded to **ASTC (4x4 or 6x6)** or **ETC2** / **EAC**.
+- **Complete Mipmap Pyramids**: All KTX2 assets contain 10 precomputed mipmap levels with Kaiser filtered downsampling to eliminate texture aliasing at shallow grazing angles.
+
+#### 65 Registered Architectural Assets (`shared_spec.h`)
+The native engine registers 65 standard architectural materials across 4 dedicated categories, complete with metric tile dimensions, bindless descriptor slots, and photometric defaults:
+
+| Category | Example Materials | Physical Tile Scale | Bindless Slot Range |
+| :--- | :--- | :---: | :---: |
+| **Metals & Cladding** | Box Profile Stainless Steel, Square Profile Zinc, Corrugated Aluminium, Diamond Tread Aluminium, Patinated Copper, Weathered Rusted Iron Plate | $800\text{mm} - 3000\text{mm}$ | `1000 - 1080` |
+| **Bricks & Masonry** | Rusticated Red Brick, Metro Subway Tile White, Roughcast Render Tan, Smoky Brick Grey, Pilotage Red, Gillespie Magenta, Buff Flemish, Industrial Common Bond | $500\text{mm} - 1575\text{mm}$ | `1090 - 1240` |
+| **Stone, Pavers & Slabs** | Grey Victorian Encaustic Tile, Basalt V-Pavers, Basalt Bowtie, Concrete Aggregate Pavers, Dark Scottish Granite Setts, Larvikite Blue Pearl, Galletta Terrazzo, Flamed Granite Slabs, Sofia Marble Star Inlay | $450\text{mm} - 3200\text{mm}$ | `1250 - 1450` |
+| **Flooring, Nature & Roof** | European Oak Hardwood Planks, Wenge Chevron Parquet, Mondo Grass Turf, Perennial Ryegrass, Forest Cushion Moss, Rich Organic Loam, Black Stone Asphalt, Terracotta Roman Roof Tiles, Bitumen Hexagonal Shingles | $300\text{mm} - 3275\text{mm}$ | `1460 - 1640` |
+
+---
+
+### 12. Vulkan C++ Native Core vs. Kotlin Architecture (Sascha Willems Integration)
+
+In accordance with modern high-performance Android graphics and the reference architecture from **[SaschaWillems/Vulkan](https://github.com/SaschaWillems/Vulkan)**, responsibilities are cleanly decoupled between C++20 (NDK) and Kotlin Multiplatform:
+
+```
+[ User Interaction ]  --->  [ Kotlin Compose UI ]  --->  [ JNI Bridge ]  --->  [ Vulkan C++ ]  --->  [ GPU Shaders ]
+(Touch / Sliders)          (MaterialInspectorScreen)      (SphereStudioJni)       (UBO / PushConstants)   (pbr.vert / pbr.frag)
+```
+
+#### 1. Why Core Vulkan Belongs in C/C++
+Android does not provide an official Java or Kotlin runtime binding for Vulkan (unlike OpenGL ES with `android.opengl.GLES20`). Vulkan on Android is strictly exposed as a native C API via the NDK (`<vulkan/vulkan.h>` and `libvulkan.so`):
+- **Vulkan Infrastructure (`native_assets/base/`)**: Adapted directly from Sascha Willems (`VulkanDevice.cpp`, `VulkanSwapChain.cpp`, `VulkanBuffer.cpp`, `VulkanTexture.cpp`, `VulkanDebug.cpp`).
+- **Memory & Allocators**: Native host-visible, device-local, and staging buffer management with sub-allocation pools.
+- **Dynamic Rendering & Pipelines (`native_assets/src/vulkan/`)**: Vulkan 1.3 dynamic rendering pipelines (`PipelineBuilder.cpp`), removing legacy render pass boilerplate.
+- **Bindless Descriptor Heaps**: `VK_EXT_descriptor_indexing` allowing the 65 registered KTX2 textures to reside in unbounded descriptor arrays indexed directly by `mat.albedoTexIndex` in GLSL.
+
+#### 2. Why UI and Parameter Controls Belong in Kotlin (`kt`)
+- In Sascha Willems' desktop repository, controls are implemented via **Dear ImGui (`imgui.cpp`)**. On Android, ImGui lacks native accessibility, system font scaling, and smooth mobile touch ergonomics.
+- Kotlin Multiplatform & Jetpack Compose (`MaterialInspectorScreen.kt`, `ObjectDimensionsControlTab.kt`) provide responsive Material 3 UI widgets (Sliders, FilterChips, Dropdowns, TabRows).
+- Provides instant fallback software/canvas rasterization viewports on devices without hardware Vulkan drivers or in headless JVM unit test environments.
+
+#### 3. JNI Bridge (`SphereStudioJni.cpp`)
+Connects the Kotlin Compose UI with the C++ Vulkan pipeline:
+- `nativeInitEngine()`: Initializes C++ logging, `GeneratorRegistry`, and KTX2 texture metadata.
+- `nativeGetEngineVersion()`: Returns engine branding string (`"SphereStudioEngine 1.3 (Sascha Willems Vulkan Framework / C++20 / NDK r26b)"`).
+- `nativeGetRegisteredTextureCount()`: Returns total registered KTX2 textures ($65$).
+- `nativeGetTextureId()`, `nativeGetTextureDisplayName()`, `nativeGetTextureBindlessSlot()`: Reflects texture metadata to Kotlin.
+- `nativeEvaluateCookTorrance()`: Evaluates the exact C++ microfacet specular BRDF ($D \cdot G \cdot F$) on CPU when cross-validating GPU shader parity.
+
+#### 4. GPU Shaders (GLSL to SPIR-V)
+- **`pbr.vert`**: Multiplies vertex position by `push.modelMatrix` (containing the parametric object dimensions $w, h, d$) and outputs light-space coordinates for Sascha Willems shadow mapping.
+- **`pbr.frag`**: Multiplies `inTexCoord` by the push constant `uvScale` vector:
+  ```glsl
+  vec2 uv = inTexCoord * mat.uvScale;
+  vec4 albedo = texture(samplerColorMap, uv);
+  ```
+  The sampler is configured with `VK_SAMPLER_ADDRESS_MODE_REPEAT` to execute seamless physical metric tiling across the 3D surface.
+
+---
+
+### 13. Terrain & Hydraulic Erosion
 
 - **Fractal Noise**: Multi-octave fractional Brownian motion (fBm) with ridged multifractal peaks.
 - **Hydraulic & Thermal Erosion**: Simulates particle drop trajectories, sediment transport, deposition, and talus scree slopes.
@@ -669,7 +780,7 @@ Adapted and converted from [AmanSachan1/Meteoros](https://github.com/AmanSachan1
 
 ---
 
-### 12. Water Bodies & Tessendorf FFT Ocean
+### 14. Water Bodies & Tessendorf FFT Ocean
 
 - **Phillips Ocean Spectrum**: Evaluated via inverse Fast Fourier Transform (FFT) on compute shaders, generating realistic choppy wave peaks, capillary ripples, and whitecap foam.
 - **Inland Water Bodies**: Meandering river splines with cross-sectional velocity profiles, tranquil mountain lakes, and cascading waterfalls.
@@ -677,7 +788,7 @@ Adapted and converted from [AmanSachan1/Meteoros](https://github.com/AmanSachan1
 
 ---
 
-### 13. Energy, Utility & World Props
+### 15. Energy, Utility & World Props
 
 - **Renewable Energy Infrastructure**:
   - Multi-part wind turbines (hollow steel towers, nacelles, pitch-controlled airfoil blades) with rotation simulation.
@@ -688,7 +799,7 @@ Adapted and converted from [AmanSachan1/Meteoros](https://github.com/AmanSachan1
 
 ---
 
-### 14. GPU Particles & Procedural Audio
+### 16. GPU Particles & Procedural Audio
 
 - **Compute VFX**: GPU bitonic sorting, curl-noise vector fields, and physics simulation for sparks, smoke plumes, fire sheets, and blizzard flurries.
 - **Real-Time Procedural Audio**: Band-limited oscillator synthesis for internal combustion engine RPMs, dynamic rain droplet acoustics, wind howl resonance, and surface-specific footstep impacts.
@@ -701,7 +812,8 @@ All procedural generators in `native_assets` utilize deterministic binary seed b
 
 | Relative File Path | Format | Subsystem | Functional Role | Status |
 | :--- | :---: | :--- | :--- | :---: |
-| `native_assets/textures/spec/shared_spec.h` | Header | Root Shared | Texture format specification | **Active** |
+| `native_assets/textures/spec/shared_spec.h` | C++ Header | Root Shared | 65 Registered KTX2 Architectural Assets with Real-World Physical Dimensions | **Active** |
+| `native_assets/src/jni/SphereStudioJni.cpp` | C++ / JNI | Native Core | JNI Bridge: Lifecycle, KTX2 Texture Registry Reflection & Cook-Torrance BRDF | **Active** |
 | `native_assets/meshes/profiles/shared_profile.h` | Header | Root Shared | Shared spline extrusion profiles | **Active** |
 | `native_assets/meshes/spec/shared_mesh_spec.h` | Header | Root Shared | Vertex buffer descriptor specifications | **Active** |
 | `native_assets/src/weather/textures/seeds/weather_seed.bin` | Binary Seed | Weather Core | Deterministic cloud and rain seed | **Active** |

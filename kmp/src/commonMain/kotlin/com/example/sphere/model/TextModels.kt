@@ -32,6 +32,34 @@ enum class TextBadgeStyle(val label: String) {
     TACTICAL_BRACKETS("Avionics Corner Brackets")
 }
 
+enum class TextMountTarget(val label: String, val shortName: String, val description: String) {
+    WALL("🧱 Architectural Wall", "Wall", "Text applied onto a brick, concrete, stone, or timber architectural wall"),
+    POST("📍 Street / Sign Post", "Post", "Text mounted on a 3D street pole or signpost with mounting brackets"),
+    FLOATING("☁️ Floating Billboard", "Billboard", "3D world-space text hovering above the ground platform"),
+    HUD("🖥️ 2D HUD Overlay", "HUD", "Screen-space dynamic text overlay (Sascha Willems textoverlay)")
+}
+
+enum class WallMaterialType(val label: String, val primaryColor: Color, val mortarColor: Color, val accentColor: Color) {
+    BRICK_RED("Red Stretcher Brick", Color(0xFF9E3A26), Color(0xFFD4C8B8), Color(0xFFB84530)),
+    CONCRETE_MODERN("Cast Formwork Concrete", Color(0xFF5A6372), Color(0xFF38404E), Color(0xFF6B7688)),
+    DARK_STONE("Dark Ashlar Stone", Color(0xFF2E3540), Color(0xFF1E222A), Color(0xFF3C4554)),
+    TIMBER_PLANK("Cedar Timber Siding", Color(0xFF6B482A), Color(0xFF452C16), Color(0xFF7E5632))
+}
+
+enum class PostStyleType(val label: String, val poleColor: Color, val bracketColor: Color, val plateColor: Color) {
+    STEEL_CYLINDER("Round Galvanized Steel", Color(0xFF8896A6), Color(0xFF425062), Color(0xFF1B3B2B)),
+    TIMBER_SQUARE("Square Cedar Timber", Color(0xFF6E4A2C), Color(0xFF382414), Color(0xFF2C241E)),
+    CAST_IRON_BLACK("Victorian Cast Iron", Color(0xFF22262E), Color(0xFF12151A), Color(0xFF1E2B38)),
+    HIGHWAY_GANTRY("Industrial Steel / Yellow", Color(0xFF5A6270), Color(0xFF2A303A), Color(0xFFD97706))
+}
+
+enum class TextApplicationStyle(val label: String, val description: String) {
+    MOUNTED_PLAQUE("Mounted Signboard Plaque", "Raised metal/acrylic plate with bevelled rim & corner bolts"),
+    DIRECT_DECAL("Surface Stencil Decal", "Painted directly onto the wall/post conforming to surface"),
+    CHANNEL_3D_LETTERS("3D Raised Channel Letters", "Extruded letters casting realistic drop shadows onto surface"),
+    NEON_SIGN("Neon Emissive Sign", "Glowing light tubes casting radial illumination onto wall/post")
+}
+
 data class TextPreset(
     val id: String,
     val name: String,
@@ -64,10 +92,79 @@ data class TextPreset(
     val rotX: Float = 0.0f,
     val rotY: Float = 0.0f,
     val scale: Float = 1.0f,
-    val badgeStyle: TextBadgeStyle = TextBadgeStyle.GLASS_DARK
+    val badgeStyle: TextBadgeStyle = TextBadgeStyle.GLASS_DARK,
+    val mountTarget: TextMountTarget = TextMountTarget.WALL,
+    val wallMaterial: WallMaterialType = WallMaterialType.BRICK_RED,
+    val postStyle: PostStyleType = PostStyleType.STEEL_CYLINDER,
+    val applicationStyle: TextApplicationStyle = TextApplicationStyle.MOUNTED_PLAQUE
 )
 
 val defaultTextPresets = listOf(
+    // 0. Architectural Wall Signage (Default)
+    TextPreset(
+        id = "architectural_wall_sign",
+        name = "Architectural Wall Signage",
+        category = "Wall Mounts",
+        description = "High-contrast architectural signage mounted on a weathered red brick facade with bevelled plaque and corner bolts.",
+        text = "SPHERE STUDIO // 3D GRAPHICS\nBUILDING 4 - DIVISION OF VULKAN ENGINE\nARCHITECTURAL LABS & SIMULATION",
+        font = FontTypeface.ROBOTO_SDF,
+        renderMode = TextRenderMode.SURFACE_DECAL_3D,
+        alignment = TextAlignment.CENTER,
+        fontSize = 20.0f,
+        letterSpacing = 1.05f,
+        lineHeight = 1.30f,
+        textColor = Color(0xFFF0F4F8),
+        enableOutline = true,
+        outlineWidth = 0.16f,
+        outlineColor = Color(0xFF1A1C22),
+        enableShadow = true,
+        shadowOffsetX = 3.0f,
+        shadowOffsetY = 4.0f,
+        shadowSoftness = 0.30f,
+        shadowColor = Color(0xCC000000),
+        smoothing = 0.040f,
+        thicknessBias = 0.02f,
+        enableGlow = false,
+        glowRadius = 0.0f,
+        glowColor = Color.Transparent,
+        badgeStyle = TextBadgeStyle.SOLID_SLATE,
+        mountTarget = TextMountTarget.WALL,
+        wallMaterial = WallMaterialType.BRICK_RED,
+        applicationStyle = TextApplicationStyle.MOUNTED_PLAQUE
+    ),
+
+    // 0b. Street Wayfinding Signpost
+    TextPreset(
+        id = "street_wayfinding_post",
+        name = "Street Wayfinding Signpost",
+        category = "Post Mounts",
+        description = "Urban street sign mounted onto a galvanized steel post with clamp brackets and reflective sign panel.",
+        text = "VULKAN WAY // NDK AVE\n<-- SCENE STAGE  |  PBR LABS -->\nMAX SPEED: 144 FPS",
+        font = FontTypeface.ROBOTO_SDF,
+        renderMode = TextRenderMode.BILLBOARD_3D_AXIAL,
+        alignment = TextAlignment.CENTER,
+        fontSize = 20.0f,
+        letterSpacing = 1.02f,
+        lineHeight = 1.25f,
+        textColor = Color(0xFFFFFFFF),
+        enableOutline = true,
+        outlineWidth = 0.14f,
+        outlineColor = Color(0xFF0F2618),
+        enableShadow = true,
+        shadowOffsetX = 2.0f,
+        shadowOffsetY = 3.0f,
+        shadowSoftness = 0.20f,
+        shadowColor = Color(0xAA000000),
+        smoothing = 0.038f,
+        thicknessBias = 0.0f,
+        enableGlow = false,
+        glowRadius = 0.0f,
+        glowColor = Color.Transparent,
+        badgeStyle = TextBadgeStyle.NONE,
+        mountTarget = TextMountTarget.POST,
+        postStyle = PostStyleType.STEEL_CYLINDER,
+        applicationStyle = TextApplicationStyle.MOUNTED_PLAQUE
+    ),
     // 1. Vulkan GPU Telemetry HUD (Sascha Willems classic overlay)
     TextPreset(
         id = "vulkan_telemetry_hud",

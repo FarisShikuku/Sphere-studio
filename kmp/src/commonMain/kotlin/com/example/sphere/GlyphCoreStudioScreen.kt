@@ -9,6 +9,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -26,9 +27,9 @@ import kotlinx.coroutines.isActive
  *
  * Implements the architecture from Sascha Willems Vulkan textoverlay and distancefieldfonts:
  *  - Signed Distance Field (SDF) rasterization with smoothstep subpixel antialiasing
+ *  - 3D Text Mount Targets: Architectural Wall, Street Signpost, Floating Billboard, 2D HUD
  *  - Dynamic outline width, color, and stroke dilation
  *  - Secondary distance field drop shadow with offset and feathering
- *  - 2D HUD Screen Overlay vs 3D World Space Billboard rendering
  *  - 1024x1024 SDF Font Atlas inspection and typographic metrics
  *  - Live C++ Vulkan pipeline code and GLSL shader code preview
  */
@@ -44,7 +45,7 @@ fun GlyphCoreStudioScreen(
 
     var selectedPreset by remember { mutableStateOf(defaultTextPresets[0]) }
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabTitles = listOf("Typography", "SDF & Shading", "3D & Billboard", "Font Atlas", "Vulkan C++")
+    val tabTitles = listOf("Typography", "SDF & Shading", "3D Mount & Placement", "Font Atlas", "Vulkan C++")
 
     // Typography State
     var textContent by remember { mutableStateOf(selectedPreset.text) }
@@ -71,7 +72,17 @@ fun GlyphCoreStudioScreen(
     var glowRadius by remember { mutableFloatStateOf(selectedPreset.glowRadius) }
     var glowColor by remember { mutableStateOf(selectedPreset.glowColor) }
 
-    // 3D & World Billboard State
+    // Mount Target & 3D World Placement State
+    var mountTarget by remember { mutableStateOf(selectedPreset.mountTarget) }
+    var wallMaterial by remember { mutableStateOf(selectedPreset.wallMaterial) }
+    var postStyle by remember { mutableStateOf(selectedPreset.postStyle) }
+    var textApplicationStyle by remember { mutableStateOf(selectedPreset.applicationStyle) }
+    var mountHeightOffset by remember { mutableFloatStateOf(0.0f) }
+    var wallWidthMeters by remember { mutableFloatStateOf(3.2f) }
+    var wallHeightMeters by remember { mutableFloatStateOf(2.2f) }
+    var postHeightMeters by remember { mutableFloatStateOf(2.8f) }
+
+    // Camera & Viewport State
     var zoomFactor by remember { mutableFloatStateOf(1.0f) }
     var rotX by remember { mutableFloatStateOf(15f) }
     var rotY by remember { mutableFloatStateOf(-20f) }
@@ -101,7 +112,7 @@ fun GlyphCoreStudioScreen(
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                         )
                         Text(
-                            "Vulkan SDF Typography & TextOverlay Engine",
+                            "Vulkan SDF Typography & 3D Surface Mounting",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 11.sp
@@ -153,6 +164,11 @@ fun GlyphCoreStudioScreen(
                             glowRadius = selectedPreset.glowRadius
                             glowColor = selectedPreset.glowColor
                             badgeStyle = selectedPreset.badgeStyle
+                            mountTarget = selectedPreset.mountTarget
+                            wallMaterial = selectedPreset.wallMaterial
+                            postStyle = selectedPreset.postStyle
+                            textApplicationStyle = selectedPreset.applicationStyle
+                            mountHeightOffset = 0.0f
                             zoomFactor = 1.0f
                             rotX = 15f
                             rotY = -20f
@@ -174,7 +190,77 @@ fun GlyphCoreStudioScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // VIEWPORT AREA
+            // 1. TARGET MOUNT SELECTOR BAR (WALL, POST, BILLBOARD, HUD)
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.fillMaxWidth().testTag("text_mount_selector_bar")
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = when (mountTarget) {
+                                    TextMountTarget.WALL -> Icons.Default.Layers
+                                    TextMountTarget.POST -> Icons.Default.VerticalAlignTop
+                                    TextMountTarget.FLOATING -> Icons.Default.ViewInAr
+                                    TextMountTarget.HUD -> Icons.Default.Screenshot
+                                },
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                "Text Mount Target:",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                        }
+                        Text(
+                            when (mountTarget) {
+                                TextMountTarget.WALL -> "Wall: ${wallMaterial.label}"
+                                TextMountTarget.POST -> "Post: ${postStyle.label}"
+                                TextMountTarget.FLOATING -> "3D Billboard"
+                                TextMountTarget.HUD -> "2D HUD Overlay"
+                            },
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp
+                            )
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TextMountTarget.entries.forEach { target ->
+                            val isSelected = mountTarget == target
+                            FilledTonalButton(
+                                onClick = { mountTarget = target },
+                                modifier = Modifier.weight(1f).testTag("select_mount_${target.name.lowercase()}"),
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                    contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                ),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    target.shortName,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. VIEWPORT CANVAS
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -212,11 +298,19 @@ fun GlyphCoreStudioScreen(
                     onDrag = { dx, dy ->
                         rotY += dx * 0.5f
                         rotX = (rotX - dy * 0.5f).coerceIn(-45f, 75f)
-                    }
+                    },
+                    mountTarget = mountTarget,
+                    wallMaterial = wallMaterial,
+                    postStyle = postStyle,
+                    textApplicationStyle = textApplicationStyle,
+                    mountHeightOffset = mountHeightOffset,
+                    wallWidthMeters = wallWidthMeters,
+                    wallHeightMeters = wallHeightMeters,
+                    postHeightMeters = postHeightMeters
                 )
             }
 
-            // CONTROLS TAB ROW
+            // 3. CONTROLS TAB ROW
             ScrollableTabRow(
                 selectedTabIndex = selectedTab,
                 edgePadding = 12.dp,
@@ -238,7 +332,7 @@ fun GlyphCoreStudioScreen(
                 }
             }
 
-            // CONTROLS CONTENT AREA
+            // 4. CONTROLS CONTENT AREA
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -286,6 +380,10 @@ fun GlyphCoreStudioScreen(
                             glowRadius = preset.glowRadius
                             glowColor = preset.glowColor
                             badgeStyle = preset.badgeStyle
+                            mountTarget = preset.mountTarget
+                            wallMaterial = preset.wallMaterial
+                            postStyle = preset.postStyle
+                            textApplicationStyle = preset.applicationStyle
                         }
                     )
                     1 -> SdfShadingTab(
@@ -317,6 +415,22 @@ fun GlyphCoreStudioScreen(
                         onGlowColorChange = { glowColor = it }
                     )
                     2 -> WorldAndBillboardTab(
+                        mountTarget = mountTarget,
+                        onMountTargetChange = { mountTarget = it },
+                        wallMaterial = wallMaterial,
+                        onWallMaterialChange = { wallMaterial = it },
+                        postStyle = postStyle,
+                        onPostStyleChange = { postStyle = it },
+                        textApplicationStyle = textApplicationStyle,
+                        onTextApplicationStyleChange = { textApplicationStyle = it },
+                        mountHeightOffset = mountHeightOffset,
+                        onMountHeightOffsetChange = { mountHeightOffset = it },
+                        wallWidthMeters = wallWidthMeters,
+                        onWallWidthMetersChange = { wallWidthMeters = it },
+                        wallHeightMeters = wallHeightMeters,
+                        onWallHeightMetersChange = { wallHeightMeters = it },
+                        postHeightMeters = postHeightMeters,
+                        onPostHeightMetersChange = { postHeightMeters = it },
                         renderMode = renderMode,
                         onRenderModeChange = { renderMode = it },
                         zoomFactor = zoomFactor,

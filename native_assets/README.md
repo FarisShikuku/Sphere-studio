@@ -42,11 +42,14 @@ native_assets/
 │       ├── texture_processor.comp      # KTX2 Sobel normal & roughness derivation compute filter
 │       ├── text_sdf.vert / text_sdf.frag # Signed Distance Field (SDF) glyph rendering
 │       └── include/                    # bindless.glsl, pbr_common.glsl, math_common.glsl, vulkan_compat.glsl
-└── textures/                           # Khronos Texture 2.0 (KTX2) Assets
+├── jni/                                # JNI C-ABI Bridge between Kotlin & Vulkan C++
+│   └── SphereStudioJni.cpp             # Native lifecycle, registered KTX2 textures, Cook-Torrance BRDF
+└── textures/                           # Khronos Texture 2.0 (KTX2) Assets & Specifications
+    ├── spec/shared_spec.h              # 65 registered KTX2 architectural textures with real-world metric dimensions (Architextures standard)
     ├── rusticated_red_brick.ktx2       # 900x748, 10 mip levels, VK_FORMAT_R8G8B8A8_SRGB
     ├── mondo_grass.ktx2                # 900x900, 10 mip levels, VK_FORMAT_R8G8B8A8_SRGB
     ├── earth_foliage.ktx2              # 900x900, 10 mip levels, VK_FORMAT_R8G8B8A8_SRGB
-    └── spec/                           # Texture specifications & PBR parameter descriptors
+    └── ... (65 total registered assets across Metals, Bricks, Pavers, Wood, Roof, Nature)
 ```
 
 ---
