@@ -75,7 +75,6 @@ fun MaterialPreviewViewport(
     var lightAngle by remember { mutableFloatStateOf(45f) }
     var splitPosition by remember { mutableFloatStateOf(0.5f) }
 
-    val textMeasurer = rememberTextMeasurer()
     val context = androidx.compose.ui.platform.LocalContext.current
     val textureBitmap = remember(material.id, context) {
         TextureManager.getTextureForMaterial(context, material)
@@ -314,18 +313,6 @@ fun MaterialPreviewViewport(
                                 uvTilingMultiplierX = uvTilingMultiplierX,
                                 uvTilingMultiplierY = uvTilingMultiplierY
                             )
-
-                            if (channelMode == MaterialChannelMode.COMPOSITE_PBR || channelMode == MaterialChannelMode.ALBEDO_MAP) {
-                                drawCubeFaceText(
-                                    textMeasurer = textMeasurer,
-                                    face = face,
-                                    pts = projPts,
-                                    material = material,
-                                    dimW = hw * 2f,
-                                    dimH = hh * 2f,
-                                    dimD = hd * 2f
-                                )
-                            }
                         } else {
                             when (channelMode) {
                                 MaterialChannelMode.ALBEDO_MAP -> {
@@ -370,17 +357,6 @@ fun MaterialPreviewViewport(
                                         diffuse = diffuse,
                                         repeatX = if (useRealWorldScale) repX else uvTilingMultiplierX,
                                         repeatY = if (useRealWorldScale) repY else uvTilingMultiplierY
-                                    )
-
-                                    // Real Text & Telemetry overlay on faces!
-                                    drawCubeFaceText(
-                                        textMeasurer = textMeasurer,
-                                        face = face,
-                                        pts = projPts,
-                                        material = material,
-                                        dimW = hw * 2f,
-                                        dimH = hh * 2f,
-                                        dimD = hd * 2f
                                     )
                                 }
                             }
@@ -513,16 +489,6 @@ fun MaterialPreviewViewport(
                                 uvTilingMultiplierX = uvTilingMultiplierX,
                                 uvTilingMultiplierY = uvTilingMultiplierY
                             )
-                            if (wf.isFront && (channelMode == MaterialChannelMode.COMPOSITE_PBR || channelMode == MaterialChannelMode.ALBEDO_MAP)) {
-                                drawWallBlueprintText(
-                                    textMeasurer = textMeasurer,
-                                    pts = pts,
-                                    material = material,
-                                    dimW = hw * 2f,
-                                    dimH = hh * 2f,
-                                    dimT = ht * 2f
-                                )
-                            }
                         } else {
                             val baseCol = if (wf.isCoping) Color(0xFFC5C9CD) else material.baseColor
                             val litRed = (baseCol.red * diffuse).coerceIn(0f, 1f)
@@ -540,15 +506,6 @@ fun MaterialPreviewViewport(
                                     diffuse = diffuse,
                                     repeatX = if (useRealWorldScale) repX else uvTilingMultiplierX,
                                     repeatY = if (useRealWorldScale) repY else uvTilingMultiplierY
-                                )
-
-                                drawWallBlueprintText(
-                                    textMeasurer = textMeasurer,
-                                    pts = pts,
-                                    material = material,
-                                    dimW = hw * 2f,
-                                    dimH = hh * 2f,
-                                    dimT = ht * 2f
                                 )
                             }
                         }
@@ -731,14 +688,6 @@ fun MaterialPreviewViewport(
                                     repeatY = if (useRealWorldScale) repY else uvTilingMultiplierY
                                 )
                             }
-                            drawFloorBlueprintText(
-                                textMeasurer = textMeasurer,
-                                pts = pts,
-                                material = material,
-                                dimW = hfw * 2f,
-                                dimD = hfd * 2f,
-                                thickness = slabThickness
-                            )
                         } else {
                             val edgeBase = Color(0xFF64748B)
                             val litCol = Color(
@@ -759,65 +708,14 @@ fun MaterialPreviewViewport(
             }
         }
 
-        // 3. Top Badges (Object & Channel)
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                color = Color.Black.copy(alpha = 0.78f),
-                shape = RoundedCornerShape(6.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
-            ) {
-                Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = when (shape) {
-                            PreviewMeshShape.CUBE -> Icons.Default.ViewInAr
-                            PreviewMeshShape.WALL -> Icons.Default.Layers
-                            PreviewMeshShape.SPHERE -> Icons.Default.Circle
-                            PreviewMeshShape.PLANE -> Icons.Default.SquareFoot
-                        },
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(Modifier.width(5.dp))
-                    Text(
-                        shape.label,
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = Color.White)
-                    )
-                }
-            }
-
-            Spacer(Modifier.width(6.dp))
-
-            Surface(
-                color = Color.Black.copy(alpha = 0.78f),
-                shape = RoundedCornerShape(6.dp),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
-            ) {
-                Text(
-                    text = channelMode.label,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontFamily = FontFamily.Monospace,
-                        color = Color(0xFF38BDF8),
-                        fontWeight = FontWeight.Bold
-                    )
-                )
-            }
-        }
-
-        // 4. Sun Light Rotation Button
+        // Sun Light Rotation Control (Top End)
         Surface(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(10.dp),
-            color = Color.Black.copy(alpha = 0.78f),
-            shape = RoundedCornerShape(6.dp),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+            color = Color.Black.copy(alpha = 0.70f),
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
@@ -844,369 +742,6 @@ fun MaterialPreviewViewport(
                 )
             }
         }
-
-        // 5. Floating Quick Size Adjuster Bar (Bottom End)
-        if (onScaleChange != null) {
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(10.dp)
-                    .testTag("viewport_quick_scale_pill"),
-                color = Color.Black.copy(alpha = 0.82f),
-                shape = RoundedCornerShape(18.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f))
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = { onScaleChange((objectScale - 0.10f).coerceAtLeast(0.4f)) },
-                        modifier = Modifier.size(28.dp).testTag("quick_scale_down")
-                    ) {
-                        Icon(
-                            Icons.Default.Remove,
-                            contentDescription = "Decrease Scale",
-                            tint = Color.White,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-
-                    Text(
-                        "${(objectScale * 100).toInt()}%",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontSize = 11.sp
-                        ),
-                        modifier = Modifier.padding(horizontal = 4.dp)
-                    )
-
-                    IconButton(
-                        onClick = { onScaleChange((objectScale + 0.10f).coerceAtMost(2.5f)) },
-                        modifier = Modifier.size(28.dp).testTag("quick_scale_up")
-                    ) {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = "Increase Scale",
-                            tint = Color.White,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-
-                    if (abs(objectScale - 1.0f) > 0.01f) {
-                        IconButton(
-                            onClick = { onScaleChange(1.0f) },
-                            modifier = Modifier.size(28.dp).testTag("quick_scale_reset")
-                        ) {
-                            Icon(
-                                Icons.Default.RestartAlt,
-                                contentDescription = "Reset Scale",
-                                tint = Color(0xFFFBBF24),
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// -------------------------------------------------------------
-// TEXT DRAWING ON THE 3D TEST CUBE FACES
-// -------------------------------------------------------------
-private fun DrawScope.drawCubeFaceText(
-    textMeasurer: TextMeasurer,
-    face: Any,
-    pts: List<Point2D>, // 0: TL, 1: TR, 2: BR, 3: BL
-    material: PbrMaterial,
-    dimW: Float = 1.0f,
-    dimH: Float = 1.0f,
-    dimD: Float = 1.0f
-) {
-    if (pts.size < 4) return
-
-    try {
-        fun lerp(u: Float, v: Float): Offset {
-            val topX = pts[0].x + (pts[1].x - pts[0].x) * u
-            val topY = pts[0].y + (pts[1].y - pts[0].y) * u
-            val botX = pts[3].x + (pts[2].x - pts[3].x) * u
-            val botY = pts[3].y + (pts[2].y - pts[3].y) * u
-            return Offset(topX + (botX - topX) * v, topY + (botY - topY) * v)
-        }
-
-        val centerPt = lerp(0.5f, 0.5f)
-        val topSpan = sqrt((pts[1].x - pts[0].x).pow(2) + (pts[1].y - pts[0].y).pow(2))
-        val sideSpan = sqrt((pts[3].x - pts[0].x).pow(2) + (pts[3].y - pts[0].y).pow(2))
-
-        // Center Crosshair
-        val cSize = 12f
-        drawLine(Color.White.copy(alpha = 0.70f), Offset(centerPt.x - cSize, centerPt.y), Offset(centerPt.x + cSize, centerPt.y), strokeWidth = 1.4f)
-        drawLine(Color.White.copy(alpha = 0.70f), Offset(centerPt.x, centerPt.y - cSize), Offset(centerPt.x, centerPt.y + cSize), strokeWidth = 1.4f)
-        drawCircle(Color.White.copy(alpha = 0.60f), radius = 6f, center = centerPt, style = Stroke(width = 1.2f))
-
-        // Corner L-brackets
-        val bLen = 10f
-        val c0 = lerp(0.08f, 0.08f)
-        drawLine(Color.White.copy(alpha = 0.75f), c0, Offset(c0.x + bLen, c0.y), strokeWidth = 1.5f)
-        drawLine(Color.White.copy(alpha = 0.75f), c0, Offset(c0.x, c0.y + bLen), strokeWidth = 1.5f)
-
-        val c1 = lerp(0.92f, 0.08f)
-        drawLine(Color.White.copy(alpha = 0.75f), c1, Offset(c1.x - bLen, c1.y), strokeWidth = 1.5f)
-        drawLine(Color.White.copy(alpha = 0.75f), c1, Offset(c1.x, c1.y + bLen), strokeWidth = 1.5f)
-
-        if (topSpan >= 85f && sideSpan >= 65f) {
-            val badgePos = lerp(0.12f, 0.18f)
-            val badgeW = (topSpan * 0.72f).coerceIn(60f, 170f)
-            val badgeH = 46f
-
-            // Bounds check against viewport dimensions
-            if (badgePos.x > -badgeW && badgePos.x < size.width &&
-                badgePos.y > -badgeH && badgePos.y < size.height) {
-
-                drawRoundRect(
-                    color = Color.Black.copy(alpha = 0.75f),
-                    topLeft = Offset(badgePos.x, badgePos.y),
-                    size = Size(badgeW, badgeH),
-                    cornerRadius = CornerRadius(4f, 4f)
-                )
-
-                val wM = ((dimW * 100).roundToInt() / 100f)
-                val hM = ((dimH * 100).roundToInt() / 100f)
-                val dM = ((dimD * 100).roundToInt() / 100f)
-                val cubeTitle = if (abs(dimW - dimH) < 0.05f && abs(dimH - dimD) < 0.05f) {
-                    "CUBE ${wM}m³"
-                } else {
-                    "${wM}x${hM}x${dM}m"
-                }
-
-                // Title Text (Pre-measured to prevent negative constraint crash)
-                val titleLayout = textMeasurer.measure(
-                    text = cubeTitle,
-                    style = TextStyle(
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
-                )
-                drawText(
-                    textLayoutResult = titleLayout,
-                    topLeft = Offset(badgePos.x + 6f, badgePos.y + 4f)
-                )
-
-                // Real-World Architectural PBR Telemetry Subtitle
-                val tileMm = (material.tileScaleMeters * 1000).toInt()
-                val repX = ((dimW / material.tileScaleMeters.coerceAtLeast(0.1f)) * 10).roundToInt() / 10f
-                val repY = ((dimH / material.tileScaleMeters.coerceAtLeast(0.1f)) * 10).roundToInt() / 10f
-                val teleLayout = textMeasurer.measure(
-                    text = "PBR: ${tileMm}mm • UV: ${repX}x×${repY}y",
-                    style = TextStyle(
-                        color = Color(0xFF38BDF8),
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
-                )
-                drawText(
-                    textLayoutResult = teleLayout,
-                    topLeft = Offset(badgePos.x + 6f, badgePos.y + 24f)
-                )
-
-                // Material Name Badge at bottom
-                val bottomBadgePos = lerp(0.12f, 0.75f)
-                if (bottomBadgePos.x > -badgeW && bottomBadgePos.x < size.width &&
-                    bottomBadgePos.y > -20f && bottomBadgePos.y < size.height) {
-
-                    drawRoundRect(
-                        color = Color.Black.copy(alpha = 0.75f),
-                        topLeft = Offset(bottomBadgePos.x, bottomBadgePos.y),
-                        size = Size(badgeW, 20f),
-                        cornerRadius = CornerRadius(4f, 4f)
-                    )
-
-                    val nameLayout = textMeasurer.measure(
-                        text = material.name.take(20),
-                        style = TextStyle(
-                            color = Color(0xFFFBBF24),
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Medium,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    )
-                    drawText(
-                        textLayoutResult = nameLayout,
-                        topLeft = Offset(bottomBadgePos.x + 6f, bottomBadgePos.y + 3f)
-                    )
-                }
-            }
-        }
-    } catch (_: Exception) {
-        // Safe fallback
-    }
-}
-
-// -------------------------------------------------------------
-// TEXT DRAWING ON THE 3D ARCHITECTURAL WALL
-// -------------------------------------------------------------
-private fun DrawScope.drawWallBlueprintText(
-    textMeasurer: TextMeasurer,
-    pts: List<Point2D>,
-    material: PbrMaterial,
-    dimW: Float = 3.0f,
-    dimH: Float = 2.2f,
-    dimT: Float = 0.3f
-) {
-    if (pts.size < 4) return
-
-    try {
-        fun lerp(u: Float, v: Float): Offset {
-            val topX = pts[0].x + (pts[1].x - pts[0].x) * u
-            val topY = pts[0].y + (pts[1].y - pts[0].y) * u
-            val botX = pts[3].x + (pts[2].x - pts[3].x) * u
-            val botY = pts[3].y + (pts[2].y - pts[3].y) * u
-            return Offset(topX + (botX - topX) * v, topY + (botY - topY) * v)
-        }
-
-        val widthPx = abs(pts[1].x - pts[0].x)
-
-        // Architectural Header Plaque
-        val plaquePos = lerp(0.10f, 0.15f)
-        val plaqueW = (widthPx * 0.80f).coerceAtLeast(80f)
-        val plaqueH = 46f
-
-        if (plaquePos.x > -plaqueW && plaquePos.x < size.width &&
-            plaquePos.y > -plaqueH && plaquePos.y < size.height) {
-
-            drawRoundRect(
-                color = Color.Black.copy(alpha = 0.80f),
-                topLeft = Offset(plaquePos.x, plaquePos.y),
-                size = Size(plaqueW, plaqueH),
-                cornerRadius = CornerRadius(5f, 5f)
-            )
-
-            val wM = ((dimW * 100).roundToInt() / 100f)
-            val hM = ((dimH * 100).roundToInt() / 100f)
-            val tMm = (dimT * 1000).toInt()
-
-            val titleLayout = textMeasurer.measure(
-                text = "WALL • ${wM}m × ${hM}m",
-                style = TextStyle(
-                    color = Color.White,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace
-                )
-            )
-            drawText(
-                textLayoutResult = titleLayout,
-                topLeft = Offset(plaquePos.x + 8f, plaquePos.y + 5f)
-            )
-
-            val tileMm = (material.tileScaleMeters * 1000).toInt()
-            val repX = ((dimW / material.tileScaleMeters.coerceAtLeast(0.1f)) * 10).roundToInt() / 10f
-            val repY = ((dimH / material.tileScaleMeters.coerceAtLeast(0.1f)) * 10).roundToInt() / 10f
-            val detailLayout = textMeasurer.measure(
-                text = "PBR: ${tileMm}mm • UV: ${repX}x×${repY}y • ${tMm}mm CORE",
-                style = TextStyle(
-                    color = Color(0xFF38BDF8),
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Medium,
-                    fontFamily = FontFamily.Monospace
-                )
-            )
-            drawText(
-                textLayoutResult = detailLayout,
-                topLeft = Offset(plaquePos.x + 8f, plaquePos.y + 24f)
-            )
-        }
-
-        // Foundation Base line
-        val b0 = lerp(0.04f, 0.94f)
-        val b1 = lerp(0.96f, 0.94f)
-        drawLine(Color.White.copy(alpha = 0.5f), b0, b1, strokeWidth = 1.5f)
-    } catch (_: Exception) {
-        // Safe fallback
-    }
-}
-
-// -------------------------------------------------------------
-// TEXT DRAWING ON THE 3D ARCHITECTURAL FLOOR SLAB
-// -------------------------------------------------------------
-private fun DrawScope.drawFloorBlueprintText(
-    textMeasurer: TextMeasurer,
-    pts: List<Point2D>,
-    material: PbrMaterial,
-    dimW: Float = 2.4f,
-    dimD: Float = 2.4f,
-    thickness: Float = 0.20f
-) {
-    if (pts.size < 4) return
-
-    try {
-        fun lerp(u: Float, v: Float): Offset {
-            val topX = pts[0].x + (pts[1].x - pts[0].x) * u
-            val topY = pts[0].y + (pts[1].y - pts[0].y) * u
-            val botX = pts[3].x + (pts[2].x - pts[3].x) * u
-            val botY = pts[3].y + (pts[2].y - pts[3].y) * u
-            return Offset(topX + (botX - topX) * v, topY + (botY - topY) * v)
-        }
-
-        val widthPx = abs(pts[1].x - pts[0].x)
-        val plaquePos = lerp(0.12f, 0.20f)
-        val plaqueW = (widthPx * 0.75f).coerceAtLeast(80f)
-        val plaqueH = 46f
-
-        if (plaquePos.x > -plaqueW && plaquePos.x < size.width &&
-            plaquePos.y > -plaqueH && plaquePos.y < size.height) {
-
-            drawRoundRect(
-                color = Color.Black.copy(alpha = 0.80f),
-                topLeft = Offset(plaquePos.x, plaquePos.y),
-                size = Size(plaqueW, plaqueH),
-                cornerRadius = CornerRadius(5f, 5f)
-            )
-
-            val wM = ((dimW * 100).roundToInt() / 100f)
-            val dM = ((dimD * 100).roundToInt() / 100f)
-            val areaM = (((dimW * dimD) * 10).roundToInt() / 10f)
-
-            val titleLayout = textMeasurer.measure(
-                text = "FLOOR • ${wM}m × ${dM}m (${areaM}m²)",
-                style = TextStyle(
-                    color = Color.White,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace
-                )
-            )
-            drawText(
-                textLayoutResult = titleLayout,
-                topLeft = Offset(plaquePos.x + 8f, plaquePos.y + 5f)
-            )
-
-            val tileMm = (material.tileScaleMeters * 1000).toInt()
-            val repX = ((dimW / material.tileScaleMeters.coerceAtLeast(0.1f)) * 10).roundToInt() / 10f
-            val repD = ((dimD / material.tileScaleMeters.coerceAtLeast(0.1f)) * 10).roundToInt() / 10f
-            val tMm = (thickness * 1000).toInt()
-            val detailLayout = textMeasurer.measure(
-                text = "PBR: ${tileMm}mm • UV: ${repX}x×${repD}y • SLAB: ${tMm}mm",
-                style = TextStyle(
-                    color = Color(0xFF38BDF8),
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Medium,
-                    fontFamily = FontFamily.Monospace
-                )
-            )
-            drawText(
-                textLayoutResult = detailLayout,
-                topLeft = Offset(plaquePos.x + 8f, plaquePos.y + 24f)
-            )
-        }
-    } catch (_: Exception) {
-        // Safe fallback
     }
 }
 

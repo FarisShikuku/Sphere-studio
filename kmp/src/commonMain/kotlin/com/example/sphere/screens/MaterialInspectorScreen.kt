@@ -63,7 +63,6 @@ fun MaterialInspectorScreen(
     var objectWidthScale by remember { mutableFloatStateOf(1.0f) }
     var objectHeightScale by remember { mutableFloatStateOf(1.0f) }
     var objectDepthScale by remember { mutableFloatStateOf(1.0f) }
-    var isQuickSizeBarExpanded by remember { mutableStateOf(false) }
 
     // Real-World Physical PBR Scaling & UV Tiling (Architextures / BIM standard)
     var useRealWorldScale by remember { mutableStateOf(true) }
@@ -102,37 +101,10 @@ fun MaterialInspectorScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                "PBR Material & Surface Studio",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Surface(
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(
-                                    "14:30 UTC",
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontFamily = FontFamily.Monospace,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                )
-                            }
-                        }
-                        Text(
-                            "Target: ${previewShape.label} • Active: ${currentMaterial.name}",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 11.sp
-                            )
-                        )
-                    }
+                    Text(
+                        "PBR Material Studio",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
                 },
                 navigationIcon = {
                     IconButton(
@@ -173,57 +145,26 @@ fun MaterialInspectorScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // 1. Target Object Selector Bar (Cube, Wall, Sphere, Slab)
+            // 1. Sleek Compact Target 3D Mesh Selector
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.ViewInAr,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                "Target 3D Object:",
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
-                            )
-                        }
-
-                        Text(
-                            "Tap object, then apply any texture below",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 10.sp
-                            )
-                        )
-                    }
-
-                    Spacer(Modifier.height(4.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        PreviewMeshShape.entries.forEach { shapeOption ->
-                            val isSelected = previewShape == shapeOption
-                            FilledTonalButton(
-                                onClick = { previewShape = shapeOption },
-                                modifier = Modifier.weight(1f).testTag("select_shape_${shapeOption.id}"),
-                                colors = ButtonDefaults.filledTonalButtonColors(
-                                    containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
-                                    contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                                ),
-                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
-                            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    PreviewMeshShape.entries.forEach { shapeOption ->
+                        val isSelected = previewShape == shapeOption
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { previewShape = shapeOption },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("select_shape_${shapeOption.id}"),
+                            leadingIcon = {
                                 Icon(
                                     imageVector = when (shapeOption) {
                                         PreviewMeshShape.CUBE -> Icons.Default.ViewInAr
@@ -234,201 +175,46 @@ fun MaterialInspectorScreen(
                                     contentDescription = null,
                                     modifier = Modifier.size(14.dp)
                                 )
-                                Spacer(Modifier.width(4.dp))
+                            },
+                            label = {
                                 Text(
                                     shapeOption.label,
                                     fontSize = 11.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    maxLines = 1
                                 )
-                            }
-                        }
-                    }
-
-                    // Quick Size & Dimensions Toolbar
-                    Spacer(Modifier.height(6.dp))
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.65f),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth().testTag("quick_size_toolbar")
-                    ) {
-                        Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(
-                                        Icons.Default.Straighten,
-                                        contentDescription = null,
-                                        tint = Color(0xFFF59E0B),
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Spacer(Modifier.width(5.dp))
-                                    Text(
-                                        text = when (previewShape) {
-                                            PreviewMeshShape.WALL -> "Wall: ${(1.85f * objectScale * objectWidthScale * 10).roundToInt() / 10f}m(W) × ${(1.45f * objectScale * objectHeightScale * 10).roundToInt() / 10f}m(H) × ${(0.34f * objectScale * objectDepthScale * 1000).toInt()}mm(T)"
-                                            PreviewMeshShape.PLANE -> "Floor: ${(2.40f * objectScale * objectWidthScale * 10).roundToInt() / 10f}m × ${(2.40f * objectScale * objectDepthScale * 10).roundToInt() / 10f}m (Slab: ${(0.20f * objectScale * objectHeightScale * 1000).toInt()}mm)"
-                                            PreviewMeshShape.CUBE -> "Box: ${(1.92f * objectScale * objectWidthScale * 10).roundToInt() / 10f}m × ${(1.92f * objectScale * objectHeightScale * 10).roundToInt() / 10f}m × ${(1.92f * objectScale * objectDepthScale * 10).roundToInt() / 10f}m"
-                                            PreviewMeshShape.SPHERE -> "Sphere: Ø ${(1.60f * objectScale * objectWidthScale * 10).roundToInt() / 10f}m"
-                                        },
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontFamily = FontFamily.Monospace,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            fontSize = 10.sp
-                                        ),
-                                        maxLines = 1
-                                    )
-                                }
-
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    IconButton(
-                                        onClick = { objectScale = (objectScale - 0.15f).coerceAtLeast(0.40f) },
-                                        modifier = Modifier.size(26.dp).testTag("button_decrease_size")
-                                    ) {
-                                        Icon(Icons.Default.Remove, contentDescription = "Decrease Size", modifier = Modifier.size(13.dp))
-                                    }
-
-                                    Surface(
-                                        color = MaterialTheme.colorScheme.primaryContainer,
-                                        shape = RoundedCornerShape(4.dp),
-                                        modifier = Modifier.clickable { selectedTab = 0 }
-                                    ) {
-                                        Text(
-                                            "${(objectScale * 100).toInt()}%",
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                fontFamily = FontFamily.Monospace,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                fontSize = 10.sp
-                                            )
-                                        )
-                                    }
-
-                                    IconButton(
-                                        onClick = { objectScale = (objectScale + 0.15f).coerceAtMost(2.50f) },
-                                        modifier = Modifier.size(26.dp).testTag("button_increase_size")
-                                    ) {
-                                        Icon(Icons.Default.Add, contentDescription = "Increase Size", modifier = Modifier.size(13.dp))
-                                    }
-
-                                    IconButton(
-                                        onClick = { isQuickSizeBarExpanded = !isQuickSizeBarExpanded },
-                                        modifier = Modifier.size(26.dp).testTag("toggle_size_sliders")
-                                    ) {
-                                        Icon(
-                                            if (isQuickSizeBarExpanded) Icons.Default.ExpandLess else Icons.Default.Tune,
-                                            contentDescription = "Tune Dimensions",
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                    }
-                                }
-                            }
-
-                            if (isQuickSizeBarExpanded) {
-                                Spacer(Modifier.height(4.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    FilterChip(
-                                        selected = useRealWorldScale,
-                                        onClick = { useRealWorldScale = !useRealWorldScale },
-                                        label = {
-                                            Text(
-                                                if (useRealWorldScale) "PBR ${(currentMaterial.tileScaleMeters * 1000).toInt()}mm" else "Stretch Fit",
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        },
-                                        leadingIcon = {
-                                            Icon(
-                                                if (useRealWorldScale) Icons.Default.GridOn else Icons.Default.FitScreen,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(11.dp)
-                                            )
-                                        },
-                                        modifier = Modifier.testTag("quick_toggle_real_world_scale")
-                                    )
-                                    AssistChip(
-                                        onClick = {
-                                            objectScale = 0.70f
-                                            objectWidthScale = 1.0f
-                                            objectHeightScale = 1.0f
-                                            objectDepthScale = 1.0f
-                                        },
-                                        label = { Text("Compact 0.7x", fontSize = 10.sp) },
-                                        modifier = Modifier.testTag("preset_compact")
-                                    )
-                                    AssistChip(
-                                        onClick = {
-                                            objectScale = 1.0f
-                                            objectWidthScale = 1.0f
-                                            objectHeightScale = 1.0f
-                                            objectDepthScale = 1.0f
-                                        },
-                                        label = { Text("Default 1.0x", fontSize = 10.sp) },
-                                        modifier = Modifier.testTag("preset_default")
-                                    )
-                                    AssistChip(
-                                        onClick = {
-                                            objectScale = 1.40f
-                                            objectWidthScale = 1.0f
-                                            objectHeightScale = 1.0f
-                                            objectDepthScale = 1.0f
-                                        },
-                                        label = { Text("Expanded 1.4x", fontSize = 10.sp) },
-                                        modifier = Modifier.testTag("preset_expanded")
-                                    )
-                                    AssistChip(
-                                        onClick = {
-                                            objectScale = 2.0f
-                                            objectWidthScale = 1.0f
-                                            objectHeightScale = 1.0f
-                                            objectDepthScale = 1.0f
-                                        },
-                                        label = { Text("Massive 2.0x", fontSize = 10.sp) },
-                                        modifier = Modifier.testTag("preset_massive")
-                                    )
-                                    Button(
-                                        onClick = { selectedTab = 0 },
-                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                        modifier = Modifier.height(26.dp)
-                                    ) {
-                                        Icon(Icons.Default.OpenInFull, contentDescription = null, modifier = Modifier.size(11.dp))
-                                        Spacer(Modifier.width(3.dp))
-                                        Text("All Parametric Sliders", fontSize = 10.sp)
-                                    }
-                                }
-                            }
-                        }
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                selectedLeadingIconColor = MaterialTheme.colorScheme.primary
+                            )
+                        )
                     }
                 }
             }
 
-            // 2. Texture Category Filter & Quick Material Selection
+            // 2. Streamlined Unified Category & Texture Selector
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 12.dp, vertical = 3.dp),
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 MaterialCategoryFilter.entries.forEach { cat ->
-                    val isSelected = selectedCategoryFilter == cat
+                    val isCatSelected = selectedCategoryFilter == cat
                     FilterChip(
-                        selected = isSelected,
+                        selected = isCatSelected,
                         onClick = { selectedCategoryFilter = cat },
-                        label = { Text(cat.label, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                        label = {
+                            Text(
+                                cat.label,
+                                fontSize = 11.sp,
+                                fontWeight = if (isCatSelected) FontWeight.Bold else FontWeight.Normal
+                            )
+                        },
                         modifier = Modifier.testTag("filter_cat_${cat.name.lowercase()}"),
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -436,21 +222,18 @@ fun MaterialInspectorScreen(
                         )
                     )
                 }
-            }
 
-            // 3. Compact Horizontal Texture Quick-Chips
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 12.dp, vertical = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+                VerticalDivider(
+                    modifier = Modifier
+                        .height(20.dp)
+                        .padding(horizontal = 2.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+
                 filteredMaterials.forEach { mat ->
-                    val isSelected = currentMaterial.id == mat.id
+                    val isMatSelected = currentMaterial.id == mat.id
                     FilterChip(
-                        selected = isSelected,
+                        selected = isMatSelected,
                         onClick = {
                             currentMaterial = mat
                             selectedMaterialIndex = defaultPbrMaterials.indexOfFirst { it.id == mat.id }.coerceAtLeast(0)
@@ -466,7 +249,7 @@ fun MaterialInspectorScreen(
                         leadingIcon = {
                             Box(
                                 modifier = Modifier
-                                    .size(12.dp)
+                                    .size(10.dp)
                                     .clip(CircleShape)
                                     .background(mat.baseColor)
                             )
@@ -475,7 +258,7 @@ fun MaterialInspectorScreen(
                             Text(
                                 mat.name,
                                 fontSize = 11.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                fontWeight = if (isMatSelected) FontWeight.Bold else FontWeight.Normal
                             )
                         },
                         modifier = Modifier.testTag("chip_mat_${mat.id}"),
@@ -487,7 +270,7 @@ fun MaterialInspectorScreen(
                 }
             }
 
-            // 4. Texture Channel Selector (Full PBR, Albedo, Normal, ORM, Height)
+            // 3. Texture Channel Selector (Full PBR, Albedo, Normal, ORM, Height)
             MaterialChannelSelectorRow(
                 selectedChannel = selectedChannel,
                 onChannelSelect = { selectedChannel = it }
