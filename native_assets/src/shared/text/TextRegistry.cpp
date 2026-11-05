@@ -58,10 +58,7 @@ void TextRegistry::initializeDefaults() {
         hud.name = "Vulkan GPU Telemetry HUD";
         hud.category = "Engine HUD";
         hud.description = "Real-time engine performance metrics overlay showing FPS, VRAM allocation, and draw call counts.";
-        hud.textContent = "VK_DEVICE: Mali-G78 / Adreno 740
-FRAME: 6.94 ms (144 FPS)
-VRAM: 1,420 MB / 4,096 MB
-PIPELINES: 48 (Bindless Descriptor Set 0)";
+        hud.textContent = "VK_DEVICE: Mali-G78 / Adreno 740\nFRAME: 6.94 ms (144 FPS)\nVRAM: 1,420 MB / 4,096 MB\nPIPELINES: 48 (Bindless Descriptor Set 0)";
         hud.fontId = "jetbrains_mono";
         hud.renderMode = TextRenderMode::SCREEN_OVERLAY_HUD;
         hud.alignment = TextAlign::LEFT;
@@ -85,9 +82,7 @@ PIPELINES: 48 (Bindless Descriptor Set 0)";
         billboard.name = "3D Stage Coordinate Anchor";
         billboard.category = "3D World Labels";
         billboard.description = "In-world 3D billboard with spherical camera locking, floating directly above the calibration cube.";
-        billboard.textContent = "PBR STAGE ORIGIN [0.0, 1.25, 0.0]
-MATERIAL: RUSTICATED BRICK MASONRY
-SHADOW: 4-CASCADE PCF 5x5";
+        billboard.textContent = "PBR STAGE ORIGIN [0.0, 1.25, 0.0]\nMATERIAL: RUSTICATED BRICK MASONRY\nSHADOW: 4-CASCADE PCF 5x5";
         billboard.fontId = "roboto_bold";
         billboard.renderMode = TextRenderMode::BILLBOARD_3D_WORLD;
         billboard.alignment = TextAlign::CENTER;
@@ -112,9 +107,7 @@ SHADOW: 4-CASCADE PCF 5x5";
         terminal.name = "Cyberpunk Quantum Terminal";
         terminal.category = "Sci-Fi Displays";
         terminal.description = "High-energy cyan emissive text with multi-channel signed distance field glow and soft drop shadow.";
-        terminal.textContent = "SYNCHRONIZATION COMPLETE
-ATMOSPHERIC COHERENCE: 99.8%
-VULKAN RENDER PASS #04: OK";
+        terminal.textContent = "SYNCHRONIZATION COMPLETE\nATMOSPHERIC COHERENCE: 99.8%\nVULKAN RENDER PASS #04: OK";
         terminal.fontId = "jetbrains_mono";
         terminal.renderMode = TextRenderMode::SDF_DISTANCE_FIELD_2D;
         terminal.alignment = TextAlign::CENTER;
@@ -138,8 +131,7 @@ VULKAN RENDER PASS #04: OK";
         title.name = "Cinematic Golden Serif";
         title.category = "Cinematics";
         title.description = "Deep warm gold typography with elegant drop shadow and smooth antialiased outlines.";
-        title.textContent = "SPHERE ENGINE
-CHRONICLES OF VULKAN";
+        title.textContent = "SPHERE ENGINE\nCHRONICLES OF VULKAN";
         title.fontId = "roboto_bold";
         title.renderMode = TextRenderMode::SDF_DISTANCE_FIELD_2D;
         title.alignment = TextAlign::CENTER;
@@ -163,9 +155,7 @@ CHRONICLES OF VULKAN";
         warning.name = "Critical Hazard Holo-Banner";
         warning.category = "Industrial & Alerts";
         warning.description = "High-contrast warning banner with thick black stroke and amber/crimson alert color.";
-        warning.textContent = "CAUTION: HIGH VOLTAGE RAY TRACING
-UNIFORM BUFFER OVERFLOW IMMINENT
-REDUCE CASCADE COUNT";
+        warning.textContent = "CAUTION: HIGH VOLTAGE RAY TRACING\nUNIFORM BUFFER OVERFLOW IMMINENT\nREDUCE CASCADE COUNT";
         warning.fontId = "jetbrains_mono";
         warning.renderMode = TextRenderMode::SDF_DISTANCE_FIELD_2D;
         warning.alignment = TextAlign::CENTER;
@@ -222,8 +212,7 @@ std::vector<TextVertex> TextRegistry::generateTextQuads(
     std::vector<std::string> lines;
     size_t start = 0;
     while (start < text.length()) {
-        size_t end = text.find('
-', start);
+        size_t end = text.find('\n', start);
         if (end == std::string::npos) {
             lines.push_back(text.substr(start));
             break;
@@ -274,4 +263,5 @@ std::vector<TextVertex> TextRegistry::generateTextQuads(
     }
     return vertices;
 }
-} // namespace spher
+} // namespace sphere
+

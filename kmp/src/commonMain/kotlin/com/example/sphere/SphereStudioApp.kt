@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
  *
  * Modular architecture:
  *  - Models: [GeometryModels], [ShadowModels], [SolarModels], [AssetCategory]
- *  - Viewport: [SceneCubeViewport], [SceneStageRenderer], [DirectionalShadowRenderer]
+ *  - Viewport: [NativeVulkanSurfaceHost] (Native C++20 Vulkan 1.3 WSI Swapchain via ANativeWindow)
  *  - Control Tabs: [DimensionsControlTab], [SurfaceAndStageTab], [ShadowsControlTab], [SkyAndSunTab], [NativeStructureTab]
  *  - Studios: [SkyStudioScreen], [WeatherStudioScreen], [EmptyAssetScreen]
  */
@@ -42,6 +42,7 @@ fun SphereStudioApp() {
     var selectedCategoryIndex by remember { mutableIntStateOf(0) }
     val currentCategory = availableAssetCategories[selectedCategoryIndex]
 
+    val lightingIndex = remember { availableAssetCategories.indexOfFirst { it.id == "lighting" }.coerceAtLeast(0) }
     val skyIndex = remember { availableAssetCategories.indexOfFirst { it.id == "sky" }.coerceAtLeast(0) }
     val weatherIndex = remember { availableAssetCategories.indexOfFirst { it.id == "weather" }.coerceAtLeast(0) }
     val surfacesIndex = remember { availableAssetCategories.indexOfFirst { it.id == "surfaces" }.coerceAtLeast(0) }
@@ -267,42 +268,35 @@ fun SphereStudioApp() {
                             .fillMaxSize()
                             .padding(innerPadding)
                     ) {
-                        // 3D Viewport: Proportional weight ensures expansive viewport on tall screens
+                        // Native C++ Vulkan 1.3 Scene Viewport
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1.15f)
                                 .background(Color(0xFF0F1218))
                         ) {
-                            SceneCubeViewport(
+                            val stageModeId = when (surfaceMode) {
+                                SurfaceSceneMode.FLAT_PIECE -> 0
+                                SurfaceSceneMode.ENDLESS -> 1
+                                SurfaceSceneMode.WATER_BODY -> 2
+                                SurfaceSceneMode.BROKEN_SLAB -> 3
+                                SurfaceSceneMode.NONE -> 4
+                            }
+                            com.example.sphere.viewport.NativeVulkanSurfaceHost(
                                 modifier = Modifier.fillMaxSize(),
-                                width = width * scale,
-                                height = height * scale,
-                                depth = depth * scale,
-                                baseColor = activeColor.color,
-                                pattern = selectedPattern,
-                                rotX = rotX,
-                                rotY = rotY,
-                                showGrid = true,
-                                enableSky = enableSky,
-                                enableSun = enableSun,
-                                sunElevation = sunElevation,
-                                sunAzimuth = sunAzimuth,
-                                turbidity = skyTurbidity,
-                                surfaceMode = surfaceMode,
-                                stageWidth = effectiveStageWidth,
-                                stageLength = effectiveStageLength,
-                                stageHeight = stageHeight,
-                                enableShadows = enableShadows,
-                                shadowQuality = shadowQuality,
-                                shadowIntensity = shadowIntensity,
-                                shadowSoftness = shadowSoftness,
-                                depthBias = depthBias,
-                                showShadowMapDebug = showShadowMapDebug,
-                                onDrag = { dx, dy ->
-                                    rotY += dx * 0.5f
-                                    rotX = (rotX - dy * 0.5f).coerceIn(-89f, 89f)
-                                }
+                                lightPosX = 0.0f,
+                                lightPosY = 2.5f,
+                                lightPosZ = 1.8f,
+                                intensity = 2500.0f,
+                                colorR = activeColor.color.red,
+                                colorG = activeColor.color.green,
+                                colorB = activeColor.color.blue,
+                                roughness = 0.45f,
+                                metallic = 0.0f,
+                                objectWidth = width * scale,
+                                objectHeight = height * scale,
+                                objectDepth = depth * scale,
+                                stageMode = stageModeId
                             )
                         }
 
@@ -418,6 +412,13 @@ fun SphereStudioApp() {
                         }
                     }
                 }
+            }
+            "lighting" -> {
+                com.example.sphere.screens.LightingStudioScreen(
+                    onNavigateBack = {
+                        selectedCategoryIndex = 0
+                    }
+                )
             }
             "surfaces" -> {
                 com.example.sphere.screens.MaterialInspectorScreen(

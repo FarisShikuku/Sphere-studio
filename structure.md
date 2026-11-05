@@ -520,10 +520,13 @@ kmp/src/commonMain/kotlin/com/example/sphere/
 │   ├── SolarModels.kt                      # TimeOfDayPreset & 6 Solar presets (26 lines)
 │   └── AssetCategory.kt                    # AssetCategory definitions & Available list (44 lines)
 │
-├── viewport/                               # 3D Viewport, Shadow & Stage renderers
-│   ├── SceneCubeViewport.kt                # Interactive 3D Perspective Canvas with drag orbit (483 lines)
-│   ├── SceneStageRenderer.kt               # 5 Surface Stages: Endless, None, Flat, Water, Slab (410 lines)
-│   └── DirectionalShadowRenderer.kt        # Sascha Willems PCF 3x3/5x5, Contact AO & Hull Projection (157 lines)
+├── viewport/                               # 3D Viewports & Surface Management
+│   ├── MaterialPreviewViewport.kt          # 3D PBR Material Viewport with real-world metric scaling (1312 lines)
+│   ├── TextureManager.kt                   # Real-World metric UV tiling shader (BitmapShader TileMode.REPEAT)
+│   └── NativeVulkanSurfaceHost.kt          # Android SurfaceView WSI host for native C++ Vulkan 1.3 swapchain
+│
+├── nativebridge/                           # Kotlin Multiplatform JNI Bindings
+│   └── SphereNativeEngine.kt               # JNI bridge to libSphereStudioEngine.so (WSI, Cook-Torrance BRDF, KTX2)
 │
 ├── tabs/                                   # Primary 3D Studio Control Tabs
 │   ├── DimensionsControlTab.kt             # Cube Dimensions, Scaling & Reset controls (144 lines)

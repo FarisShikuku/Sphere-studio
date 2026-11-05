@@ -27,10 +27,12 @@
    - [PBR Materials, Architectural Metric Scale & Parametric Sizing](#10-pbr-materials-architectural-metric-scale--parametric-sizing)
    - [KTX2 Texture Compression & 65 Registered Architectural Assets](#11-ktx2-texture-compression--65-registered-architectural-assets)
    - [Vulkan C++ Native Core vs. Kotlin Architecture (Sascha Willems Integration)](#12-vulkan-c-native-core-vs-kotlin-architecture-sascha-willems-integration)
+   - [⚡ Native Vulkan 1.3 & Android WSI Specification (VULKAN_NATIVE_PIPELINE.md)](VULKAN_NATIVE_PIPELINE.md)
    - [Terrain & Hydraulic Erosion](#13-terrain--hydraulic-erosion)
    - [Water Bodies & Tessendorf FFT Ocean](#14-water-bodies--tessendorf-fft-ocean)
    - [Energy, Utility & World Props](#15-energy-utility--world-props)
    - [GPU Particles & Procedural Audio](#16-gpu-particles--procedural-audio)
+   - [Vulkan Physically Based Lighting & Light Effects Subsystem (Gaukler/PlainRenderer Reference)](#17-vulkan-physically-based-lighting--light-effects-subsystem-gauklerplainrenderer-reference)
 4. [Generated Assets & Binary Manifest Registry](#generated-assets--binary-manifest-registry)
 5. [Build, Test & Deployment Guide](#build-test--deployment-guide)
 
@@ -140,12 +142,13 @@ sphere-studio/
 │       │   │   ├── SurfaceAndStageTab.kt                   # 5 Surface scene modes & procedural ground patterns
 │       │   │   └── NativeStructureTab.kt                   # Native C++ engine architecture & memory stats
 │       │   │
-│       │   ├── viewport/                                   # Real-Time 3D Perspective Viewports & Shaders
+│       │   ├── viewport/                                   # Real-Time 3D Viewports & Surface Management
 │       │   │   ├── MaterialPreviewViewport.kt              # 3D Material Viewport (Cube, Wall, Slab, Sphere) with lighting & blueprint HUD
 │       │   │   ├── TextureManager.kt                       # Real-World metric UV tiling shader (BitmapShader TileMode.REPEAT)
-│       │   │   ├── SceneCubeViewport.kt                    # Multi-face photometric 3D cube rasterizer
-│       │   │   ├── SceneStageRenderer.kt                   # 5 Surface scene stage modes renderer
-│       │   │   └── DirectionalShadowRenderer.kt            # Monotone-chain convex hull shadow projector & PCF soft penumbra
+│       │   │   └── NativeVulkanSurfaceHost.kt              # Android SurfaceView WSI host for native C++ Vulkan 1.3 swapchain
+│       │   │
+│       │   ├── nativebridge/                               # Kotlin Multiplatform JNI Bindings
+│       │   │   └── SphereNativeEngine.kt                   # JNI bridge to libSphereStudioEngine.so (WSI, Cook-Torrance BRDF, KTX2)
 │       │   │
 │       │   ├── model/                                      # Data Models & Schemas
 │       │   │   ├── MaterialModels.kt                       # PbrMaterial models with real-world metric tileScaleMeters
@@ -753,13 +756,17 @@ Android does not provide an official Java or Kotlin runtime binding for Vulkan (
 - Kotlin Multiplatform & Jetpack Compose (`MaterialInspectorScreen.kt`, `ObjectDimensionsControlTab.kt`) provide responsive Material 3 UI widgets (Sliders, FilterChips, Dropdowns, TabRows).
 - Provides instant fallback software/canvas rasterization viewports on devices without hardware Vulkan drivers or in headless JVM unit test environments.
 
-#### 3. JNI Bridge (`SphereStudioJni.cpp`)
+#### 3. JNI Bridge & Android WSI Pipeline (`SphereStudioJni.cpp` & `NativeVulkanSurfaceHost.kt`)
 Connects the Kotlin Compose UI with the C++ Vulkan pipeline:
+- `nativeCreateVulkanSurface(Surface, width, height)`: Converts Android's `Surface` into an NDK `ANativeWindow*` and initializes `VkSurfaceKHR` via `VK_KHR_android_surface`.
+- `nativeResizeVulkanSurface(width, height)`: Recreates the double-buffered `VkSwapchainKHR` on orientation/window resize.
+- `nativeRenderVulkanFrame(...)`: Records command buffers, sets dynamic viewport/scissor, and presents frames via `vkQueuePresentKHR`.
+- `nativeDestroyVulkanSurface()`: Flushes device idle and cleans up swapchain and synchronization objects.
 - `nativeInitEngine()`: Initializes C++ logging, `GeneratorRegistry`, and KTX2 texture metadata.
 - `nativeGetEngineVersion()`: Returns engine branding string (`"SphereStudioEngine 1.3 (Sascha Willems Vulkan Framework / C++20 / NDK r26b)"`).
-- `nativeGetRegisteredTextureCount()`: Returns total registered KTX2 textures ($65$).
-- `nativeGetTextureId()`, `nativeGetTextureDisplayName()`, `nativeGetTextureBindlessSlot()`: Reflects texture metadata to Kotlin.
 - `nativeEvaluateCookTorrance()`: Evaluates the exact C++ microfacet specular BRDF ($D \cdot G \cdot F$) on CPU when cross-validating GPU shader parity.
+
+> **Full Architectural & Telemetry Guide:** See [VULKAN_NATIVE_PIPELINE.md](VULKAN_NATIVE_PIPELINE.md) for complete WSI lifecycle, NDK 26.1 CMake build pipeline, and on-device logcat analysis.
 
 #### 4. GPU Shaders (GLSL to SPIR-V)
 - **`pbr.vert`**: Multiplies vertex position by `push.modelMatrix` (containing the parametric object dimensions $w, h, d$) and outputs light-space coordinates for Sascha Willems shadow mapping.
@@ -799,10 +806,93 @@ Connects the Kotlin Compose UI with the C++ Vulkan pipeline:
 
 ---
 
+---
+
 ### 16. GPU Particles & Procedural Audio
 
 - **Compute VFX**: GPU bitonic sorting, curl-noise vector fields, and physics simulation for sparks, smoke plumes, fire sheets, and blizzard flurries.
 - **Real-Time Procedural Audio**: Band-limited oscillator synthesis for internal combustion engine RPMs, dynamic rain droplet acoustics, wind howl resonance, and surface-specific footstep impacts.
+
+---
+
+### 17. Vulkan Physically Based Lighting & Light Effects Subsystem (Gaukler/PlainRenderer Reference)
+
+Ported and architected with direct reference to **[Gaukler/PlainRenderer](https://github.com/Gaukler/PlainRenderer)**, the Lighting Subsystem brings physically based light types, radiometric units, and volumetric beam optics to the Vulkan scene:
+
+```
+native_assets/
+├── src/
+│   ├── scene/
+│   │   └── Light.h                                         # std430 GpuLight struct, LightType enum, LightUnit, Kelvin converter
+│   └── lighting/
+│       ├── CMakeLists.txt                                  # Compiles liblighting.a
+│       ├── LightTypes.h                                    # LightingScenario presets, physical radiance conversions
+│       ├── LightingSystem.h                                # LightingManager, GPU buffer builders & shadow matrices
+│       └── LightingSystem.cpp                              # Inverse-square attenuation, spot angles & blackbody curves
+└── shaders/glsl/include/
+    └── lighting_common.glsl                                # PlainRenderer GLSL PBR lighting, GGX specular & Cook-Torrance BRDF
+```
+
+#### Supported Vulkan Light Scenarios & Controls
+
+| Light Source | Type | Physical Unit | Default Values | Key Optical Controls |
+| :--- | :---: | :---: | :---: | :--- |
+| **Tactical Flashlight** | `SPOT` | Lumens ($\text{lm}$) | $1,200\,\text{lm}$, $6,200\,\text{K}$ | Inner hotspot cone ($16^\circ$), outer penumbra ($32^\circ$), volumetric beam haze, 3D aim vector |
+| **Filament Bulb** | `POINT` | Lumens ($\text{lm}$) | $800\,\text{lm}$, $2,400\,\text{K}$ | Omnidirectional inverse-square falloff, smooth attenuation windowing ($12\text{m}$ radius), filament glow |
+| **Studio Softbox** | `AREA` | Lumens ($\text{lm}$) | $3,500\,\text{lm}$, $5,400\,\text{K}$ | Rectangular emitter dimensions ($1.2\text{m} \times 0.8\text{m}$), diffuse highlight broadening |
+| **Directional Sun** | `DIRECTIONAL` | Lux ($\text{lx}$) | $95,000\,\text{lx}$, $5,778\,\text{K}$ | Orthographic light space matrix, solar azimuth & elevation, zero distance falloff |
+| **Cyberpunk Neon** | `AREA` / `POINT` | Lumens ($\text{lm}$) | $2,200\,\text{lm}$, Cyan/Magenta | High-intensity colored accent lighting with saturated specular reflections |
+| **Street Lamp** | `SPOT` | Lumens ($\text{lm}$) | $4,500\,\text{lm}$, $2,000\,\text{K}$ High-Pressure Sodium | Downward overhead cone ($45^\circ / 65^\circ$), wide ground illumination pool |
+
+#### Physical Formulas (PlainRenderer Core)
+
+1. **Inverse-Square Distance Attenuation with Smooth Windowing**:
+   $$\text{Att}_{\text{dist}}(d, r) = \frac{1}{\max(d^2, 0.01)} \cdot \left[\operatorname{clamp}\left(1 - \left(\frac{d}{r}\right)^4, 0, 1\right)\right]^2$$
+2. **Dual-Cosine Spot Angular Falloff**:
+   $$\text{Att}_{\text{spot}}(\mathbf{L}, \mathbf{D}, \theta_i, \theta_o) = \left[\operatorname{clamp}\left(\frac{\mathbf{L} \cdot (-\mathbf{D}) - \cos\theta_o}{\cos\theta_i - \cos\theta_o}, 0, 1\right)\right]^2$$
+3. **Blackbody Radiation (Kelvin to Linear RGB)**:
+   Calibrated from $1,800\,\text{K}$ (candlelight) through $3,200\,\text{K}$ (warm tungsten), $5,500\,\text{K}$ (daylight), to $9,500\,\text{K}$ (overcast deep sky) using Planckian locus approximations.
+4. **Volumetric Beam Haze**:
+   Forward Mie scattering evaluated along the light ray frustum, producing atmospheric dust and fog beam shafts when enabled.
+
+#### PlainRenderer Vulkan C++ Architecture (`native_assets/src/lighting/`)
+Faithfully implementing the multi-pass rendering subsystems referencing [Gaukler/PlainRenderer](https://github.com/Gaukler/PlainRenderer):
+1. **Signed Distance Field (SDF) Diffuse Global Illumination (`SdfGiSystem.h` / `SdfGiSystem.cpp`)**:
+   - Continuous 3D Signed Distance Field geometry representation.
+   - Compute shader (`sdf_diffuse_gi.comp`) marches multiple diffuse cones across the distance field to evaluate indirect bounce radiance (multi-bounce color bleeding from colored walls onto floors and meshes).
+   - Distance Field Ambient Occlusion (DFAO) evaluated from SDF step distances along surface normals without monte-carlo ray tracing.
+2. **Physically Based Atmosphere & Sun Illuminance (`Atmosphere.h` / `Atmosphere.cpp`)**:
+   - Single-scattering atmosphere (Preetham / Bruneton / Nishita) modeling molecular Rayleigh scattering ($\beta_R$), aerosol Mie scattering ($\beta_M$ with Cornette-Shanks phase function), and Chappuis ozone band absorption.
+   - Kasten-Young optical air mass formula and direct solar illuminance transmission in Lux ($E_{\text{sun}} \approx 120,000\,\text{lux}$ extraterrestrial).
+   - Generates skybox radiance and diffuse ambient irradiance on ground surfaces (`sky_atmosphere.frag`).
+3. **Directional Cascaded Shadow Maps (`CascadedShadows.h` / `CascadedShadows.cpp`)**:
+   - 4-cascade frustum splits calculated via practical logarithmic-linear blend ($\lambda \cdot \text{log} + (1-\lambda) \cdot \text{uniform}$).
+   - Sub-texel grid stabilization: snaps light-space orthographic projection center to texel units, completely eliminating shadow edge shimmering and swimming during camera motion.
+   - 5x5 Percentage Closer Filtering (PCF) and Poisson disk kernels with normal-offset slope bias (`cascaded_shadows_common.glsl`).
+4. **Plain Custom Binary Mesh & SDF Container (`.plain`) (`PlainMeshFormat.h` / `PlainMeshFormat.cpp`)**:
+   - Binary format (`PLAIN_SDF`) packing vertex attributes, triangle indices, and an embedded 3D signed distance field voxel volume for direct upload into Vulkan 3D textures (`VkImage`) without runtime voxelization overhead.
+5. **Temporal Anti-Aliasing & Light Accumulation (`TaaPipeline.h` / `TaaPipeline.cpp`)**:
+   - 16-sample Halton (2,3) subpixel camera projection jitter with velocity buffer reprojection and YCoCg neighborhood color clamping to prevent ghosting.
+6. **Master Multi-Pass Vulkan Render Coordinator (`VulkanLightPipeline.h` / `VulkanLightPipeline.cpp`)**:
+   - Orchestrates the sequential pipeline: **Pass 1** Cascaded Shadows $\rightarrow$ **Pass 2** Deferred G-Buffer $\rightarrow$ **Pass 3** SDF GI Compute Pass $\rightarrow$ **Pass 4** Atmosphere Sky Pass $\rightarrow$ **Pass 5** Deferred PBR Lighting $\rightarrow$ **Pass 6** TAA Resolve.
+
+#### Multiplatform Compose Studio UI (`LightingStudioScreen.kt`)
+- **Interactive 3D Viewport (`LightingViewportCanvas.kt`)**: Real-time perspective rendering with interactive light gizmos (tactical flashlight cylinder, hanging tungsten bulb filament, softbox rectangular panel, solar disk), target meshes (Cube, Wall, Floor, Sphere), dynamic shadow casting, volumetric light shafts, and vivid Cornell box indirect color bleeding.
+- **Multi-Pass Pipeline Debug Views**:
+  - `Final Lit`: Combined PBR composite (Direct + Cascaded Shadows + SDF Diffuse GI + Atmosphere Sky).
+  - `GI Bounce`: Pure indirect diffuse radiance gathered via 3D SDF cone tracing (visualizing color bleeding).
+  - `SDF Voxels`: Continuous 3D distance field isosurfaces and bounding density cage.
+  - `Cascades`: Color-coded 4-split shadow frustum slices (Red=C0, Green=C1, Blue=C2, Yellow=C3).
+  - `Sky Only`: Single-scattering Rayleigh/Mie sky radiance and solar disk.
+  - `DFAO`: Distance Field Ambient Occlusion contact shadowing.
+- **7 Dedicated Control Tabs**:
+  - **Optics Tab (`LightOpticsControlTab.kt`)**: Physical lumens ($50\,\text{lm} - 10,000\,\text{lm}$), Kelvin temperature ($1,800\,\text{K} - 9,500\,\text{K}$), attenuation range, spot angles, and area softbox dimensions.
+  - **SDF GI Tab (`SdfGiTab.kt`)**: Voxel resolution ($32^3, 64^3, 128^3$), bounce factor, color bleeding boost, DFAO intensity, cone aperture angle, and max ray distance.
+  - **Atmosphere Tab (`AtmosphereSkyTab.kt`)**: Sun elevation ($-5^\circ - 90^\circ$), azimuth, turbidity ($1.0 - 8.0$), Mie asymmetry ($g$), and live photometric readouts (Direct Sun Lux, Diffuse Sky Lux, Optical Air Mass).
+  - **Cascaded Shadows Tab (`CascadedShadowsTab.kt`)**: 4-split cascade distances, practical split lambda, PCF softness, normal/depth bias, and sub-texel stabilization.
+  - **3D Gizmo Placement Tab (`LightGizmoPlacementTab.kt`)**: World coordinates ($X, Y, Z$), yaw/pitch orientation sliders, and "Aim at Center" snap button.
+  - **Scenarios Tab (`LightScenariosTab.kt`)**: 8 preconfigured optical environments (Tactical Flashlight, Filament Bulb, Studio Softbox, Cornell Box GI, Sunlit Exterior 4x CSM, 3-Point Studio, Cyberpunk Neon, Sodium Street Luminaire).
+  - **Vulkan C++ Tab (`LightVulkanCodeTab.kt`)**: Tabbed source code and shader inspector (`VulkanPipeline.cpp`, `SdfGiSystem.cpp`, `Atmosphere.cpp`, `CascadedShadows.cpp`, `PlainMesh.h`, `sdf_diffuse_gi.comp`, `plain_pbr.frag`, `sky_atmosphere.frag`).
 
 ---
 

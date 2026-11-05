@@ -16,6 +16,7 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/shared
     ${CMAKE_CURRENT_SOURCE_DIR}/src/sky
     ${CMAKE_CURRENT_SOURCE_DIR}/src/weather
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/lighting
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jni
     ${Vulkan_INCLUDE_DIRS}
 )
@@ -26,6 +27,7 @@ add_subdirectory(src/scene)
 add_subdirectory(src/shared)
 add_subdirectory(src/sky)
 add_subdirectory(src/weather)
+add_subdirectory(src/lighting)
 add_library(SphereStudioEngine SHARED
     src/jni/SphereStudioJni.cpp
 )
@@ -37,6 +39,7 @@ target_link_libraries(SphereStudioEngine PRIVATE
     shared
     sky
     weather
+    lighting
     Vulkan::Vulkan
     ${log-lib}
     ${android-lib}

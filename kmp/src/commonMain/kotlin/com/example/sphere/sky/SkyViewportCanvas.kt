@@ -458,34 +458,42 @@ fun SkyViewportCanvas(
             val normLight = Vec3D(lightX, lightY, lightZ)
             val sunLightTint = if (sunElevation < 20f) Color(0xFFFDBA74) else Color.White
 
-            // Render the shared Vulkan Stage (Platform, Endless Grid, Water Body, Broken Slab)
-            renderSceneStage(
-                surfaceMode = surfaceMode,
-                stageWidth = stageWidth,
-                stageLength = stageLength,
-                stageHeight = stageHeight,
-                yGround = 0f,
-                hw = if (showCalibrationItem) 0.6f else 0.001f,
-                hd = if (showCalibrationItem) 0.6f else 0.001f,
-                height = if (showCalibrationItem) 1.2f else 0.001f,
-                castShadowsActive = sunElevation > 0f,
-                shadowQuality = ShadowQuality.PCF_5X5,
-                shadowIntensity = 0.72f,
-                shadowSoftness = 1.8f,
-                lightX = lightX,
-                lightY = lightY,
-                lightZ = lightZ,
-                normLight = normLight,
-                sunLightTint = sunLightTint,
-                showGrid = showStageGrid,
-                enableSky = true,
-                w = w,
-                h = h,
-                cx = center.x,
-                cy = cyStage,
-                projectPoint = ::projectStagePoint,
-                transformNormal = ::transformStageNormal
-            )
+            // Ground perspective grid for horizon depth cue
+            if (showStageGrid && surfaceMode != SurfaceSceneMode.NONE) {
+                val gridColor = Color(0x3394A3B8)
+                val halfW = (stageWidth * 0.5f).coerceIn(2.0f, 25.0f)
+                val halfL = (stageLength * 0.5f).coerceIn(2.0f, 25.0f)
+                val steps = 8
+                val stepX = (halfW * 2f) / steps
+                val stepZ = (halfL * 2f) / steps
+
+                for (i in 0..steps) {
+                    val gx = -halfW + i * stepX
+                    val pA = projectStagePoint(Vec3D(gx, 0f, -halfL))
+                    val pB = projectStagePoint(Vec3D(gx, 0f, halfL))
+                    if (pA.depth > 0.1f && pB.depth > 0.1f) {
+                        drawLine(
+                            color = gridColor,
+                            start = Offset(pA.x, pA.y),
+                            end = Offset(pB.x, pB.y),
+                            strokeWidth = 1.2f
+                        )
+                    }
+                }
+                for (j in 0..steps) {
+                    val gz = -halfL + j * stepZ
+                    val pA = projectStagePoint(Vec3D(-halfW, 0f, gz))
+                    val pB = projectStagePoint(Vec3D(halfW, 0f, gz))
+                    if (pA.depth > 0.1f && pB.depth > 0.1f) {
+                        drawLine(
+                            color = gridColor,
+                            start = Offset(pA.x, pA.y),
+                            end = Offset(pB.x, pB.y),
+                            strokeWidth = 1.2f
+                        )
+                    }
+                }
+            }
 
             // Render 3D Calibration Cube only if explicitly requested
             if (showCalibrationItem) {

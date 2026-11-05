@@ -175,6 +175,21 @@ struct Mat4 {
         }
         return res;
     }
+    Mat4 operator*(const Mat4& b) const {
+        return Multiply(*this, b);
+    }
+    static Mat4 Ortho(float left, float right, float bottom, float top, float zNear, float zFar) {
+        Mat4 res;
+        std::fill(res.m.begin(), res.m.end(), 0.0f);
+        res.m[0] = 2.0f / (right - left);
+        res.m[5] = -2.0f / (top - bottom); // Vulkan inverted Y
+        res.m[10] = -1.0f / (zFar - zNear); // Vulkan clip depth [0, 1]
+        res.m[12] = -(right + left) / (right - left);
+        res.m[13] = -(top + bottom) / (top - bottom);
+        res.m[14] = -zNear / (zFar - zNear);
+        res.m[15] = 1.0f;
+        return res;
+    }
     static Mat4 Perspective(float fovRadians, float aspect, float zNear, float zFar) {
         Mat4 res;
         std::fill(res.m.begin(), res.m.end(), 0.0f);

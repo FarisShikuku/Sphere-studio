@@ -1,11 +1,14 @@
 #include <jni.h>
 #include <string>
 #include <android/log.h>
+#include <android/native_window.h>
+#include <android/native_window_jni.h>
 #include <vulkan/vulkan.h>
 #include "textures/spec/shared_spec.h"
 #include "core/Application.h"
 #include "core/Log.h"
 #include "shared/GeneratorRegistry.h"
+#include "vulkan/VulkanNativeSceneRenderer.h"
 #define LOG_TAG "SphereStudioNative"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 extern "C" {
@@ -73,4 +76,105 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeEvaluateCookTorran
     float specular = (D * G * F) / (4.0f * NdotL * NdotV + 1e-4f);
     return specular;
 }
-} // extern "C
+
+JNIEXPORT jfloat JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeEvaluateSpotAttenuation(
+    JNIEnv* env, jclass clazz, jfloat cosAngle, jfloat cosInner, jfloat cosOuter, jfloat exponent
+) {
+    float diff = cosInner - cosOuter;
+    if (diff < 0.001f) diff = 0.001f;
+    float atten = (cosAngle - cosOuter) / diff;
+    if (atten < 0.0f) atten = 0.0f;
+    if (atten > 1.0f) atten = 1.0f;
+    return std::pow(atten, exponent);
+}
+
+JNIEXPORT jfloat JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeEvaluateDistanceAttenuation(
+    JNIEnv* env, jclass clazz, jfloat distance, jfloat range
+) {
+    if (distance <= 0.001f) distance = 0.001f;
+    float invSq = 1.0f / (distance * distance);
+    float factor = distance / range;
+    float smoothFactor = 1.0f - factor * factor * factor * factor;
+    if (smoothFactor < 0.0f) smoothFactor = 0.0f;
+    return invSq * (smoothFactor * smoothFactor);
+}
+
+// ---------------------------------------------------------------------------
+// Native Vulkan C++ Scene WSI Bridge (Sascha Willems Android Pattern)
+// ---------------------------------------------------------------------------
+
+JNIEXPORT jboolean JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeCreateVulkanSurface(
+    JNIEnv* env, jclass clazz, jobject surface, jint width, jint height
+) {
+    LOGI("JNI: nativeCreateVulkanSurface requested with dimensions %dx%d", width, height);
+    if (!surface) {
+        LOGI("JNI: surface is null, cannot create native window");
+        return JNI_FALSE;
+    }
+    ANativeWindow* window = ANativeWindow_fromSurface(env, surface);
+    if (!window) {
+        LOGI("JNI: Failed to acquire ANativeWindow from Surface");
+        return JNI_FALSE;
+    }
+    bool success = sphere::vk::VulkanNativeSceneRenderer::Get().InitializeSurface(
+        window, static_cast<uint32_t>(width), static_cast<uint32_t>(height)
+    );
+    return success ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT void JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeResizeVulkanSurface(
+    JNIEnv* env, jclass clazz, jint width, jint height
+) {
+    sphere::vk::VulkanNativeSceneRenderer::Get().Resize(
+        static_cast<uint32_t>(width), static_cast<uint32_t>(height)
+    );
+}
+
+JNIEXPORT void JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeDestroyVulkanSurface(
+    JNIEnv* env, jclass clazz
+) {
+    LOGI("JNI: nativeDestroyVulkanSurface cleaning up Vulkan surface...");
+    sphere::vk::VulkanNativeSceneRenderer::Get().DestroySurface();
+}
+
+JNIEXPORT void JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderVulkanFrame(
+    JNIEnv* env, jclass clazz,
+    jfloat posX, jfloat posY, jfloat posZ,
+    jfloat intensity, jfloat colorR, jfloat colorG, jfloat colorB,
+    jfloat roughness, jfloat metallic,
+    jfloat width, jfloat height, jfloat depth,
+    jint stageMode
+) {
+    sphere::vk::NativeRenderParams params;
+    params.lightPosX = posX;
+    params.lightPosY = posY;
+    params.lightPosZ = posZ;
+    params.lightIntensity = intensity;
+    params.lightColorR = colorR;
+    params.lightColorG = colorG;
+    params.lightColorB = colorB;
+    params.roughness = roughness;
+    params.metallic = metallic;
+    params.objectWidth = width;
+    params.objectHeight = height;
+    params.objectDepth = depth;
+    params.stageMode = static_cast<uint32_t>(stageMode);
+
+    sphere::vk::VulkanNativeSceneRenderer::Get().RenderFrame(params);
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeIsVulkanInitialized(
+    JNIEnv* env, jclass clazz
+) {
+    return sphere::vk::VulkanNativeSceneRenderer::Get().IsInitialized() ? JNI_TRUE : JNI_FALSE;
+}
+
+} // extern "C"
+

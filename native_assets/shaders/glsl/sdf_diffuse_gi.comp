@@ -1,0 +1,51 @@
+#version 450
+// sdf_diffuse_gi.comp - Signed Distance Field Diffuse GI Compute Shader
+// Referencing Gaukler/PlainRenderer raymarched GI compute pass
+
+#include "include/sdf_gi_common.glsl"
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform SdfGiUBO {
+    GpuSdfGiData u_sdfGi;
+};
+
+layout(set = 0, binding = 1) uniform sampler3D u_sdfTexture;
+layout(set = 0, binding = 2) uniform sampler3D u_albedoTexture;
+
+// G-Buffer inputs: World Normal and Position
+layout(set = 0, binding = 3) uniform sampler2D u_gbufferWorldNormal;
+layout(set = 0, binding = 4) uniform sampler2D u_gbufferWorldPos;
+
+// Output: Indirect Diffuse Radiance and Distance Field AO
+layout(set = 0, binding = 5, rgba16f) uniform writeonly image2D u_indirectGiOutput;
+
+void main() {
+    ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 imageSize = imageSize(u_indirectGiOutput);
+
+    if (pixelCoord.x >= imageSize.x || pixelCoord.y >= imageSize.y) {
+        return;
+    }
+
+    vec2 uv = (vec2(pixelCoord) + 0.5) / vec2(imageSize);
+    vec3 normal = texture(u_gbufferWorldNormal, uv).xyz;
+    vec3 worldPos = texture(u_gbufferWorldPos, uv).xyz;
+
+    // Background sky check
+    if (length(normal) < 0.1) {
+        imageStore(u_indirectGiOutput, pixelCoord, vec4(0.0));
+        return;
+    }
+
+    normal = normalize(normal);
+
+    // Compute Distance Field Ambient Occlusion
+    float dfao = evaluateSdfAmbientOcclusion(u_sdfTexture, u_sdfGi, worldPos, normal);
+
+    // Compute Multi-Cone Cone-Traced Diffuse Indirect Bounce
+    vec3 indirectDiffuse = coneTraceIndirectDiffuse(u_sdfTexture, u_albedoTexture, u_sdfGi, worldPos, normal);
+
+    // Encode RGB = indirect radiance, A = DFAO
+    imageStore(u_indirectGiOutput, pixelCoord, vec4(indirectDiffuse, dfao));
+}

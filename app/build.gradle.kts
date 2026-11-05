@@ -11,6 +11,7 @@ plugins {
 android {
   namespace = "com.example"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
+  ndkVersion = "26.1.10909125"
 
   defaultConfig {
     applicationId = "com.example"
@@ -20,6 +21,22 @@ android {
     versionName = "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    externalNativeBuild {
+      cmake {
+        cppFlags("-std=c++20")
+        arguments("-DANDROID_STL=c++_shared")
+      }
+    }
+    ndk {
+      abiFilters.addAll(listOf("arm64-v8a", "x86_64"))
+    }
+  }
+
+  externalNativeBuild {
+    cmake {
+      path = file("../native_assets/CMakeLists.txt")
+      version = "3.22.1"
+    }
   }
 
   // Do not remove or modify these signingConfigs. They are necessary for building, installing,

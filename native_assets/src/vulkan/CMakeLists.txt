@@ -8,6 +8,7 @@ add_library(vulkan_wrap STATIC
     RenderPass.cpp
     BindlessHeap.cpp
     FrameGraph.cpp
+    VulkanNativeSceneRenderer.cpp
 )
 target_include_directories(vulkan_wrap PUBLIC  /.. /../../base)
 target_link_libraries(vulkan_wrap PUBLIC base Vulkan::Vulkan)

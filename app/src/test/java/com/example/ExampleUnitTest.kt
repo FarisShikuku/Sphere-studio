@@ -53,4 +53,32 @@ class ExampleUnitTest {
     val parsed = com.example.sphere.viewport.TextureManager.parseKtx2(invalidBytes)
     assertNull(parsed)
   }
+
+  @Test
+  fun `available asset categories contains lighting studio as independent option`() {
+    val lightingCategory = com.example.sphere.availableAssetCategories.find { it.id == "lighting" }
+    assertNotNull(lightingCategory)
+    assertEquals("Lighting Studio", lightingCategory?.title)
+    assertTrue(lightingCategory?.description?.contains("flashlight", ignoreCase = true) == true)
+  }
+
+  @Test
+  fun `default lighting scenarios contain flashlight, bulb and area light`() {
+    val scenarios = com.example.sphere.model.DEFAULT_LIGHTING_SCENARIOS
+    assertTrue(scenarios.isNotEmpty())
+    assertTrue(scenarios.any { it.params.type == com.example.sphere.model.LightSourceType.SPOT_FLASHLIGHT })
+    assertTrue(scenarios.any { it.params.type == com.example.sphere.model.LightSourceType.POINT_BULB })
+    assertTrue(scenarios.any { it.params.type == com.example.sphere.model.LightSourceType.AREA_SOFTBOX })
+  }
+
+  @Test
+  fun `kelvinToColor outputs warm reddish-amber for candle and cool bluish-white for sky`() {
+    val candle = com.example.sphere.model.kelvinToColor(2000f)
+    val daylight = com.example.sphere.model.kelvinToColor(7500f)
+
+    // Candle should have high red and lower blue
+    assertTrue(candle.red > candle.blue)
+    // 7500K overcast daylight should have substantial blue
+    assertTrue(daylight.blue > 0.8f)
+  }
 }
