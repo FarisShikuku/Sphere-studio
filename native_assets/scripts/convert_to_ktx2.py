@@ -79,12 +79,10 @@ def convert_image_to_ktx2(input_path, output_path, max_dim=1024, is_srgb=True):
     res = subprocess.check_output(cmd_dim).decode("utf-8").strip().split()
     orig_w, orig_h = int(res[0]), int(res[1])
     
-    # Scale to square or power of 2 for optimal Vulkan staging
-    target_w = min(orig_w, max_dim)
-    target_h = min(orig_h, max_dim)
-    # Snap to nearest multiple of 4
-    target_w = (target_w // 4) * 4
-    target_h = (target_h // 4) * 4
+    # Scale maintaining aspect ratio, snap to multiple of 4 for GPU block alignment
+    scale = min(1.0, float(max_dim) / max(orig_w, orig_h))
+    target_w = max(4, int(round(orig_w * scale / 4.0)) * 4)
+    target_h = max(4, int(round(orig_h * scale / 4.0)) * 4)
     
     # Calculate mip levels
     levels = []

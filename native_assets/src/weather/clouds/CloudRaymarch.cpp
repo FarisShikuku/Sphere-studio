@@ -24,8 +24,8 @@ constexpr float BAYER_4X4[4][4] = {
 };
 
 // Meteoros ambient illumination palette for sky / earth ambient bounce
-constexpr Vec3 AMBIENT_TOP{0.68f, 0.62f, 0.64f};
-constexpr Vec3 AMBIENT_BOTTOM{0.24f, 0.26f, 0.32f};
+constexpr Vec3 AMBIENT_TOP{0.95f, 0.98f, 1.05f};
+constexpr Vec3 AMBIENT_BOTTOM{0.75f, 0.80f, 0.88f};
 } // namespace
 
 bool CloudRaymarch::IntersectAtmosphere(
@@ -135,6 +135,7 @@ CloudRayResult CloudRaymarch::March(
             // 3. March towards sun to calculate cloud self-shadowing
             float lightDepth = RaymarchToLight(p, sunDir, generator, time, stepSize);
             float sunEnergy = generator.MultiBeer(lightDepth * params.sunAbsorption * 0.005f, params.multiScatteringFactor * 0.5f);
+            sunEnergy = std::clamp(sunEnergy, 0.18f, 1.0f);
 
             // 4. Ambient light combination (sky hemisphere + ground bounce)
             float hFrac = generator.GetHeightFraction(p);
@@ -152,9 +153,9 @@ CloudRayResult CloudRaymarch::March(
             };
 
             Vec3 stepLight = {
-                (ambient.x + direct.x) * sampleDensity,
-                (ambient.y + direct.y) * sampleDensity,
-                (ambient.z + direct.z) * sampleDensity
+                (ambient.x * 0.75f + direct.x * 0.65f) * sampleDensity,
+                (ambient.y * 0.75f + direct.y * 0.65f) * sampleDensity,
+                (ambient.z * 0.75f + direct.z * 0.65f) * sampleDensity
             };
 
             accumulatedRadiance.x += stepLight.x * transmittance;
@@ -174,6 +175,102 @@ CloudRayResult CloudRaymarch::March(
     // Meteoros god-ray occlusion factor (1.0 = clear sunlight beam, 0.0 = occluded by thick cloud)
     result.godRayOcclusion = transmittance;
     return result;
+}
+
+void CloudRaymarch::RenderCloudBuffer(
+    uint32_t* outPixels,
+    int width,
+    int height,
+    float camYaw,
+    float camPitch,
+    float sunAzimuth,
+    float sunElevation,
+    const CloudGen& generator,
+    float time
+) const {
+    if (!outPixels || width <= 0 || height <= 0) return;
+
+    constexpr float kPi = 3.14159265358979323846f;
+    float yawRad = camYaw * (kPi / 180.0f);
+    float pitchRad = camPitch * (kPi / 180.0f);
+
+    float cosP = std::cos(pitchRad);
+    float sinP = std::sin(pitchRad);
+    float cosY = std::cos(yawRad);
+    float sinY = std::sin(yawRad);
+
+    float aspect = static_cast<float>(width) / static_cast<float>(height);
+    float fovH = 75.0f * (kPi / 180.0f);
+    float tanH = std::tan(fovH * 0.5f);
+    float tanV = tanH / aspect;
+
+    // Sun vector and solar chromaticity
+    float sunAzRad = sunAzimuth * (kPi / 180.0f);
+    float sunElRad = sunElevation * (kPi / 180.0f);
+    Vec3 sunDir{
+        std::cos(sunElRad) * std::sin(sunAzRad),
+        std::sin(sunElRad),
+        std::cos(sunElRad) * std::cos(sunAzRad)
+    };
+
+    Vec3 sunColor{1.2f, 1.2f, 1.15f};
+    if (sunElevation < 12.0f) {
+        sunColor = Vec3{1.45f, 0.72f, 0.38f}; // Sunset golden hour
+    } else if (sunElevation < 25.0f) {
+        sunColor = Vec3{1.32f, 1.08f, 0.82f}; // Low morning/afternoon sun
+    }
+
+    const auto& params = generator.GetParams();
+    float exposure = params.toneMapExposure;
+    Vec3 origin{0.0f, 0.0f, 0.0f};
+
+    auto AcesTonemap = [](float x) -> float {
+        x = std::max(0.0f, x);
+        return std::clamp((x * (2.51f * x + 0.03f)) / (x * (2.43f * x + 0.59f) + 0.14f), 0.0f, 1.0f);
+    };
+
+    for (int y = 0; y < height; ++y) {
+        float vNorm = (1.0f - 2.0f * (static_cast<float>(y) + 0.5f) / static_cast<float>(height)) * tanV;
+        float vy1 = vNorm * cosP + sinP;
+        float vz1 = -vNorm * sinP + cosP;
+
+        int rowOffset = y * width;
+
+        for (int x = 0; x < width; ++x) {
+            float uNorm = (2.0f * (static_cast<float>(x) + 0.5f) / static_cast<float>(width) - 1.0f) * tanH;
+
+            float rx = uNorm * cosY + vz1 * sinY;
+            float ry = vy1;
+            float rz = -uNorm * sinY + vz1 * cosY;
+
+            float invLen = 1.0f / std::sqrt(rx * rx + ry * ry + rz * rz);
+            Vec3 dir{rx * invLen, ry * invLen, rz * invLen};
+
+            if (dir.y <= 0.005f) {
+                outPixels[rowOffset + x] = 0;
+                continue;
+            }
+
+            CloudRayResult res = March(origin, dir, sunDir, sunColor, generator, time, x, y);
+
+            if (res.cloudAlpha <= 0.005f) {
+                outPixels[rowOffset + x] = 0;
+                continue;
+            }
+
+            float r = AcesTonemap(res.radiance.x * exposure);
+            float g = AcesTonemap(res.radiance.y * exposure);
+            float b = AcesTonemap(res.radiance.z * exposure);
+            float a = res.cloudAlpha;
+
+            uint32_t ir = static_cast<uint32_t>(r * 255.0f);
+            uint32_t ig = static_cast<uint32_t>(g * 255.0f);
+            uint32_t ib = static_cast<uint32_t>(b * 255.0f);
+            uint32_t ia = static_cast<uint32_t>(a * 255.0f);
+
+            outPixels[rowOffset + x] = (ia << 24) | (ir << 16) | (ig << 8) | ib;
+        }
+    }
 }
 
 } // namespace sphere::weather

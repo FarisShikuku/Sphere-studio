@@ -46,12 +46,12 @@ fun ObjectDimensionsControlTab(
 ) {
     val scrollState = rememberScrollState()
 
-    // Base metric dimensions for 1.0x scale
+    // Base metric dimensions for 1.0x scale (1.0m standard unit cube)
     val (baseW, baseH, baseD) = when (shape) {
-        PreviewMeshShape.CUBE -> Triple(1.92f, 1.92f, 1.92f)
-        PreviewMeshShape.WALL -> Triple(1.85f, 1.45f, 0.34f)
-        PreviewMeshShape.PLANE -> Triple(3.40f, 0.22f, 3.40f)
-        PreviewMeshShape.SPHERE -> Triple(1.60f, 1.60f, 1.60f)
+        PreviewMeshShape.CUBE -> Triple(1.0f, 1.0f, 1.0f)
+        PreviewMeshShape.WALL -> Triple(2.0f, 1.5f, 0.25f)
+        PreviewMeshShape.PLANE -> Triple(2.0f, 0.15f, 2.0f)
+        PreviewMeshShape.SPHERE -> Triple(1.0f, 1.0f, 1.0f)
     }
 
     val actualW = baseW * scale * widthScale
@@ -353,22 +353,27 @@ fun ObjectDimensionsControlTab(
                     FilterChip(
                         selected = (widthScale == 1.0f && heightScale == 1.0f && depthScale == 1.0f && scale == 1.0f),
                         onClick = { onScaleChange(1.0f); onWidthScaleChange(1.0f); onHeightScaleChange(1.0f); onDepthScaleChange(1.0f) },
-                        label = { Text("Standard 1.85m×1.45m", fontSize = 11.sp) }
+                        label = { Text("Standard 2.0m×1.5m", fontSize = 11.sp) }
                     )
                     FilterChip(
-                        selected = (widthScale == 1.5f && heightScale == 1.6f),
-                        onClick = { onScaleChange(1.0f); onWidthScaleChange(1.5f); onHeightScaleChange(1.6f); onDepthScaleChange(1.0f) },
-                        label = { Text("High Facade 2.8m×2.3m", fontSize = 11.sp) }
+                        selected = (widthScale == 5.0f && heightScale == 2.0f),
+                        onClick = { onScaleChange(1.0f); onWidthScaleChange(5.0f); onHeightScaleChange(2.0f); onDepthScaleChange(1.0f) },
+                        label = { Text("Facade 10m×3m", fontSize = 11.sp) }
                     )
                     FilterChip(
-                        selected = (widthScale == 1.2f && heightScale == 0.7f),
-                        onClick = { onScaleChange(1.0f); onWidthScaleChange(1.2f); onHeightScaleChange(0.7f); onDepthScaleChange(1.3f) },
-                        label = { Text("Garden Parapet 2.2m×1.0m", fontSize = 11.sp) }
+                        selected = (widthScale == 25.0f && heightScale == 4.0f),
+                        onClick = { onScaleChange(1.0f); onWidthScaleChange(25.0f); onHeightScaleChange(4.0f); onDepthScaleChange(2.0f) },
+                        label = { Text("Acoustic Barrier 50m×6m", fontSize = 11.sp) }
                     )
                     FilterChip(
-                        selected = (widthScale == 2.0f && heightScale == 1.8f && depthScale == 1.8f),
-                        onClick = { onScaleChange(1.0f); onWidthScaleChange(2.0f); onHeightScaleChange(1.8f); onDepthScaleChange(1.8f) },
-                        label = { Text("Retaining Wall 3.7m×2.6m", fontSize = 11.sp) }
+                        selected = (widthScale == 50.0f && heightScale == 6.0f),
+                        onClick = { onScaleChange(1.0f); onWidthScaleChange(50.0f); onHeightScaleChange(6.0f); onDepthScaleChange(3.0f) },
+                        label = { Text("Megastructure 100m×9m", fontSize = 11.sp) }
+                    )
+                    FilterChip(
+                        selected = (widthScale == 60.0f && heightScale == 8.0f),
+                        onClick = { onScaleChange(1.0f); onWidthScaleChange(60.0f); onHeightScaleChange(8.0f); onDepthScaleChange(4.0f) },
+                        label = { Text("Perimeter Wall 120m×12m", fontSize = 11.sp) }
                     )
                 }
                 PreviewMeshShape.CUBE -> {
@@ -378,58 +383,83 @@ fun ObjectDimensionsControlTab(
                         label = { Text("Standard 1.0m Cube", fontSize = 11.sp) }
                     )
                     FilterChip(
-                        selected = (scale == 1.6f && widthScale == 1.0f && heightScale == 1.0f),
-                        onClick = { onScaleChange(1.6f); onWidthScaleChange(1.0f); onHeightScaleChange(1.0f); onDepthScaleChange(1.0f) },
-                        label = { Text("Large 1.6m Block", fontSize = 11.sp) }
+                        selected = (widthScale == 2.0f && heightScale == 2.0f && depthScale == 2.0f),
+                        onClick = { onScaleChange(1.0f); onWidthScaleChange(2.0f); onHeightScaleChange(2.0f); onDepthScaleChange(2.0f) },
+                        label = { Text("2.0m Solid Cube (8m³)", fontSize = 11.sp) }
                     )
                     FilterChip(
-                        selected = (widthScale == 0.6f && heightScale == 1.8f && depthScale == 0.6f),
-                        onClick = { onScaleChange(1.0f); onWidthScaleChange(0.6f); onHeightScaleChange(1.8f); onDepthScaleChange(0.6f) },
-                        label = { Text("Pillar Column (0.6m×1.8m)", fontSize = 11.sp) }
+                        selected = (widthScale == 10.0f && heightScale == 10.0f && depthScale == 10.0f),
+                        onClick = { onScaleChange(1.0f); onWidthScaleChange(10.0f); onHeightScaleChange(10.0f); onDepthScaleChange(10.0f) },
+                        label = { Text("Building Block 10m³", fontSize = 11.sp) }
                     )
                     FilterChip(
-                        selected = (widthScale == 1.8f && heightScale == 0.5f && depthScale == 1.4f),
-                        onClick = { onScaleChange(1.0f); onWidthScaleChange(1.8f); onHeightScaleChange(0.5f); onDepthScaleChange(1.4f) },
-                        label = { Text("Display Plinth", fontSize = 11.sp) }
+                        selected = (widthScale == 50.0f && heightScale == 50.0f && depthScale == 50.0f),
+                        onClick = { onScaleChange(1.0f); onWidthScaleChange(50.0f); onHeightScaleChange(50.0f); onDepthScaleChange(50.0f) },
+                        label = { Text("District Block 50m³", fontSize = 11.sp) }
+                    )
+                    FilterChip(
+                        selected = (widthScale == 100.0f && heightScale == 100.0f && depthScale == 100.0f),
+                        onClick = { onScaleChange(1.0f); onWidthScaleChange(100.0f); onHeightScaleChange(100.0f); onDepthScaleChange(100.0f) },
+                        label = { Text("Mega Complex 100m³", fontSize = 11.sp) }
+                    )
+                    FilterChip(
+                        selected = (widthScale == 120.0f && heightScale == 120.0f && depthScale == 120.0f),
+                        onClick = { onScaleChange(1.0f); onWidthScaleChange(120.0f); onHeightScaleChange(120.0f); onDepthScaleChange(120.0f) },
+                        label = { Text("Superstructure 120m³ (>100m)", fontSize = 11.sp) }
                     )
                 }
                 PreviewMeshShape.PLANE -> {
                     FilterChip(
                         selected = (widthScale == 1.0f && depthScale == 1.0f && scale == 1.0f),
                         onClick = { onScaleChange(1.0f); onWidthScaleChange(1.0f); onHeightScaleChange(1.0f); onDepthScaleChange(1.0f) },
-                        label = { Text("Room Floor 3.4m×3.4m", fontSize = 11.sp) }
+                        label = { Text("Standard Floor 2m×2m (4m²)", fontSize = 11.sp) }
                     )
                     FilterChip(
-                        selected = (widthScale == 1.6f && depthScale == 1.6f),
-                        onClick = { onScaleChange(1.0f); onWidthScaleChange(1.6f); onHeightScaleChange(1.0f); onDepthScaleChange(1.6f) },
-                        label = { Text("Grand Hall 5.4m×5.4m", fontSize = 11.sp) }
+                        selected = (widthScale == 5.0f && depthScale == 5.0f),
+                        onClick = { onScaleChange(1.0f); onWidthScaleChange(5.0f); onHeightScaleChange(1.0f); onDepthScaleChange(5.0f) },
+                        label = { Text("Plaza 10m×10m (100m²)", fontSize = 11.sp) }
                     )
                     FilterChip(
-                        selected = (widthScale == 0.6f && depthScale == 1.8f),
-                        onClick = { onScaleChange(1.0f); onWidthScaleChange(0.6f); onHeightScaleChange(1.0f); onDepthScaleChange(1.8f) },
-                        label = { Text("Walkway / Path 2.0m×6.0m", fontSize = 11.sp) }
+                        selected = (widthScale == 25.0f && depthScale == 25.0f),
+                        onClick = { onScaleChange(1.0f); onWidthScaleChange(25.0f); onHeightScaleChange(1.0f); onDepthScaleChange(25.0f) },
+                        label = { Text("Courtyard 50m×50m", fontSize = 11.sp) }
                     )
                     FilterChip(
-                        selected = (widthScale == 1.4f && depthScale == 1.0f),
-                        onClick = { onScaleChange(1.0f); onWidthScaleChange(1.4f); onHeightScaleChange(1.0f); onDepthScaleChange(1.0f) },
-                        label = { Text("Patio Slab 4.8m×3.4m", fontSize = 11.sp) }
+                        selected = (widthScale == 50.0f && depthScale == 50.0f),
+                        onClick = { onScaleChange(1.0f); onWidthScaleChange(50.0f); onHeightScaleChange(1.0f); onDepthScaleChange(50.0f) },
+                        label = { Text("Urban District 100m×100m", fontSize = 11.sp) }
+                    )
+                    FilterChip(
+                        selected = (widthScale == 60.0f && depthScale == 60.0f),
+                        onClick = { onScaleChange(1.0f); onWidthScaleChange(60.0f); onHeightScaleChange(1.0f); onDepthScaleChange(60.0f) },
+                        label = { Text("Superfield 120m×120m (>100m)", fontSize = 11.sp) }
                     )
                 }
                 PreviewMeshShape.SPHERE -> {
                     FilterChip(
-                        selected = (scale == 0.75f),
-                        onClick = { onScaleChange(0.75f); onWidthScaleChange(1.0f); onHeightScaleChange(1.0f); onDepthScaleChange(1.0f) },
-                        label = { Text("Compact Ø 1.2m", fontSize = 11.sp) }
-                    )
-                    FilterChip(
                         selected = (scale == 1.0f),
                         onClick = { onScaleChange(1.0f); onWidthScaleChange(1.0f); onHeightScaleChange(1.0f); onDepthScaleChange(1.0f) },
-                        label = { Text("Standard Ø 1.6m", fontSize = 11.sp) }
+                        label = { Text("Standard Ø 1.0m", fontSize = 11.sp) }
                     )
                     FilterChip(
-                        selected = (scale == 1.45f),
-                        onClick = { onScaleChange(1.45f); onWidthScaleChange(1.0f); onHeightScaleChange(1.0f); onDepthScaleChange(1.0f) },
-                        label = { Text("Monumental Ø 2.3m", fontSize = 11.sp) }
+                        selected = (widthScale == 10.0f),
+                        onClick = { onScaleChange(1.0f); onWidthScaleChange(10.0f); onHeightScaleChange(10.0f); onDepthScaleChange(10.0f) },
+                        label = { Text("Dome Ø 10m", fontSize = 11.sp) }
+                    )
+                    FilterChip(
+                        selected = (widthScale == 50.0f),
+                        onClick = { onScaleChange(1.0f); onWidthScaleChange(50.0f); onHeightScaleChange(50.0f); onDepthScaleChange(50.0f) },
+                        label = { Text("Biosphere Ø 50m", fontSize = 11.sp) }
+                    )
+                    FilterChip(
+                        selected = (widthScale == 100.0f),
+                        onClick = { onScaleChange(1.0f); onWidthScaleChange(100.0f); onHeightScaleChange(100.0f); onDepthScaleChange(100.0f) },
+                        label = { Text("Superdome Ø 100m", fontSize = 11.sp) }
+                    )
+                    FilterChip(
+                        selected = (widthScale == 120.0f),
+                        onClick = { onScaleChange(1.0f); onWidthScaleChange(120.0f); onHeightScaleChange(120.0f); onDepthScaleChange(120.0f) },
+                        label = { Text("Megadome Ø 120m (>100m)", fontSize = 11.sp) }
                     )
                 }
             }
@@ -437,17 +467,17 @@ fun ObjectDimensionsControlTab(
 
         Spacer(Modifier.height(4.dp))
 
-        // 4. Parametric Dimension Sliders
+        // 4. Parametric Dimension Sliders with support for > 100 meters
         Text(
-            text = "Fine Parametric Controls",
+            text = "Fine Parametric Controls (Scalable to > 100m)",
             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
         )
 
         // Uniform Scale
         DimensionSlider(
             label = "Overall Proportional Scale",
-            value = scale,
-            range = 0.40f..2.50f,
+            value = scale.coerceIn(0.10f, 10.0f),
+            range = 0.10f..10.0f,
             unit = "x",
             accentColor = Color(0xFFF59E0B),
             onValueChange = onScaleChange
@@ -461,8 +491,8 @@ fun ObjectDimensionsControlTab(
                 PreviewMeshShape.SPHERE -> "Sphere Radius / Width"
                 else -> "Width (X-Axis)"
             },
-            value = widthScale,
-            range = 0.40f..2.50f,
+            value = widthScale.coerceIn(0.20f, 150.0f),
+            range = 0.20f..150.0f,
             unit = "x  (${"%.2f".format(actualW)}m)",
             accentColor = Color(0xFFEF4444),
             onValueChange = onWidthScaleChange
@@ -476,8 +506,8 @@ fun ObjectDimensionsControlTab(
                     PreviewMeshShape.PLANE -> "Slab Foundation Depth"
                     else -> "Height (Y-Axis)"
                 },
-                value = heightScale,
-                range = 0.35f..2.50f,
+                value = heightScale.coerceIn(0.20f, 150.0f),
+                range = 0.20f..150.0f,
                 unit = "x  (${"%.2f".format(actualH)}m)",
                 accentColor = Color(0xFF10B981),
                 onValueChange = onHeightScaleChange
@@ -492,9 +522,9 @@ fun ObjectDimensionsControlTab(
                     PreviewMeshShape.PLANE -> "Floor Length (Z-Depth)"
                     else -> "Depth (Z-Axis)"
                 },
-                value = depthScale,
-                range = 0.35f..2.50f,
-                unit = if (shape == PreviewMeshShape.WALL) "x  (${(actualD * 1000).toInt()}mm)" else "x  (${"%.2f".format(actualD)}m)",
+                value = depthScale.coerceIn(0.20f, 150.0f),
+                range = 0.20f..150.0f,
+                unit = if (shape == PreviewMeshShape.WALL && actualD < 2.0f) "x  (${(actualD * 1000).toInt()}mm)" else "x  (${"%.2f".format(actualD)}m)",
                 accentColor = Color(0xFF3B82F6),
                 onValueChange = onDepthScaleChange
             )

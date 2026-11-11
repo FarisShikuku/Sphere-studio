@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -40,11 +41,13 @@ import com.example.sphere.viewport.PreviewMeshShape
 import kotlin.math.*
 
 enum class MaterialCategoryFilter(val label: String, val iconDescription: String) {
-    ALL("All Textures", "All procedural PBR materials"),
-    WALL("🧱 Wall & Masonry", "Bricks, concrete, tiles, mortar"),
-    METALS("✨ Metals & PBR", "Gold, brushed steel, rusted iron, copper"),
-    FLOORING("🌲 Flooring & Stone", "Oak planks, marble, bitumen asphalt"),
-    NATURE("🌿 Nature & Organic", "Lawn turf, moist earth loam, skin")
+    ALL("All Textures", "All 74 Khronos KTX2 PBR materials"),
+    WALL("🧱 Masonry", "Bricks, blocks, tiles, mortar"),
+    METALS("✨ Metals", "Steel, zinc, aluminium, copper"),
+    FLOORING("🌲 Flooring & Stone", "Oak planks, chevron parquet, pavers, flagstone, terrazzo"),
+    NATURE("🌿 Nature & Turf", "Lawn grass, four-leaf clover, picket paver, soil loam"),
+    INFRASTRUCTURE("🏗️ Roads & Roofing", "Thin asphalt aggregate, macadam, bitumen shingles, tiles"),
+    OPTICAL("💎 Optical Glass", "Architectural glass, frosted glass, water, ice")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -75,14 +78,14 @@ fun MaterialInspectorScreen(
         mutableStateOf(defaultPbrMaterials[selectedMaterialIndex])
     }
 
-    var selectedSurfaceIndex by remember { mutableIntStateOf(0) }
-    var currentSurface by remember(selectedSurfaceIndex) {
-        mutableStateOf(defaultCompositeSurfaces[selectedSurfaceIndex])
+    var currentSurface by remember(currentMaterial) {
+        mutableStateOf(getCompositeSurfaceForMaterial(currentMaterial))
     }
 
     var selectedCategoryFilter by remember { mutableStateOf(MaterialCategoryFilter.ALL) }
     var selectedChannel by remember { mutableStateOf(MaterialChannelMode.COMPOSITE_PBR) }
     var selectedTab by remember { mutableIntStateOf(0) }
+    var showWireframe by remember { mutableStateOf(false) }
 
     // Filtered materials based on category
     val filteredMaterials = remember(selectedCategoryFilter) {
@@ -90,8 +93,10 @@ fun MaterialInspectorScreen(
             MaterialCategoryFilter.ALL -> defaultPbrMaterials
             MaterialCategoryFilter.WALL -> defaultPbrMaterials.filter { it.category == "Masonry" }
             MaterialCategoryFilter.METALS -> defaultPbrMaterials.filter { it.category == "Metals" }
-            MaterialCategoryFilter.FLOORING -> defaultPbrMaterials.filter { it.category == "Flooring" || it.category == "Infrastructure" }
-            MaterialCategoryFilter.NATURE -> defaultPbrMaterials.filter { it.category == "Nature" || it.category == "Organics" || it.category == "Refractive" }
+            MaterialCategoryFilter.FLOORING -> defaultPbrMaterials.filter { it.category == "Flooring" }
+            MaterialCategoryFilter.NATURE -> defaultPbrMaterials.filter { it.category == "Nature" || it.category == "Organics" }
+            MaterialCategoryFilter.INFRASTRUCTURE -> defaultPbrMaterials.filter { it.category == "Infrastructure" }
+            MaterialCategoryFilter.OPTICAL -> defaultPbrMaterials.filter { it.category == "Refractive" }
         }
     }
 
@@ -118,7 +123,7 @@ fun MaterialInspectorScreen(
                     IconButton(
                         onClick = {
                             currentMaterial = defaultPbrMaterials[selectedMaterialIndex]
-                            currentSurface = defaultCompositeSurfaces[selectedSurfaceIndex]
+                            currentSurface = getCompositeSurfaceForMaterial(currentMaterial)
                             selectedChannel = MaterialChannelMode.COMPOSITE_PBR
                             objectScale = 1.0f
                             objectWidthScale = 1.0f
@@ -194,23 +199,32 @@ fun MaterialInspectorScreen(
                 }
             }
 
-            // 2. Streamlined Unified Category & Texture Selector
+            // 2A. PINNED Category Filter Bar (Fixed above materials so it never scrolls away)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                    .padding(horizontal = 12.dp, vertical = 3.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 MaterialCategoryFilter.entries.forEach { cat ->
+                    val count = when (cat) {
+                        MaterialCategoryFilter.ALL -> defaultPbrMaterials.size
+                        MaterialCategoryFilter.WALL -> defaultPbrMaterials.count { it.category == "Masonry" }
+                        MaterialCategoryFilter.METALS -> defaultPbrMaterials.count { it.category == "Metals" }
+                        MaterialCategoryFilter.FLOORING -> defaultPbrMaterials.count { it.category == "Flooring" }
+                        MaterialCategoryFilter.NATURE -> defaultPbrMaterials.count { it.category == "Nature" || it.category == "Organics" }
+                        MaterialCategoryFilter.INFRASTRUCTURE -> defaultPbrMaterials.count { it.category == "Infrastructure" }
+                        MaterialCategoryFilter.OPTICAL -> defaultPbrMaterials.count { it.category == "Refractive" }
+                    }
                     val isCatSelected = selectedCategoryFilter == cat
                     FilterChip(
                         selected = isCatSelected,
                         onClick = { selectedCategoryFilter = cat },
                         label = {
                             Text(
-                                cat.label,
+                                "${cat.label} ($count)",
                                 fontSize = 11.sp,
                                 fontWeight = if (isCatSelected) FontWeight.Bold else FontWeight.Normal
                             )
@@ -222,14 +236,17 @@ fun MaterialInspectorScreen(
                         )
                     )
                 }
+            }
 
-                VerticalDivider(
-                    modifier = Modifier
-                        .height(20.dp)
-                        .padding(horizontal = 2.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-
+            // 2B. Scrollable Material Chips Row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 filteredMaterials.forEach { mat ->
                     val isMatSelected = currentMaterial.id == mat.id
                     FilterChip(
@@ -237,14 +254,7 @@ fun MaterialInspectorScreen(
                         onClick = {
                             currentMaterial = mat
                             selectedMaterialIndex = defaultPbrMaterials.indexOfFirst { it.id == mat.id }.coerceAtLeast(0)
-
-                            val matchingSurface = defaultCompositeSurfaces.find { surf ->
-                                surf.id.contains(mat.id) || mat.id.contains(surf.id) || surf.category.name == mat.category.uppercase()
-                            }
-                            if (matchingSurface != null) {
-                                currentSurface = matchingSurface
-                                selectedSurfaceIndex = defaultCompositeSurfaces.indexOf(matchingSurface)
-                            }
+                            currentSurface = getCompositeSurfaceForMaterial(mat)
                         },
                         leadingIcon = {
                             Box(
@@ -289,6 +299,8 @@ fun MaterialInspectorScreen(
                 useRealWorldScale = useRealWorldScale,
                 uvTilingMultiplierX = uvTilingMultiplierX,
                 uvTilingMultiplierY = uvTilingMultiplierY,
+                showWireframe = showWireframe,
+                onToggleWireframe = { showWireframe = it },
                 onScaleChange = { objectScale = it },
                 onShapeChange = { previewShape = it },
                 modifier = Modifier
@@ -394,41 +406,185 @@ private fun MaterialLibraryBrowserTab(
     onSelectMaterial: (PbrMaterial) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var searchQuery by remember { mutableStateOf("") }
+
+    val filteredList = remember(searchQuery, materials) {
+        if (searchQuery.isBlank()) {
+            materials
+        } else {
+            materials.filter {
+                it.name.contains(searchQuery, ignoreCase = true) ||
+                it.category.contains(searchQuery, ignoreCase = true) ||
+                it.id.contains(searchQuery, ignoreCase = true)
+            }
+        }
+    }
+
+    // Curated showcase of textures converted to Khronos KTX 2.0 (specifically user-shared images)
+    val convertedShowcaseIds = listOf(
+        "pilotage_brick_herringbone",
+        "mondo_grass_four_leaf",
+        "mondo_grass_picket_and_square",
+        "asphalt_black_stone_aggregate"
+    )
+    val showcaseMaterials = remember {
+        defaultPbrMaterials.filter { it.id in convertedShowcaseIds }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(14.dp),
+            .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Quick Apply Notice
-        Surface(
-            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
-            shape = RoundedCornerShape(8.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+        // Search & Filter Box
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("texture_search_input"),
+            placeholder = { Text("Search 74 KTX2 PBR textures (e.g. herringbone, grass, paver)...", fontSize = 12.sp) },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", modifier = Modifier.size(18.dp)) },
+            trailingIcon = {
+                if (searchQuery.isNotEmpty()) {
+                    IconButton(onClick = { searchQuery = "" }) {
+                        Icon(Icons.Default.Clear, contentDescription = "Clear", modifier = Modifier.size(16.dp))
+                    }
+                }
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(10.dp)
+        )
+
+        // -----------------------------------------------------------------
+        // USER ACTUAL SHARED IMAGES -> KTX 2.0 CONVERSION SHOWCASE
+        // -----------------------------------------------------------------
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("ktx2_conversion_showcase_card"),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.70f)
+            ),
+            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.50f))
         ) {
-            Row(
-                modifier = Modifier.padding(10.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(
-                    Icons.Default.TouchApp,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    "Tap any texture card below to apply it to the active ${targetShape.label}.",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Verified,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
                     )
-                )
+                    Column {
+                        Text(
+                            "Actual Images ➔ Khronos KTX 2.0 GPU Containers",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            "Direct Vulkan 1.3 GPU pipeline • BC7/VK_FORMAT_R8G8B8A8_SRGB • 10 Mipmap levels",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = MaterialTheme.colorScheme.primary,
+                                fontSize = 10.sp
+                            )
+                        )
+                    }
+                }
+
+                showcaseMaterials.forEach { showMat ->
+                    val isSelected = showMat.id == activeMaterial.id
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelectMaterial(showMat) }
+                            .testTag("showcase_item_${showMat.id}"),
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.40f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.60f),
+                        border = BorderStroke(
+                            1.dp,
+                            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            MaterialSwatchThumbnail(mat = showMat, isSelected = isSelected)
+
+                            Spacer(Modifier.width(10.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    showMat.name,
+                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                    maxLines = 1
+                                )
+                                Text(
+                                    "Format: VK_FORMAT_R8G8B8A8_SRGB (43) • 10 Mips • Slot #${showMat.bindlessAlbedoSlot}",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 9.sp,
+                                        color = Color(0xFF38BDF8)
+                                    )
+                                )
+                                Text(
+                                    "Physical Scale: ${(showMat.tileScaleMeters * 1000).toInt()}mm • Architextures BIM",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 9.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                )
+                            }
+
+                            Spacer(Modifier.width(6.dp))
+
+                            FilledTonalButton(
+                                onClick = { onSelectMaterial(showMat) },
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
+                                    contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
+                                ),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Text(if (isSelected) "Applied" else "Apply 3D", fontSize = 10.sp)
+                            }
+                        }
+                    }
+                }
             }
         }
 
-        materials.forEach { mat ->
+        // Section Title: All Textures
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "All Library Textures (${filteredList.size})",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+            )
+            Text(
+                "Tap to apply to ${targetShape.label}",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 10.sp
+                )
+            )
+        }
+
+        // Full Materials List
+        filteredList.forEach { mat ->
             val isSelected = mat.id == activeMaterial.id
             Card(
                 modifier = Modifier
@@ -445,30 +601,12 @@ private fun MaterialLibraryBrowserTab(
                 )
             ) {
                 Row(
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier.padding(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Color / Material Swatch Thumbnail
-                    Box(
-                        modifier = Modifier
-                            .size(46.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(mat.baseColor)
-                            .padding(2.dp)
-                    ) {
-                        if (isSelected) {
-                            Icon(
-                                Icons.Default.CheckCircle,
-                                contentDescription = "Active",
-                                tint = Color.White,
-                                modifier = Modifier
-                                    .size(18.dp)
-                                    .align(Alignment.Center)
-                            )
-                        }
-                    }
+                    MaterialSwatchThumbnail(mat = mat, isSelected = isSelected)
 
-                    Spacer(Modifier.width(12.dp))
+                    Spacer(Modifier.width(10.dp))
 
                     Column(modifier = Modifier.weight(1f)) {
                         Row(
@@ -504,7 +642,6 @@ private fun MaterialLibraryBrowserTab(
 
                         Spacer(Modifier.height(4.dp))
 
-                        // Physical PBR Telemetry Badges
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(
                                 "Rough: ${(mat.roughness * 100).toInt()}%",
@@ -523,7 +660,7 @@ private fun MaterialLibraryBrowserTab(
                                 )
                             )
                             Text(
-                                "IOR: ${mat.ior}",
+                                "Scale: ${(mat.tileScaleMeters * 1000).toInt()}mm",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontFamily = FontFamily.Monospace,
                                     color = Color(0xFFA78BFA),
@@ -547,6 +684,88 @@ private fun MaterialLibraryBrowserTab(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun MaterialSwatchThumbnail(
+    mat: PbrMaterial,
+    isSelected: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(46.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(mat.baseColor)
+    ) {
+        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            when {
+                mat.id.contains("herringbone") -> {
+                    val lineCol = Color.White.copy(alpha = 0.65f)
+                    drawLine(lineCol, Offset(0f, h * 0.5f), Offset(w * 0.5f, 0f), strokeWidth = 1.8f)
+                    drawLine(lineCol, Offset(w * 0.5f, h), Offset(w, h * 0.5f), strokeWidth = 1.8f)
+                    drawLine(lineCol, Offset(w * 0.5f, 0f), Offset(w, h * 0.5f), strokeWidth = 1.8f)
+                    drawLine(lineCol, Offset(0f, h * 0.5f), Offset(w * 0.5f, h), strokeWidth = 1.8f)
+                }
+                mat.id.contains("four_leaf") || mat.id.contains("four-leaf") -> {
+                    val gCol = Color(0xFF386622)
+                    drawCircle(gCol, radius = 5.5f, center = Offset(w * 0.35f, h * 0.35f))
+                    drawCircle(gCol, radius = 5.5f, center = Offset(w * 0.65f, h * 0.35f))
+                    drawCircle(gCol, radius = 5.5f, center = Offset(w * 0.35f, h * 0.65f))
+                    drawCircle(gCol, radius = 5.5f, center = Offset(w * 0.65f, h * 0.65f))
+                }
+                mat.id.contains("picket") -> {
+                    val frameCol = Color.White.copy(alpha = 0.6f)
+                    drawRect(frameCol, topLeft = Offset(4f, 4f), size = androidx.compose.ui.geometry.Size(w - 8f, h - 8f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f))
+                    drawRect(Color(0xFF386622), topLeft = Offset(w * 0.3f, h * 0.3f), size = androidx.compose.ui.geometry.Size(w * 0.4f, h * 0.4f))
+                }
+                mat.id.contains("asphalt") -> {
+                    val speck = Color(0xFF141516)
+                    val speckLight = Color(0xFF888A8E)
+                    drawCircle(speck, radius = 2f, center = Offset(w * 0.25f, h * 0.3f))
+                    drawCircle(speckLight, radius = 2f, center = Offset(w * 0.7f, h * 0.25f))
+                    drawCircle(speck, radius = 2.5f, center = Offset(w * 0.5f, h * 0.6f))
+                    drawCircle(speckLight, radius = 1.8f, center = Offset(w * 0.3f, h * 0.8f))
+                    drawCircle(speck, radius = 2.2f, center = Offset(w * 0.8f, h * 0.75f))
+                }
+                mat.id.contains("brick") -> {
+                    val mortar = Color.White.copy(alpha = 0.45f)
+                    drawLine(mortar, Offset(0f, h * 0.33f), Offset(w, h * 0.33f), strokeWidth = 1.5f)
+                    drawLine(mortar, Offset(0f, h * 0.66f), Offset(w, h * 0.66f), strokeWidth = 1.5f)
+                    drawLine(mortar, Offset(w * 0.5f, 0f), Offset(w * 0.5f, h * 0.33f), strokeWidth = 1.5f)
+                    drawLine(mortar, Offset(w * 0.25f, h * 0.33f), Offset(w * 0.25f, h * 0.66f), strokeWidth = 1.5f)
+                    drawLine(mortar, Offset(w * 0.75f, h * 0.33f), Offset(w * 0.75f, h * 0.66f), strokeWidth = 1.5f)
+                }
+                mat.id.contains("wood") || mat.id.contains("plank") || mat.id.contains("chevron") -> {
+                    val grain = Color.Black.copy(alpha = 0.35f)
+                    drawLine(grain, Offset(0f, h * 0.35f), Offset(w, h * 0.35f), strokeWidth = 1.5f)
+                    drawLine(grain, Offset(0f, h * 0.70f), Offset(w, h * 0.70f), strokeWidth = 1.5f)
+                }
+                mat.id.contains("grass") || mat.id.contains("turf") -> {
+                    val blade = Color(0xFF68A33A)
+                    drawLine(blade, Offset(w * 0.3f, h * 0.8f), Offset(w * 0.35f, h * 0.3f), strokeWidth = 1.8f)
+                    drawLine(blade, Offset(w * 0.6f, h * 0.85f), Offset(w * 0.55f, h * 0.25f), strokeWidth = 1.8f)
+                }
+                mat.category == "Metals" -> {
+                    val shine = Color.White.copy(alpha = 0.5f)
+                    drawLine(shine, Offset(0f, 0f), Offset(w, h), strokeWidth = 2.2f)
+                }
+            }
+        }
+
+        if (isSelected) {
+            Icon(
+                Icons.Default.CheckCircle,
+                contentDescription = "Active",
+                tint = Color.White,
+                modifier = Modifier
+                    .size(18.dp)
+                    .align(Alignment.Center)
+            )
         }
     }
 }

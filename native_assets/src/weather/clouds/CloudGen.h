@@ -7,6 +7,7 @@ namespace sphere::weather {
 class CloudGen {
 public:
     CloudGen() = default;
+    explicit CloudGen(const CloudParams& params) : m_params(params) {}
     void SetParams(const CloudParams& params) { m_params = params; }
     const CloudParams& GetParams() const { return m_params; }
 

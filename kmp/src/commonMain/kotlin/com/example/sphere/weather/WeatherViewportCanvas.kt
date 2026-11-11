@@ -79,7 +79,8 @@ fun DrawScope.drawGroundSurface(
     cloudCoverage: Float,
     windSpeed: Float,
     cloudWave: Float,
-    lightningFlash: Float
+    lightningFlash: Float,
+    showGrid: Boolean = false
 ) {
     if (surfaceMode == SurfaceSceneMode.NONE) {
         return
@@ -103,29 +104,31 @@ fun DrawScope.drawGroundSurface(
             size = Size(w, (h - horizonY).coerceAtLeast(0f))
         )
 
-        val gridColor = if (snowCover > 0.4f) Color(0xFF94A3B8).copy(alpha = 0.3f)
-        else Color(0xFF1E293B).copy(alpha = 0.6f)
+        if (showGrid) {
+            val gridColor = if (snowCover > 0.4f) Color(0xFF94A3B8).copy(alpha = 0.3f)
+            else Color(0xFF1E293B).copy(alpha = 0.6f)
 
-        for (i in 0..12) {
-            val frac = i / 12f
-            val py = horizonY + (h - horizonY) * (frac * frac)
-            drawLine(
-                color = gridColor,
-                start = Offset(0f, py),
-                end = Offset(w, py),
-                strokeWidth = 1f
-            )
-        }
+            for (i in 0..12) {
+                val frac = i / 12f
+                val py = horizonY + (h - horizonY) * (frac * frac)
+                drawLine(
+                    color = gridColor,
+                    start = Offset(0f, py),
+                    end = Offset(w, py),
+                    strokeWidth = 1f
+                )
+            }
 
-        val centerX = w * 0.5f + sin((camYaw - 180f) * (PI.toFloat() / 180f)) * (w * 0.5f)
-        for (i in -8..8) {
-            val gx = centerX + i * (w * 0.12f)
-            drawLine(
-                color = gridColor.copy(alpha = 0.35f),
-                start = Offset(centerX, horizonY),
-                end = Offset(gx, h),
-                strokeWidth = 1f
-            )
+            val centerX = w * 0.5f + sin((camYaw - 180f) * (PI.toFloat() / 180f)) * (w * 0.5f)
+            for (i in -8..8) {
+                val gx = centerX + i * (w * 0.12f)
+                drawLine(
+                    color = gridColor.copy(alpha = 0.35f),
+                    start = Offset(centerX, horizonY),
+                    end = Offset(gx, h),
+                    strokeWidth = 1f
+                )
+            }
         }
 
         if (cloudCoverage > 0.15f) {
@@ -257,18 +260,20 @@ fun DrawScope.drawGroundSurface(
                 }
                 drawPath(topSlab, color = slabFillColor)
 
-                for (g in 1..4) {
-                    val f = g / 5f
-                    val pA = Offset(topP0.x + (topP1.x - topP0.x) * f, topP0.y + (topP1.y - topP0.y) * f)
-                    val pB = Offset(topP3.x + (topP2.x - topP3.x) * f, topP3.y + (topP2.y - topP3.y) * f)
-                    drawLine(Color(0xFF38BDF8).copy(alpha = 0.25f), pA, pB, strokeWidth = 1f)
+                if (showGrid) {
+                    for (g in 1..4) {
+                        val f = g / 5f
+                        val pA = Offset(topP0.x + (topP1.x - topP0.x) * f, topP0.y + (topP1.y - topP0.y) * f)
+                        val pB = Offset(topP3.x + (topP2.x - topP3.x) * f, topP3.y + (topP2.y - topP3.y) * f)
+                        drawLine(Color(0xFF38BDF8).copy(alpha = 0.25f), pA, pB, strokeWidth = 1f)
 
-                    val pC = Offset(topP1.x + (topP2.x - topP1.x) * f, topP1.y + (topP2.y - topP1.y) * f)
-                    val pD = Offset(topP0.x + (topP3.x - topP0.x) * f, topP0.y + (topP3.y - topP0.y) * f)
-                    drawLine(Color(0xFF38BDF8).copy(alpha = 0.25f), pC, pD, strokeWidth = 1f)
+                        val pC = Offset(topP1.x + (topP2.x - topP1.x) * f, topP1.y + (topP2.y - topP1.y) * f)
+                        val pD = Offset(topP0.x + (topP3.x - topP0.x) * f, topP0.y + (topP3.y - topP0.y) * f)
+                        drawLine(Color(0xFF38BDF8).copy(alpha = 0.25f), pC, pD, strokeWidth = 1f)
+                    }
+
+                    drawPath(topSlab, color = Color(0xFF38BDF8).copy(alpha = 0.65f), style = Stroke(width = 2f))
                 }
-
-                drawPath(topSlab, color = Color(0xFF38BDF8).copy(alpha = 0.65f), style = Stroke(width = 2f))
 
                 if (puddleDepth > 0.05f) {
                     val pColor = if (lightningFlash > 0.2f) Color(0xFFE2E8F0) else Color(0xFF1E3A5F).copy(alpha = 0.75f)

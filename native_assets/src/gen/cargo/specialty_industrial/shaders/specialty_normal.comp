@@ -1,0 +1,40 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+
+#include "include/specialty_common.glsl"
+
+layout(binding = 0, rg8) uniform writeonly image2D outNormal;
+
+layout(push_constant) uniform SpecNormParams {
+    uint categoryType;
+    float depth;
+} uNorm;
+
+void main() {
+    ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 imgSize = imageSize(outNormal);
+    if (pixelCoord.x >= imgSize.x || pixelCoord.y >= imgSize.y) return;
+
+    vec2 uv = vec2(pixelCoord) / vec2(imgSize);
+    vec2 eps = vec2(1.0) / vec2(imgSize);
+
+    float hC = 0.0;
+    float hR = 0.0;
+    float hU = 0.0;
+
+    if (uNorm.categoryType == 3u) {
+        hC = TyreTreadPattern(uv) * uNorm.depth;
+        hR = TyreTreadPattern(uv + vec2(eps.x, 0.0)) * uNorm.depth;
+        hU = TyreTreadPattern(uv + vec2(0.0, eps.y)) * uNorm.depth;
+    } else {
+        vec2 grid = fract(uv * vec2(8.0, 16.0));
+        hC = step(0.06, grid.x) * step(0.06, grid.y) * uNorm.depth;
+        vec2 gridR = fract((uv + vec2(eps.x, 0.0)) * vec2(8.0, 16.0));
+        hR = step(0.06, gridR.x) * step(0.06, gridR.y) * uNorm.depth;
+        vec2 gridU = fract((uv + vec2(0.0, eps.y)) * vec2(8.0, 16.0));
+        hU = step(0.06, gridU.x) * step(0.06, gridU.y) * uNorm.depth;
+    }
+
+    vec3 n = normalize(vec3((hC - hR) / eps.x, (hC - hU) / eps.y, 1.0));
+    imageStore(outNormal, pixelCoord, vec4(n.xy * 0.5 + 0.5, 0.0, 1.0));
+}

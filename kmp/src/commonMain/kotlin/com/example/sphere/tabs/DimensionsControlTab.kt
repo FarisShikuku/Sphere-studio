@@ -124,15 +124,33 @@ fun DimensionsControlTab(
                 },
                 label = { Text("Low Slab", fontSize = 11.sp) }
             )
+            FilterChip(
+                selected = (width == 100.0f && height == 100.0f && depth == 100.0f),
+                onClick = {
+                    onWidthChange(100.0f)
+                    onHeightChange(100.0f)
+                    onDepthChange(100.0f)
+                },
+                label = { Text("100m Complex", fontSize = 11.sp) }
+            )
+            FilterChip(
+                selected = (width == 120.0f && height == 25.0f && depth == 120.0f),
+                onClick = {
+                    onWidthChange(120.0f)
+                    onHeightChange(25.0f)
+                    onDepthChange(120.0f)
+                },
+                label = { Text("120m Superfield", fontSize = 11.sp) }
+            )
         }
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Live Dimension Sliders
+        // Live Dimension Sliders (allowing measurements to exceed 100 meters)
         DimensionSlider(
             label = "Width (X-Axis)",
-            value = width.coerceIn(0.4f, 3.2f),
-            range = 0.4f..3.2f,
+            value = width.coerceIn(0.4f, 150.0f),
+            range = 0.4f..150.0f,
             unit = "m",
             accentColor = Color(0xFFEF4444),
             onValueChange = onWidthChange
@@ -140,8 +158,8 @@ fun DimensionsControlTab(
 
         DimensionSlider(
             label = "Height (Y-Axis)",
-            value = height.coerceIn(0.4f, 3.2f),
-            range = 0.4f..3.2f,
+            value = height.coerceIn(0.4f, 150.0f),
+            range = 0.4f..150.0f,
             unit = "m",
             accentColor = Color(0xFF10B981),
             onValueChange = onHeightChange
@@ -149,8 +167,8 @@ fun DimensionsControlTab(
 
         DimensionSlider(
             label = "Depth (Z-Axis)",
-            value = depth.coerceIn(0.4f, 3.2f),
-            range = 0.4f..3.2f,
+            value = depth.coerceIn(0.4f, 150.0f),
+            range = 0.4f..150.0f,
             unit = "m",
             accentColor = Color(0xFF3B82F6),
             onValueChange = onDepthChange
@@ -158,8 +176,8 @@ fun DimensionsControlTab(
 
         DimensionSlider(
             label = "Overall Scale",
-            value = scale.coerceIn(0.5f, 2.0f),
-            range = 0.5f..2.0f,
+            value = scale.coerceIn(0.1f, 10.0f),
+            range = 0.1f..10.0f,
             unit = "x",
             accentColor = Color(0xFFF59E0B),
             onValueChange = onScaleChange

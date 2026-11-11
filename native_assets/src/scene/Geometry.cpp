@@ -2,44 +2,52 @@
 #include <cmath>
 #include <algorithm>
 namespace sphere {
-Mesh GeometryGenerator::GenerateCube(float width, float height, float depth, const Vec3& center) {
+Mesh GeometryGenerator::GenerateCube(float width, float height, float depth, const Vec3& center, float tileScaleMeters) {
     Mesh mesh;
     mesh.name = "Cube";
     mesh.topology = PrimitiveTopology::Triangles;
     float hw = width * 0.5f;
     float hh = height * 0.5f;
     float hd = depth * 0.5f;
+    float tileScale = (tileScaleMeters > 0.01f) ? tileScaleMeters : 1.0f;
+    float uFront = width / tileScale;
+    float vFront = height / tileScale;
+    float uSide  = depth / tileScale;
+    float vSide  = height / tileScale;
+    float uTop   = width / tileScale;
+    float vTop   = depth / tileScale;
+
     // 6 Faces, 4 vertices each = 24 vertices
     // +Z Front
-    mesh.vertices.emplace_back(Vec3{-hw, -hh,  hd} + center, Vec3{0, 0, 1}, Vec4{1, 0, 0, 1}, 0.0f, 1.0f);
-    mesh.vertices.emplace_back(Vec3{ hw, -hh,  hd} + center, Vec3{0, 0, 1}, Vec4{1, 0, 0, 1}, 1.0f, 1.0f);
-    mesh.vertices.emplace_back(Vec3{ hw,  hh,  hd} + center, Vec3{0, 0, 1}, Vec4{1, 0, 0, 1}, 1.0f, 0.0f);
-    mesh.vertices.emplace_back(Vec3{-hw,  hh,  hd} + center, Vec3{0, 0, 1}, Vec4{1, 0, 0, 1}, 0.0f, 0.0f);
+    mesh.vertices.emplace_back(Vec3{-hw, -hh,  hd} + center, Vec3{0, 0, 1}, Vec4{1, 0, 0, 1}, 0.0f,   vFront);
+    mesh.vertices.emplace_back(Vec3{ hw, -hh,  hd} + center, Vec3{0, 0, 1}, Vec4{1, 0, 0, 1}, uFront, vFront);
+    mesh.vertices.emplace_back(Vec3{ hw,  hh,  hd} + center, Vec3{0, 0, 1}, Vec4{1, 0, 0, 1}, uFront, 0.0f);
+    mesh.vertices.emplace_back(Vec3{-hw,  hh,  hd} + center, Vec3{0, 0, 1}, Vec4{1, 0, 0, 1}, 0.0f,   0.0f);
     // -Z Back
-    mesh.vertices.emplace_back(Vec3{ hw, -hh, -hd} + center, Vec3{0, 0, -1}, Vec4{-1, 0, 0, 1}, 0.0f, 1.0f);
-    mesh.vertices.emplace_back(Vec3{-hw, -hh, -hd} + center, Vec3{0, 0, -1}, Vec4{-1, 0, 0, 1}, 1.0f, 1.0f);
-    mesh.vertices.emplace_back(Vec3{-hw,  hh, -hd} + center, Vec3{0, 0, -1}, Vec4{-1, 0, 0, 1}, 1.0f, 0.0f);
-    mesh.vertices.emplace_back(Vec3{ hw,  hh, -hd} + center, Vec3{0, 0, -1}, Vec4{-1, 0, 0, 1}, 0.0f, 0.0f);
+    mesh.vertices.emplace_back(Vec3{ hw, -hh, -hd} + center, Vec3{0, 0, -1}, Vec4{-1, 0, 0, 1}, 0.0f,   vFront);
+    mesh.vertices.emplace_back(Vec3{-hw, -hh, -hd} + center, Vec3{0, 0, -1}, Vec4{-1, 0, 0, 1}, uFront, vFront);
+    mesh.vertices.emplace_back(Vec3{-hw,  hh, -hd} + center, Vec3{0, 0, -1}, Vec4{-1, 0, 0, 1}, uFront, 0.0f);
+    mesh.vertices.emplace_back(Vec3{ hw,  hh, -hd} + center, Vec3{0, 0, -1}, Vec4{-1, 0, 0, 1}, 0.0f,   0.0f);
     // +X Right
-    mesh.vertices.emplace_back(Vec3{ hw, -hh,  hd} + center, Vec3{1, 0, 0}, Vec4{0, 0, -1, 1}, 0.0f, 1.0f);
-    mesh.vertices.emplace_back(Vec3{ hw, -hh, -hd} + center, Vec3{1, 0, 0}, Vec4{0, 0, -1, 1}, 1.0f, 1.0f);
-    mesh.vertices.emplace_back(Vec3{ hw,  hh, -hd} + center, Vec3{1, 0, 0}, Vec4{0, 0, -1, 1}, 1.0f, 0.0f);
-    mesh.vertices.emplace_back(Vec3{ hw,  hh,  hd} + center, Vec3{1, 0, 0}, Vec4{0, 0, -1, 1}, 0.0f, 0.0f);
+    mesh.vertices.emplace_back(Vec3{ hw, -hh,  hd} + center, Vec3{1, 0, 0}, Vec4{0, 0, -1, 1}, 0.0f,  vSide);
+    mesh.vertices.emplace_back(Vec3{ hw, -hh, -hd} + center, Vec3{1, 0, 0}, Vec4{0, 0, -1, 1}, uSide, vSide);
+    mesh.vertices.emplace_back(Vec3{ hw,  hh, -hd} + center, Vec3{1, 0, 0}, Vec4{0, 0, -1, 1}, uSide, 0.0f);
+    mesh.vertices.emplace_back(Vec3{ hw,  hh,  hd} + center, Vec3{1, 0, 0}, Vec4{0, 0, -1, 1}, 0.0f,  0.0f);
     // -X Left
-    mesh.vertices.emplace_back(Vec3{-hw, -hh, -hd} + center, Vec3{-1, 0, 0}, Vec4{0, 0, 1, 1}, 0.0f, 1.0f);
-    mesh.vertices.emplace_back(Vec3{-hw, -hh,  hd} + center, Vec3{-1, 0, 0}, Vec4{0, 0, 1, 1}, 1.0f, 1.0f);
-    mesh.vertices.emplace_back(Vec3{-hw,  hh,  hd} + center, Vec3{-1, 0, 0}, Vec4{0, 0, 1, 1}, 1.0f, 0.0f);
-    mesh.vertices.emplace_back(Vec3{-hw,  hh, -hd} + center, Vec3{-1, 0, 0}, Vec4{0, 0, 1, 1}, 0.0f, 0.0f);
+    mesh.vertices.emplace_back(Vec3{-hw, -hh, -hd} + center, Vec3{-1, 0, 0}, Vec4{0, 0, 1, 1}, 0.0f,  vSide);
+    mesh.vertices.emplace_back(Vec3{-hw, -hh,  hd} + center, Vec3{-1, 0, 0}, Vec4{0, 0, 1, 1}, uSide, vSide);
+    mesh.vertices.emplace_back(Vec3{-hw,  hh,  hd} + center, Vec3{-1, 0, 0}, Vec4{0, 0, 1, 1}, uSide, 0.0f);
+    mesh.vertices.emplace_back(Vec3{-hw,  hh, -hd} + center, Vec3{-1, 0, 0}, Vec4{0, 0, 1, 1}, 0.0f,  0.0f);
     // +Y Top
-    mesh.vertices.emplace_back(Vec3{-hw,  hh,  hd} + center, Vec3{0, 1, 0}, Vec4{1, 0, 0, 1}, 0.0f, 1.0f);
-    mesh.vertices.emplace_back(Vec3{ hw,  hh,  hd} + center, Vec3{0, 1, 0}, Vec4{1, 0, 0, 1}, 1.0f, 1.0f);
-    mesh.vertices.emplace_back(Vec3{ hw,  hh, -hd} + center, Vec3{0, 1, 0}, Vec4{1, 0, 0, 1}, 1.0f, 0.0f);
-    mesh.vertices.emplace_back(Vec3{-hw,  hh, -hd} + center, Vec3{0, 1, 0}, Vec4{1, 0, 0, 1}, 0.0f, 0.0f);
+    mesh.vertices.emplace_back(Vec3{-hw,  hh,  hd} + center, Vec3{0, 1, 0}, Vec4{1, 0, 0, 1}, 0.0f,  vTop);
+    mesh.vertices.emplace_back(Vec3{ hw,  hh,  hd} + center, Vec3{0, 1, 0}, Vec4{1, 0, 0, 1}, uTop,  vTop);
+    mesh.vertices.emplace_back(Vec3{ hw,  hh, -hd} + center, Vec3{0, 1, 0}, Vec4{1, 0, 0, 1}, uTop,  0.0f);
+    mesh.vertices.emplace_back(Vec3{-hw,  hh, -hd} + center, Vec3{0, 1, 0}, Vec4{1, 0, 0, 1}, 0.0f,  0.0f);
     // -Y Bottom
-    mesh.vertices.emplace_back(Vec3{-hw, -hh, -hd} + center, Vec3{0, -1, 0}, Vec4{1, 0, 0, 1}, 0.0f, 1.0f);
-    mesh.vertices.emplace_back(Vec3{ hw, -hh, -hd} + center, Vec3{0, -1, 0}, Vec4{1, 0, 0, 1}, 1.0f, 1.0f);
-    mesh.vertices.emplace_back(Vec3{ hw, -hh,  hd} + center, Vec3{0, -1, 0}, Vec4{1, 0, 0, 1}, 1.0f, 0.0f);
-    mesh.vertices.emplace_back(Vec3{-hw, -hh,  hd} + center, Vec3{0, -1, 0}, Vec4{1, 0, 0, 1}, 0.0f, 0.0f);
+    mesh.vertices.emplace_back(Vec3{-hw, -hh, -hd} + center, Vec3{0, -1, 0}, Vec4{1, 0, 0, 1}, 0.0f,  vTop);
+    mesh.vertices.emplace_back(Vec3{ hw, -hh, -hd} + center, Vec3{0, -1, 0}, Vec4{1, 0, 0, 1}, uTop,  vTop);
+    mesh.vertices.emplace_back(Vec3{ hw, -hh,  hd} + center, Vec3{0, -1, 0}, Vec4{1, 0, 0, 1}, uTop,  0.0f);
+    mesh.vertices.emplace_back(Vec3{-hw, -hh,  hd} + center, Vec3{0, -1, 0}, Vec4{1, 0, 0, 1}, 0.0f,  0.0f);
     // Indices for each face
     for (uint32_t f = 0; f < 6; ++f) {
         uint32_t base = f * 4;
@@ -79,12 +87,13 @@ Mesh GeometryGenerator::GeneratePlane(float width, float length, int segmentsX, 
     float hl = length * 0.5f;
     float dx = width / static_cast<float>(segmentsX);
     float dz = length / static_cast<float>(segmentsZ);
+    // UV scale tiles across physical metric measurement (u = width * uvScale, v = length * uvScale)
     for (int z = 0; z <= segmentsZ; ++z) {
         float pz = -hl + z * dz;
-        float v = (static_cast<float>(z) / static_cast<float>(segmentsZ)) * uvScale;
+        float v = (static_cast<float>(z) / static_cast<float>(segmentsZ)) * (length * uvScale);
         for (int x = 0; x <= segmentsX; ++x) {
             float px = -hw + x * dx;
-            float u = (static_cast<float>(x) / static_cast<float>(segmentsX)) * uvScale;
+            float u = (static_cast<float>(x) / static_cast<float>(segmentsX)) * (width * uvScale);
             mesh.vertices.emplace_back(
                 Vec3{px, 0.0f, pz},
                 Vec3{0.0f, 1.0f, 0.0f},
@@ -115,8 +124,9 @@ Mesh GeometryGenerator::GenerateStagePlatform(float width, float length, float h
     Mesh platform;
     platform.name = "VulkanStagePlatform";
     platform.topology = PrimitiveTopology::Triangles;
-    // Top surface plane
-    Mesh topPlane = GeneratePlane(width, length, 4, 4, 1.0f);
+    // Top surface plane: uvScale maps meters 1:1 so PBR materials tile proportionally with real dimensions
+    // e.g. 1m with 4 tiles = 4 tiles/m; 4m x 4m has 16x the tiles (4m * 2 = 8 tiles wide x 8 tiles deep = 64 tiles, or 2x2 = 4 tiles/m -> 4m = 16 tiles)
+    Mesh topPlane = GeneratePlane(width, length, std::max(4, static_cast<int>(width * 0.5f)), std::max(4, static_cast<int>(length * 0.5f)), width);
     for (auto& v : topPlane.vertices) {
         v.position.y = 0.0f;
         v.color = Vec4{0.15f, 0.18f, 0.22f, 1.0f};

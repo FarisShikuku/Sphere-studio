@@ -1,0 +1,32 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+
+#include "include/raw_common.glsl"
+
+layout(binding = 0, rgba8) uniform writeonly image2D outORM;
+
+layout(push_constant) uniform RawOrmParams {
+    float roughness;
+    float metallic;
+    uint formType;
+} uOrm;
+
+void main() {
+    ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 imgSize = imageSize(outORM);
+    if (pixelCoord.x >= imgSize.x || pixelCoord.y >= imgSize.y) return;
+
+    vec2 uv = vec2(pixelCoord) / vec2(imgSize);
+
+    float ao = 1.0;
+    float rough = uOrm.roughness;
+    float metal = uOrm.metallic;
+
+    if (uOrm.formType == 0u) {
+        float furrows = TreeBarkFurrows(uv);
+        ao = mix(0.4, 1.0, furrows);
+        rough = mix(0.82, 0.96, furrows);
+    }
+
+    imageStore(outORM, pixelCoord, vec4(ao, rough, metal, 1.0));
+}

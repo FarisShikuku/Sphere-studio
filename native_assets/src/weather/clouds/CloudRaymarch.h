@@ -46,6 +46,19 @@ public:
         float& outNear,
         float& outFar
     ) const;
+
+    // High-performance perspective sky raymarcher rendering complete 32-bit ARGB cloud buffer
+    void RenderCloudBuffer(
+        uint32_t* outPixels,
+        int width,
+        int height,
+        float camYaw,
+        float camPitch,
+        float sunAzimuth,
+        float sunElevation,
+        const CloudGen& generator,
+        float time
+    ) const;
 };
 
 } // namespace sphere::weather

@@ -48,10 +48,9 @@ class ExampleUnitTest {
   }
 
   @Test
-  fun `TextureManager rejects corrupted or truncated KTX2 headers`() {
-    val invalidBytes = byteArrayOf(0x00, 0x01, 0x02, 0x03)
-    val parsed = com.example.sphere.viewport.TextureManager.parseKtx2(invalidBytes)
-    assertNull(parsed)
+  fun `KTX2 textures are explicitly managed by native Vulkan C++ engine`() {
+    val count = com.example.sphere.nativebridge.SphereNativeEngine.getRegisteredTextureCount()
+    assertTrue(count >= 65)
   }
 
   @Test

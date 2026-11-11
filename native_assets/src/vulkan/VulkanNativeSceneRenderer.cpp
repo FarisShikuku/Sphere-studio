@@ -38,8 +38,8 @@ bool VulkanNativeSceneRenderer::InitializeSurface(void* nativeWindowHandle, uint
         LOGE("Failed to initialize: ANativeWindow is null");
         return false;
     }
-    // Set buffer geometry to match target resolution
-    ANativeWindow_setBuffersGeometry(m_NativeWindow, width, height, WINDOW_FORMAT_RGBA_8888);
+    // Note: ANativeWindow_setBuffersGeometry is avoided here because vkCreateAndroidSurfaceKHR
+    // and vkCreateSwapchainKHR configure buffer extent/formats directly, avoiding legacy gralloc rendernode queries.
 #endif
 
     if (!CreateInstance()) return false;
@@ -53,7 +53,7 @@ bool VulkanNativeSceneRenderer::InitializeSurface(void* nativeWindowHandle, uint
     if (!CreateSyncObjects()) return false;
 
     m_Initialized = true;
-    LOGI("VulkanNativeSceneRenderer: Successfully initialized native Vulkan 1.3 swapchain on ANativeWindow!");
+    LOGI("VulkanNativeSceneRenderer: Successfully initialized native Vulkan swapchain on ANativeWindow!");
     return true;
 }
 
@@ -65,8 +65,8 @@ bool VulkanNativeSceneRenderer::CreateInstance() {
     appInfo.pApplicationName = "Sphere Studio Vulkan Scene";
     appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
     appInfo.pEngineName = "SaschaWillemsVulkanEngine";
-    appInfo.engineVersion = VK_MAKE_VERSION(1, 3, 0);
-    appInfo.apiVersion = VK_API_VERSION_1_3;
+    appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+    appInfo.apiVersion = VK_API_VERSION_1_1; // Broad compatibility with physical devices and Android emulators
 
     std::vector<const char*> extensions = {
         VK_KHR_SURFACE_EXTENSION_NAME
@@ -94,8 +94,8 @@ bool VulkanNativeSceneRenderer::CreateInstance() {
 bool VulkanNativeSceneRenderer::SelectPhysicalDevice() {
     if (!m_Instance) return false;
     uint32_t deviceCount = 0;
-    vkEnumeratePhysicalDevices(m_Instance, &deviceCount, nullptr);
-    if (deviceCount == 0) return false;
+    VkResult res = vkEnumeratePhysicalDevices(m_Instance, &deviceCount, nullptr);
+    if (res != VK_SUCCESS || deviceCount == 0) return false;
 
     std::vector<VkPhysicalDevice> devices(deviceCount);
     vkEnumeratePhysicalDevices(m_Instance, &deviceCount, devices.data());
@@ -106,10 +106,24 @@ bool VulkanNativeSceneRenderer::SelectPhysicalDevice() {
 bool VulkanNativeSceneRenderer::CreateLogicalDevice() {
     if (!m_PhysicalDevice) return false;
 
+    // Dynamically query queue family with graphics capability
+    uint32_t queueFamilyCount = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(m_PhysicalDevice, &queueFamilyCount, nullptr);
+    std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(m_PhysicalDevice, &queueFamilyCount, queueFamilies.data());
+
+    uint32_t graphicsFamilyIndex = 0;
+    for (uint32_t i = 0; i < queueFamilyCount; ++i) {
+        if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+            graphicsFamilyIndex = i;
+            break;
+        }
+    }
+
     float queuePriority = 1.0f;
     VkDeviceQueueCreateInfo queueCreateInfo{};
     queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queueCreateInfo.queueFamilyIndex = 0;
+    queueCreateInfo.queueFamilyIndex = graphicsFamilyIndex;
     queueCreateInfo.queueCount = 1;
     queueCreateInfo.pQueuePriorities = &queuePriority;
 
@@ -127,7 +141,7 @@ bool VulkanNativeSceneRenderer::CreateLogicalDevice() {
     VkResult res = vkCreateDevice(m_PhysicalDevice, &createInfo, nullptr, &m_LogicalDevice);
     if (res != VK_SUCCESS) return false;
 
-    vkGetDeviceQueue(m_LogicalDevice, 0, 0, &m_GraphicsQueue);
+    vkGetDeviceQueue(m_LogicalDevice, graphicsFamilyIndex, 0, &m_GraphicsQueue);
     m_PresentQueue = m_GraphicsQueue;
     return true;
 }

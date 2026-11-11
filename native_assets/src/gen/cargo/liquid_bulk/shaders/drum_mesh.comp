@@ -1,0 +1,54 @@
+#version 450
+layout(local_size_x = 64) in;
+
+struct Vertex {
+    vec3 position;
+    vec3 normal;
+    vec4 tangent;
+    vec2 uv;
+    vec4 color;
+};
+
+layout(std430, binding = 0) buffer OutputDrumMesh {
+    Vertex vertices[];
+};
+
+layout(push_constant) uniform DrumMeshParams {
+    float diameter;
+    float height;
+    uint radialSegs;
+    uint heightSegs;
+    uint totalVertices;
+} uGeom;
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= uGeom.totalVertices) return;
+
+    uint ix = idx % (uGeom.radialSegs + 1u);
+    uint iy = idx / (uGeom.radialSegs + 1u);
+
+    float u = float(ix) / float(uGeom.radialSegs);
+    float v = float(iy) / float(uGeom.heightSegs);
+
+    float angle = u * 6.2831853;
+    float r = uGeom.diameter * 0.5;
+    float y = -uGeom.height * 0.5 + v * uGeom.height;
+
+    // Rolling hoop ridges at v = 0.35 and 0.65
+    float hoop1 = exp(-pow((v - 0.35) * 40.0, 2.0)) * 0.016;
+    float hoop2 = exp(-pow((v - 0.65) * 40.0, 2.0)) * 0.016;
+    r += (hoop1 + hoop2);
+
+    vec3 pos = vec3(cos(angle) * r, y, sin(angle) * r);
+    vec3 norm = normalize(vec3(cos(angle), 0.0, sin(angle)));
+
+    Vertex vert;
+    vert.position = pos;
+    vert.normal = norm;
+    vert.tangent = vec4(-sin(angle), 0.0, cos(angle), 1.0);
+    vert.uv = vec2(u, v);
+    vert.color = vec4(1.0);
+
+    vertices[idx] = vert;
+}

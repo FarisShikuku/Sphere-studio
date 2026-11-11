@@ -1,0 +1,38 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+
+#include "include/perishable_common.glsl"
+
+layout(binding = 0, rgba8) uniform writeonly image2D outAlbedo;
+
+layout(push_constant) uniform PerishAlbedoParams {
+    vec4 primaryColor;
+    vec4 secondaryColor;
+    uint type; // 0=Tomato, 1=Potato, 2=Fish, 3=Meat
+    uint seed;
+} uPerish;
+
+void main() {
+    ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 imgSize = imageSize(outAlbedo);
+    if (pixelCoord.x >= imgSize.x || pixelCoord.y >= imgSize.y) return;
+
+    vec2 uv = vec2(pixelCoord) / vec2(imgSize);
+    vec3 col = uPerish.primaryColor.rgb;
+
+    if (uPerish.type == 0u) {
+        // Tomato smooth sheen with subtle color gradient
+        float gradient = length(uv - vec2(0.5));
+        col = mix(uPerish.primaryColor.rgb, uPerish.primaryColor.rgb * 0.75, gradient);
+    } else if (uPerish.type == 2u) {
+        // Fresh salmon with white crushed ice flakes
+        float ice = step(0.65, PerishNoise(uv * 48.0));
+        col = mix(uPerish.primaryColor.rgb, vec3(0.95, 0.98, 1.0), ice * 0.7);
+    } else if (uPerish.type == 1u) {
+        // Russet potato with earthy soil spots
+        float dirt = PerishNoise(uv * 24.0);
+        col = mix(uPerish.primaryColor.rgb, vec3(0.35, 0.25, 0.15), dirt * 0.4);
+    }
+
+    imageStore(outAlbedo, pixelCoord, vec4(col, 1.0));
+}

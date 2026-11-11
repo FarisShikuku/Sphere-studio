@@ -1,0 +1,39 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+
+#include "include/specialty_common.glsl"
+
+layout(binding = 0, rgba8) uniform writeonly image2D outAlbedo;
+
+layout(push_constant) uniform SpecialtyAlbedoParams {
+    vec4 primaryColor;
+    vec4 secondaryColor;
+    uint categoryType; // 0=Cement, 1=Pipe, 2=Brick, 3=Tyre
+    uint seed;
+} uSpec;
+
+void main() {
+    ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 imgSize = imageSize(outAlbedo);
+    if (pixelCoord.x >= imgSize.x || pixelCoord.y >= imgSize.y) return;
+
+    vec2 uv = vec2(pixelCoord) / vec2(imgSize);
+    vec3 col = uSpec.primaryColor.rgb;
+
+    if (uSpec.categoryType == 3u) {
+        // Tyre tread black vulcanized rubber
+        float tread = TyreTreadPattern(uv);
+        col = mix(vec3(0.08), vec3(0.18), tread);
+    } else if (uSpec.categoryType == 2u) {
+        // Palletized bricks with mortar lines and plastic shrink-wrap sheen
+        vec2 grid = fract(uv * vec2(8.0, 16.0));
+        float mortar = step(0.06, grid.x) * step(0.06, grid.y);
+        col = mix(vec3(0.78, 0.75, 0.72), uSpec.primaryColor.rgb, mortar);
+    } else if (uSpec.categoryType == 1u) {
+        // Steel pipe with mill scale and stencil tracking number
+        float millScale = SpecialtyNoise(uv * 32.0);
+        col = mix(uSpec.primaryColor.rgb * 0.9, uSpec.primaryColor.rgb * 1.1, millScale);
+    }
+
+    imageStore(outAlbedo, pixelCoord, vec4(col, 1.0));
+}

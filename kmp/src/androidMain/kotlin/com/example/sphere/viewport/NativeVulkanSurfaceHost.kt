@@ -58,50 +58,66 @@ fun NativeVulkanSurfaceHost(
             SurfaceView(context).apply {
                 holder.addCallback(object : SurfaceHolder.Callback {
                     override fun surfaceCreated(surfaceHolder: SurfaceHolder) {
-                        val w = width.coerceAtLeast(640)
-                        val h = height.coerceAtLeast(480)
-                        val initialized = SphereNativeEngine.createVulkanSurface(surfaceHolder.surface, w, h)
-                        if (initialized) {
-                            SphereNativeEngine.renderVulkanFrame(
-                                lightPosX, lightPosY, lightPosZ,
-                                intensity, colorR, colorG, colorB,
-                                roughness, metallic,
-                                objectWidth, objectHeight, objectDepth,
-                                stageMode
-                            )
-                            isSurfaceReady = true
+                        try {
+                            val w = width.coerceAtLeast(640)
+                            val h = height.coerceAtLeast(480)
+                            val initialized = SphereNativeEngine.createVulkanSurface(surfaceHolder.surface, w, h)
+                            if (initialized) {
+                                SphereNativeEngine.renderVulkanFrame(
+                                    lightPosX, lightPosY, lightPosZ,
+                                    intensity, colorR, colorG, colorB,
+                                    roughness, metallic,
+                                    objectWidth, objectHeight, objectDepth,
+                                    stageMode
+                                )
+                                isSurfaceReady = true
+                            }
+                        } catch (e: Throwable) {
+                            android.util.Log.w("VulkanSurfaceHost", "Native Vulkan surface creation handled: ${e.message}")
                         }
                     }
 
                     override fun surfaceChanged(surfaceHolder: SurfaceHolder, format: Int, w: Int, h: Int) {
-                        SphereNativeEngine.resizeVulkanSurface(w, h)
-                        if (SphereNativeEngine.isVulkanInitialized()) {
-                            SphereNativeEngine.renderVulkanFrame(
-                                lightPosX, lightPosY, lightPosZ,
-                                intensity, colorR, colorG, colorB,
-                                roughness, metallic,
-                                objectWidth, objectHeight, objectDepth,
-                                stageMode
-                            )
+                        try {
+                            SphereNativeEngine.resizeVulkanSurface(w, h)
+                            if (SphereNativeEngine.isVulkanInitialized()) {
+                                SphereNativeEngine.renderVulkanFrame(
+                                    lightPosX, lightPosY, lightPosZ,
+                                    intensity, colorR, colorG, colorB,
+                                    roughness, metallic,
+                                    objectWidth, objectHeight, objectDepth,
+                                    stageMode
+                                )
+                            }
+                        } catch (e: Throwable) {
+                            android.util.Log.w("VulkanSurfaceHost", "Native Vulkan resize handled: ${e.message}")
                         }
                     }
 
                     override fun surfaceDestroyed(surfaceHolder: SurfaceHolder) {
                         isSurfaceReady = false
-                        SphereNativeEngine.destroyVulkanSurface()
+                        try {
+                            SphereNativeEngine.destroyVulkanSurface()
+                        } catch (e: Throwable) {
+                            android.util.Log.w("VulkanSurfaceHost", "Native Vulkan destroy handled: ${e.message}")
+                        }
                     }
                 })
             }
         },
         update = {
-            if (SphereNativeEngine.isVulkanInitialized()) {
-                SphereNativeEngine.renderVulkanFrame(
-                    lightPosX, lightPosY, lightPosZ,
-                    intensity, colorR, colorG, colorB,
-                    roughness, metallic,
-                    objectWidth, objectHeight, objectDepth,
-                    stageMode
-                )
+            try {
+                if (SphereNativeEngine.isVulkanInitialized()) {
+                    SphereNativeEngine.renderVulkanFrame(
+                        lightPosX, lightPosY, lightPosZ,
+                        intensity, colorR, colorG, colorB,
+                        roughness, metallic,
+                        objectWidth, objectHeight, objectDepth,
+                        stageMode
+                    )
+                }
+            } catch (e: Throwable) {
+                // Safe recovery
             }
         }
     )

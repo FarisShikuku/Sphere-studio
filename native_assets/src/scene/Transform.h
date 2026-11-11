@@ -55,6 +55,8 @@ struct Vec4 {
     constexpr Vec4(float _x, float _y, float _z, float _w = 1.0f) : x(_x), y(_y), z(_z), w(_w) {}
     constexpr Vec4(const Vec3& v, float _w = 1.0f) : x(v.x), y(v.y), z(v.z), w(_w) {}
     Vec3 ToVec3() const { return {x, y, z}; }
+    Vec4 operator*(float s) const { return {x * s, y * s, z * s, w}; }
+    Vec4 operator+(const Vec4& o) const { return {x + o.x, y + o.y, z + o.z, w}; }
 };
 struct Quat {
     float x = 0.0f;

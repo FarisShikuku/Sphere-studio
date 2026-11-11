@@ -1,0 +1,54 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+
+#include "include/boxes_common.glsl"
+
+layout(binding = 0, rgba8) uniform writeonly image2D outAlbedo;
+
+layout(push_constant) uniform BoxAlbedoParams {
+    vec4 baseColor;
+    vec4 labelColor;
+    uint constructionType; // 0=Cardboard, 1=Wood, 2=Plastic, 3=Pallet
+    float wearFactor;
+    uint seed;
+} uBox;
+
+void main() {
+    ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 imgSize = imageSize(outAlbedo);
+    if (pixelCoord.x >= imgSize.x || pixelCoord.y >= imgSize.y) return;
+
+    vec2 uv = vec2(pixelCoord) / vec2(imgSize);
+    vec3 col = uBox.baseColor.rgb;
+
+    if (uBox.constructionType == 0u) {
+        // Cardboard fibrous texture + seam tape
+        float paperFiber = BoxNoise(uv * 128.0) * 0.08;
+        col = uBox.baseColor.rgb * (0.94 + paperFiber);
+        // Center packing tape stripe
+        if (abs(uv.x - 0.5) < 0.04) {
+            col = mix(col, vec3(0.68, 0.52, 0.32), 0.75); // Brown packing tape
+        }
+    } else if (uBox.constructionType == 1u || uBox.constructionType == 3u) {
+        // Pine wood planks with gaps
+        float grain = WoodGrain(uv, 45.0);
+        col = mix(uBox.baseColor.rgb * 0.85, uBox.baseColor.rgb * 1.15, grain);
+        // Slat divisions
+        float slat = fract(uv.y * 6.0);
+        if (slat < 0.04) {
+            col *= 0.3; // dark gap between slats
+        }
+    } else {
+        // Molded plastic smooth finish with injection mold flow lines
+        float moldFlow = BoxNoise(uv * 16.0) * 0.03;
+        col = uBox.baseColor.rgb * (0.98 + moldFlow);
+    }
+
+    // Shipping barcode / Stencil label overlay
+    if (uv.x > 0.65 && uv.x < 0.90 && uv.y > 0.65 && uv.y < 0.85) {
+        float barcode = step(0.5, fract(uv.x * 60.0));
+        col = mix(col, vec3(0.08), barcode * 0.9);
+    }
+
+    imageStore(outAlbedo, pixelCoord, vec4(col, 1.0));
+}

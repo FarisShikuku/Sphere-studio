@@ -280,3 +280,17 @@ init {
 
 - **On Physical Vulkan Hardware**: The full C++20 engine executes on the GPU via `NativeVulkanSurfaceHost` at 120 FPS.
 - **In Headless Robolectric JVM Tests**: The bridge falls back to mathematical evaluations, keeping all 33 unit tests 100% green without requiring dedicated GPU pass-through.
+
+---
+
+## 8. Android Emulator & Rendernode Diagnostics (`/dev/dri`)
+
+In virtualized or cloud streaming emulator instances without direct Linux Direct Rendering Manager (DRM) pass-through nodes, the Android platform graphics allocator may log:
+```
+E/platform: Failed to open rendernode: No such file or directory
+```
+### Resolution & Mitigation:
+1. **Direct Swapchain Buffer Extent**: Modern Vulkan WSI (`vkCreateAndroidSurfaceKHR` via `VK_KHR_android_surface`) binds directly to the underlying `ANativeWindow*`. Explicit legacy calls to `ANativeWindow_setBuffersGeometry` were removed from `VulkanNativeSceneRenderer::InitializeSurface` because they trigger legacy gralloc buffer allocations against `/dev/dri/renderD128`.
+2. **Vulkan API Level Compatibility**: Configured `appInfo.apiVersion = VK_API_VERSION_1_1` in `CreateInstance()`, ensuring maximum backward compatibility with all Android Vulkan ICDs and emulators.
+3. **Dynamic Queue Family Discovery**: Queue family creation now inspects `vkGetPhysicalDeviceQueueFamilyProperties` to dynamically select the graphics-capable queue family.
+4. **Lifecycle Exception Safety**: `NativeVulkanSurfaceHost.kt` wraps all surface creation, resize, and destruction calls in exception guards to prevent unhandled state disruptions.

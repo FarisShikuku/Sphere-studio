@@ -283,35 +283,7 @@ fun SkyViewportCanvas(
             }
         }
 
-        // 6. High-Altitude Cirrus Ice Crystal Streaks
-        if (enableCirrus && cirrusCoverage > 0.05f) {
-            val cirrusAlpha = (cirrusCoverage * 0.45f).coerceIn(0.08f, 0.60f)
-            val cirrusDrift = (timeSeconds * 6.0f) % (w * 1.5f)
-
-            clipRect(left = 0f, top = 0f, right = w, bottom = horizonY * 0.75f) {
-                for (c in 0..6) {
-                    val baseY = horizonY * (0.06f + c * 0.065f)
-                    val curvePath = Path().apply {
-                        val startX = -w * 0.2f + (c * w * 0.28f + cirrusDrift) % (w * 1.4f)
-                        moveTo(startX, baseY)
-                        quadraticTo(
-                            startX + w * 0.35f,
-                            baseY - 18f + sin(timeSeconds * 0.5f + c) * 6f,
-                            startX + w * 0.70f,
-                            baseY + 14f
-                        )
-                    }
-
-                    drawPath(
-                        path = curvePath,
-                        color = Color.White.copy(alpha = cirrusAlpha * (0.35f + (c % 3) * 0.2f)),
-                        style = Stroke(width = 10f + (c % 4) * 6f, cap = StrokeCap.Round)
-                    )
-                }
-            }
-        }
-
-        // 7. AmanSachan1/Meteoros Volumetric Raymarched Cloudscape Render
+        // 6. Volumetric Raymarched Cloudscape Render (C++ / Vulkan raymarcher)
         if (cloudImage != null && cloudCoverage > 0.02f) {
             val cloudAlpha = (0.95f * cloudDensity).coerceIn(0.15f, 1.0f)
             drawImage(
@@ -322,6 +294,7 @@ fun SkyViewportCanvas(
                 filterQuality = FilterQuality.Medium
             )
         }
+
 
         // 8. Solar Disk & Corona Bloom (Layered over clouds for realistic extinction)
         if (sunCenter != null && sunCenter.y < horizonY + 30f) {
@@ -458,11 +431,46 @@ fun SkyViewportCanvas(
             val normLight = Vec3D(lightX, lightY, lightZ)
             val sunLightTint = if (sunElevation < 20f) Color(0xFFFDBA74) else Color.White
 
-            // Ground perspective grid for horizon depth cue
+            val halfW = (stageWidth * 0.5f).coerceIn(2.0f, 25.0f)
+            val halfL = (stageLength * 0.5f).coerceIn(2.0f, 25.0f)
+
+            // Solid Stage Platform (eliminates floating hollow wireframe look)
+            if (surfaceMode != SurfaceSceneMode.NONE) {
+                val p0 = projectStagePoint(Vec3D(-halfW, 0f, -halfL))
+                val p1 = projectStagePoint(Vec3D( halfW, 0f, -halfL))
+                val p2 = projectStagePoint(Vec3D( halfW, 0f,  halfL))
+                val p3 = projectStagePoint(Vec3D(-halfW, 0f,  halfL))
+
+                if (p0.depth > 0.05f && p1.depth > 0.05f && p2.depth > 0.05f && p3.depth > 0.05f) {
+                    val platformPath = Path().apply {
+                        moveTo(p0.x, p0.y)
+                        lineTo(p1.x, p1.y)
+                        lineTo(p2.x, p2.y)
+                        lineTo(p3.x, p3.y)
+                        close()
+                    }
+                    val baseCol = when (surfaceMode) {
+                        SurfaceSceneMode.WATER_BODY -> Color(0xFF1B3A5A)
+                        SurfaceSceneMode.BROKEN_SLAB -> Color(0xFF283344)
+                        SurfaceSceneMode.ENDLESS -> Color(0xFF111726)
+                        else -> Color(0xFF1E2838)
+                    }
+                    val sunLit = (0.45f + 0.55f * normLight.y.coerceIn(0f, 1f)).coerceIn(0.2f, 1f)
+                    drawPath(
+                        path = platformPath,
+                        color = Color(
+                            red = (baseCol.red * sunLit * sunLightTint.red).coerceIn(0f, 1f),
+                            green = (baseCol.green * sunLit * sunLightTint.green).coerceIn(0f, 1f),
+                            blue = (baseCol.blue * sunLit * sunLightTint.blue).coerceIn(0f, 1f),
+                            alpha = 0.96f
+                        )
+                    )
+                }
+            }
+
+            // Optional metric perspective grid lines (strictly when showStageGrid is explicitly true)
             if (showStageGrid && surfaceMode != SurfaceSceneMode.NONE) {
-                val gridColor = Color(0x3394A3B8)
-                val halfW = (stageWidth * 0.5f).coerceIn(2.0f, 25.0f)
-                val halfL = (stageLength * 0.5f).coerceIn(2.0f, 25.0f)
+                val gridColor = Color(0x2838BDF8)
                 val steps = 8
                 val stepX = (halfW * 2f) / steps
                 val stepZ = (halfL * 2f) / steps
@@ -476,7 +484,7 @@ fun SkyViewportCanvas(
                             color = gridColor,
                             start = Offset(pA.x, pA.y),
                             end = Offset(pB.x, pB.y),
-                            strokeWidth = 1.2f
+                            strokeWidth = 1.0f
                         )
                     }
                 }
@@ -489,7 +497,7 @@ fun SkyViewportCanvas(
                             color = gridColor,
                             start = Offset(pA.x, pA.y),
                             end = Offset(pB.x, pB.y),
-                            strokeWidth = 1.2f
+                            strokeWidth = 1.0f
                         )
                     }
                 }
@@ -501,7 +509,8 @@ fun SkyViewportCanvas(
                     projectPoint = ::projectStagePoint,
                     normLight = normLight,
                     sunLightTint = sunLightTint,
-                    sunElevation = sunElevation
+                    sunElevation = sunElevation,
+                    showWireframe = showStageGrid
                 )
             }
         }
@@ -675,7 +684,8 @@ private fun DrawScope.drawStageCalibrationItem(
     projectPoint: (Vec3D) -> Point2D,
     normLight: Vec3D,
     sunLightTint: Color,
-    sunElevation: Float
+    sunElevation: Float,
+    showWireframe: Boolean = false
 ) {
     val s = 0.55f
     val yBase = 0f
@@ -726,16 +736,18 @@ private fun DrawScope.drawStageCalibrationItem(
 
         drawPath(path = path, color = faceColor)
 
-        // Draw calibration wire grid on faces
-        val wireColor = Color.White.copy(alpha = 0.30f)
-        val mid01 = Offset((quad.p0.x + quad.p1.x) / 2f, (quad.p0.y + quad.p1.y) / 2f)
-        val mid23 = Offset((quad.p2.x + quad.p3.x) / 2f, (quad.p2.y + quad.p3.y) / 2f)
-        val mid12 = Offset((quad.p1.x + quad.p2.x) / 2f, (quad.p1.y + quad.p2.y) / 2f)
-        val mid30 = Offset((quad.p3.x + quad.p0.x) / 2f, (quad.p3.y + quad.p0.y) / 2f)
-        drawLine(wireColor, mid01, mid23, strokeWidth = 1.0f)
-        drawLine(wireColor, mid12, mid30, strokeWidth = 1.0f)
-
-        // Face outline
-        drawPath(path = path, color = Color.Black.copy(alpha = 0.4f), style = Stroke(width = 1.2f))
+        // Draw wire grid only when showWireframe is explicitly enabled
+        if (showWireframe) {
+            val wireColor = Color.White.copy(alpha = 0.20f)
+            val mid01 = Offset((quad.p0.x + quad.p1.x) / 2f, (quad.p0.y + quad.p1.y) / 2f)
+            val mid23 = Offset((quad.p2.x + quad.p3.x) / 2f, (quad.p2.y + quad.p3.y) / 2f)
+            val mid12 = Offset((quad.p1.x + quad.p2.x) / 2f, (quad.p1.y + quad.p2.y) / 2f)
+            val mid30 = Offset((quad.p3.x + quad.p0.x) / 2f, (quad.p3.y + quad.p0.y) / 2f)
+            drawLine(wireColor, mid01, mid23, strokeWidth = 1.0f)
+            drawLine(wireColor, mid12, mid30, strokeWidth = 1.0f)
+            drawPath(path = path, color = Color.Black.copy(alpha = 0.25f), style = Stroke(width = 1.0f))
+        }
     }
 }
+
+

@@ -48,6 +48,10 @@ object SphereNativeEngine {
         return if (isLibraryLoaded) nativeGetRegisteredTextureCount() else 65
     }
 
+    fun getTextureKtx2Path(index: Int): String {
+        return if (isLibraryLoaded) nativeGetTextureKtx2Path(index) else ""
+    }
+
     // -----------------------------------------------------------------------
     // Physical Optics & Lighting Calculations (C++20 GGX / Cook-Torrance)
     // -----------------------------------------------------------------------
@@ -147,6 +151,40 @@ object SphereNativeEngine {
     }
 
     // -----------------------------------------------------------------------
+    // Native C++ / Vulkan Volumetric Cloud Raymarcher
+    // -----------------------------------------------------------------------
+
+    fun renderVolumetricClouds(
+        outPixels: IntArray,
+        width: Int,
+        height: Int,
+        camYaw: Float,
+        camPitch: Float,
+        sunAzimuth: Float,
+        sunElevation: Float,
+        cloudType: Int,
+        coverage: Float,
+        density: Float,
+        time: Float
+    ): Boolean {
+        return if (isLibraryLoaded) {
+            try {
+                nativeRenderVolumetricClouds(
+                    outPixels, width, height,
+                    camYaw, camPitch,
+                    sunAzimuth, sunElevation,
+                    cloudType, coverage, density,
+                    time
+                )
+            } catch (e: Throwable) {
+                false
+            }
+        } else {
+            false
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // External Native Function Declarations
     // -----------------------------------------------------------------------
 
@@ -156,6 +194,7 @@ object SphereNativeEngine {
     private external fun nativeGetTextureId(index: Int): String
     private external fun nativeGetTextureDisplayName(index: Int): String
     private external fun nativeGetTextureBindlessSlot(index: Int): Int
+    private external fun nativeGetTextureKtx2Path(index: Int): String
     private external fun nativeEvaluateCookTorrance(
         roughness: Float, metallic: Float, NdotL: Float, NdotV: Float, NdotH: Float, VdotH: Float
     ): Float
@@ -177,4 +216,60 @@ object SphereNativeEngine {
         stageMode: Int
     )
     private external fun nativeIsVulkanInitialized(): Boolean
+
+    private external fun nativeRenderVolumetricClouds(
+        outPixels: IntArray,
+        width: Int,
+        height: Int,
+        camYaw: Float,
+        camPitch: Float,
+        sunAzimuth: Float,
+        sunElevation: Float,
+        cloudType: Int,
+        coverage: Float,
+        density: Float,
+        time: Float
+    ): Boolean
+
+    // -----------------------------------------------------------------------
+    // Procedural Cargo & Commodities Registry Bridge
+    // -----------------------------------------------------------------------
+
+    fun getCargoCommoditiesCount(): Int {
+        return if (isLibraryLoaded) nativeGetCargoCommoditiesCount() else 35
+    }
+
+    fun getCargoName(id: Int): String {
+        return if (isLibraryLoaded) nativeGetCargoName(id) else "Sugar Bag 50kg"
+    }
+
+    fun getCargoCategory(id: Int): String {
+        return if (isLibraryLoaded) nativeGetCargoCategory(id) else "Bagged Goods"
+    }
+
+    fun getCargoWeight(id: Int): Float {
+        return if (isLibraryLoaded) nativeGetCargoWeight(id) else 50.0f
+    }
+
+    fun getCargoVolume(id: Int): Float {
+        return if (isLibraryLoaded) nativeGetCargoVolume(id) else 0.08f
+    }
+
+    fun getCargoDimensions(id: Int): FloatArray {
+        return if (isLibraryLoaded) nativeGetCargoDimensions(id) ?: floatArrayOf(0.8f, 0.5f, 0.2f) else floatArrayOf(0.8f, 0.5f, 0.2f)
+    }
+
+    fun requestCargoMeshStats(id: Int, lod: Int = 0): IntArray {
+        return if (isLibraryLoaded) nativeRequestCargoMeshStats(id, lod) ?: intArrayOf(500, 800) else intArrayOf(500, 800)
+    }
+
+    private external fun nativeGetCargoCommoditiesCount(): Int
+    private external fun nativeGetCargoName(id: Int): String
+    private external fun nativeGetCargoCategory(id: Int): String
+    private external fun nativeGetCargoWeight(id: Int): Float
+    private external fun nativeGetCargoVolume(id: Int): Float
+    private external fun nativeGetCargoDimensions(id: Int): FloatArray?
+    private external fun nativeRequestCargoMeshStats(id: Int, lod: Int): IntArray?
 }
+
+

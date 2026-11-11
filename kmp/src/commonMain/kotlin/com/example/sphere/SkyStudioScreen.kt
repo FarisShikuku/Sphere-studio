@@ -95,7 +95,7 @@ fun SkyStudioScreen(
     var stageWidth by remember { mutableFloatStateOf(3.5f) }
     var stageLength by remember { mutableFloatStateOf(3.5f) }
     var stageHeight by remember { mutableFloatStateOf(0.25f) }
-    var showStageGrid by remember { mutableStateOf(true) }
+    var showStageGrid by remember { mutableStateOf(false) }
     var showCalibrationItem by remember { mutableStateOf(false) }
 
     // Atmosphere parameters
@@ -138,9 +138,9 @@ fun SkyStudioScreen(
     var camYaw by remember { mutableFloatStateOf(150.0f) }
 
     // Cloud Detection state
-    var isCloudDetectionEnabled by remember { mutableStateOf(true) }
+    var isCloudDetectionEnabled by remember { mutableStateOf(false) }
     var selectedFilterGenus by remember { mutableStateOf<CloudGenus?>(null) }
-    var selectedFormationId by remember { mutableStateOf<String?>("CLOUD-CB-01") }
+    var selectedFormationId by remember { mutableStateOf<String?>(null) }
     val detectedFormations = remember { CloudDetectionRepository.defaultFormations }
 
     // Meteoros Volumetric Cloud parameters (AmanSachan1/Meteoros Decima Raymarcher)
@@ -300,7 +300,8 @@ fun SkyStudioScreen(
                             stageHeight = 0.25f
                             showStageGrid = true
                             showCalibrationItem = false
-                            isCloudDetectionEnabled = true
+                            isCloudDetectionEnabled = false
+                            selectedFormationId = null
                             selectedFilterGenus = null
                             cloudType = 2
                             cloudCoverage = 0.65f
@@ -383,12 +384,17 @@ fun SkyStudioScreen(
                     selectedFilterGenus = selectedFilterGenus,
                     onSelectFormation = { formation ->
                         selectedFormationId = formation.id
+                        selectedFilterGenus = formation.genus
                         cloudType = when (formation.genus) {
                             CloudGenus.STRATUS -> 0
-                            CloudGenus.STRATOCUMULUS, CloudGenus.ALTOCUMULUS -> 1
-                            CloudGenus.CUMULUS, CloudGenus.CIRROCUMULUS, CloudGenus.CIRRUS -> 2
+                            CloudGenus.STRATOCUMULUS -> 1
+                            CloudGenus.CUMULUS -> 2
                             CloudGenus.CUMULONIMBUS, CloudGenus.NIMBOSTRATUS -> 3
+                            CloudGenus.ALTOCUMULUS, CloudGenus.CIRROCUMULUS -> 4
+                            CloudGenus.CIRRUS -> 5
                         }
+                        cloudCoverage = (formation.opticalDepthTau / 45.0f).coerceIn(0.50f, 0.85f)
+                        cloudDensity = 1.25f
                     }
                 )
 
@@ -540,10 +546,14 @@ fun SkyStudioScreen(
                                 camPitch = formation.elevationDegrees.coerceIn(0f, 65f)
                                 cloudType = when (formation.genus) {
                                     CloudGenus.STRATUS -> 0
-                                    CloudGenus.STRATOCUMULUS, CloudGenus.ALTOCUMULUS -> 1
+                                    CloudGenus.STRATOCUMULUS -> 1
+                                    CloudGenus.CUMULUS -> 2
                                     CloudGenus.CUMULONIMBUS, CloudGenus.NIMBOSTRATUS -> 3
-                                    else -> 2
+                                    CloudGenus.ALTOCUMULUS, CloudGenus.CIRROCUMULUS -> 4
+                                    CloudGenus.CIRRUS -> 5
                                 }
+                                cloudCoverage = (formation.opticalDepthTau / 45.0f).coerceIn(0.55f, 0.85f)
+                                cloudDensity = 1.25f
                             }
                             .testTag("quick_cloud_chip_${formation.id}")
                     ) {

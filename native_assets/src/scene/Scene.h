@@ -55,9 +55,12 @@ public:
     std::shared_ptr<Mesh> GetCalibrationCubeMesh() const { return m_CalibrationCubeMesh; }
     std::shared_ptr<Mesh> GetSkyDomeMesh() const { return m_SkyDomeMesh; }
     const SceneRenderStats& GetRenderStats() const { return m_Stats; }
+    void SetShowGrid(bool show) { m_ShowGrid = show; RebuildStageGeometry(); }
+    bool GetShowGrid() const { return m_ShowGrid; }
 private:
     void RebuildStageGeometry();
     StageMode m_StageMode = StageMode::FlatPiece;
+    bool m_ShowGrid = false;
     float m_StageWidth = 10.0f;
     float m_StageLength = 10.0f;
     float m_StageHeight = 0.35f;

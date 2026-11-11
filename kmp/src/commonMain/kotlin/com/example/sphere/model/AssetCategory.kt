@@ -13,6 +13,7 @@ import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Texture
 import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.outlined.LocalShipping
 import androidx.compose.material.icons.outlined.Water
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material.icons.outlined.Widgets
@@ -31,6 +32,7 @@ data class AssetCategory(
 
 val availableAssetCategories = listOf(
     AssetCategory("test", "Test Screen", "Calibration Cube & Scene Viewport", Icons.Default.ViewInAr, "Interactive 3D geometry, dimensional controls & surface PBR patterns"),
+    AssetCategory("commodities", "Commodities & Cargo", "Procedural Goods & Freight", Icons.Outlined.LocalShipping, "Procedural bags, crates, drums, timber, bottles, industrial pallets & perishable goods"),
     AssetCategory("lighting", "Lighting Studio", "PlainRenderer Vulkan Lights", Icons.Default.Lightbulb, "Physically based lights: flashlight spot cones, filament bulbs, area softboxes & Kelvin blackbody spectrum"),
     AssetCategory("water", "Water Bodies", "FFT Ocean, Lakes & Rivers", Icons.Outlined.Water, "Tessendorf FFT ocean spectrum, river splines & shore foam"),
     AssetCategory("roads", "Roads & Pathways", "Splines, Markings & States", Icons.Outlined.Agriculture, "Procedural camber, asphalt PBR, sign SDFs & 10 surface states"),

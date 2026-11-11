@@ -1,0 +1,42 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+
+#include "include/raw_common.glsl"
+
+layout(binding = 0, rgba8) uniform writeonly image2D outAlbedo;
+
+layout(push_constant) uniform RawAlbedoParams {
+    vec4 primaryColor;
+    vec4 secondaryColor;
+    uint formType; // 0=Log, 1=Timber, 2=Rebar, 3=Coal, 4=Gravel
+    uint seed;
+} uRaw;
+
+void main() {
+    ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 imgSize = imageSize(outAlbedo);
+    if (pixelCoord.x >= imgSize.x || pixelCoord.y >= imgSize.y) return;
+
+    vec2 uv = vec2(pixelCoord) / vec2(imgSize);
+    vec3 col = uRaw.primaryColor.rgb;
+
+    if (uRaw.formType == 0u) {
+        // Tree bark furrows
+        float bark = TreeBarkFurrows(uv);
+        col = mix(uRaw.primaryColor.rgb * 0.65, uRaw.primaryColor.rgb * 1.25, bark);
+    } else if (uRaw.formType == 3u) {
+        // High carbon coal crystalline facets
+        float facet = RawNoise(uv * 32.0);
+        col = vec3(0.04 + facet * 0.12);
+    } else if (uRaw.formType == 4u) {
+        // Aggregate stone gravel fragments
+        float stone = RawNoise(uv * 64.0);
+        col = mix(vec3(0.55), vec3(0.75), stone);
+    } else {
+        // Steel rebar rib patterns
+        float rebarRib = step(0.4, fract(uv.x * 20.0));
+        col = mix(uRaw.primaryColor.rgb, uRaw.secondaryColor.rgb, rebarRib * 0.5);
+    }
+
+    imageStore(outAlbedo, pixelCoord, vec4(col, 1.0));
+}

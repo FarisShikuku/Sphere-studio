@@ -17,6 +17,14 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/sky
     ${CMAKE_CURRENT_SOURCE_DIR}/src/weather
     ${CMAKE_CURRENT_SOURCE_DIR}/src/lighting
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/cargo/library/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/cargo/bagged_goods/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/cargo/boxes_crates/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/cargo/liquid_bulk/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/cargo/raw_materials/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/cargo/containers_bottles/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/cargo/specialty_industrial/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/cargo/perishable_goods/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jni
     ${Vulkan_INCLUDE_DIRS}
 )
@@ -28,6 +36,7 @@ add_subdirectory(src/shared)
 add_subdirectory(src/sky)
 add_subdirectory(src/weather)
 add_subdirectory(src/lighting)
+add_subdirectory(src/gen/cargo)
 add_library(SphereStudioEngine SHARED
     src/jni/SphereStudioJni.cpp
 )
@@ -40,6 +49,7 @@ target_link_libraries(SphereStudioEngine PRIVATE
     sky
     weather
     lighting
+    cargo
     Vulkan::Vulkan
     ${log-lib}
     ${android-lib}

@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.geometry.Size
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -98,56 +99,39 @@ fun EmptyAssetScreen(
                     )
                 )
 
-                // Isometric coordinate lattice grid
-                val step = 32f
-                val gridColor = Color(0xFF1E293B).copy(alpha = 0.45f)
-                val accentGrid = Color(0xFF334155).copy(alpha = 0.7f)
+                // Smooth studio spotlight floor and grounded pedestal
+                val pedestalRadiusX = minOf(w, h) * 0.38f
+                val pedestalRadiusY = minOf(w, h) * 0.16f
+                val pedestalCenter = Offset(center.x, center.y + pedestalRadiusY * 0.7f)
 
-                var x = 0f
-                while (x < w) {
-                    drawLine(if ((x / step).toInt() % 4 == 0) accentGrid else gridColor, Offset(x, 0f), Offset(x, h), strokeWidth = 1f)
-                    x += step
-                }
-                var y = 0f
-                while (y < h) {
-                    drawLine(if ((y / step).toInt() % 4 == 0) accentGrid else gridColor, Offset(0f, y), Offset(w, y), strokeWidth = 1f)
-                    y += step
-                }
+                // Soft ambient shadow disc
+                drawOval(
+                    brush = Brush.radialGradient(
+                        colors = listOf(Color(0xFF020617).copy(alpha = 0.85f), Color(0x00020617)),
+                        center = pedestalCenter,
+                        radius = pedestalRadiusX * 1.3f
+                    ),
+                    topLeft = Offset(pedestalCenter.x - pedestalRadiusX * 1.3f, pedestalCenter.y - pedestalRadiusY * 1.3f),
+                    size = Size(pedestalRadiusX * 2.6f, pedestalRadiusY * 2.6f)
+                )
 
-                // Empty bounding box wireframe
-                val boxRadius = minOf(w, h) * 0.28f
-                val dashEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
+                // Sleek solid studio pedestal disc
+                drawOval(
+                    brush = Brush.linearGradient(
+                        colors = listOf(Color(0xFF1E293B), Color(0xFF0F172A)),
+                        start = Offset(pedestalCenter.x, pedestalCenter.y - pedestalRadiusY),
+                        end = Offset(pedestalCenter.x, pedestalCenter.y + pedestalRadiusY)
+                    ),
+                    topLeft = Offset(pedestalCenter.x - pedestalRadiusX, pedestalCenter.y - pedestalRadiusY),
+                    size = Size(pedestalRadiusX * 2f, pedestalRadiusY * 2f)
+                )
 
-                // Top diamond
-                val topPath = Path().apply {
-                    moveTo(center.x, center.y - boxRadius * 0.8f)
-                    lineTo(center.x + boxRadius, center.y - boxRadius * 0.2f)
-                    lineTo(center.x, center.y + boxRadius * 0.4f)
-                    lineTo(center.x - boxRadius, center.y - boxRadius * 0.2f)
-                    close()
-                }
-                drawPath(topPath, color = Color(0xFF38BDF8).copy(alpha = 0.35f), style = Stroke(width = 1.5f, pathEffect = dashEffect))
-
-                // Vertical posts
-                val postColor = Color(0xFF64748B).copy(alpha = 0.4f)
-                drawLine(postColor, Offset(center.x, center.y - boxRadius * 0.8f), Offset(center.x, center.y - boxRadius * 0.1f), strokeWidth = 1.5f)
-                drawLine(postColor, Offset(center.x + boxRadius, center.y - boxRadius * 0.2f), Offset(center.x + boxRadius, center.y + boxRadius * 0.5f), strokeWidth = 1.5f)
-                drawLine(postColor, Offset(center.x - boxRadius, center.y - boxRadius * 0.2f), Offset(center.x - boxRadius, center.y + boxRadius * 0.5f), strokeWidth = 1.5f)
-                drawLine(postColor, Offset(center.x, center.y + boxRadius * 0.4f), Offset(center.x, center.y + boxRadius * 1.1f), strokeWidth = 1.5f)
-
-                // Bottom diamond
-                val botPath = Path().apply {
-                    moveTo(center.x, center.y - boxRadius * 0.1f)
-                    lineTo(center.x + boxRadius, center.y + boxRadius * 0.5f)
-                    lineTo(center.x, center.y + boxRadius * 1.1f)
-                    lineTo(center.x - boxRadius, center.y + boxRadius * 0.5f)
-                    close()
-                }
-                drawPath(botPath, color = Color(0xFF475569).copy(alpha = 0.3f), style = Stroke(width = 1.5f, pathEffect = dashEffect))
-
-                // Center crosshair
-                drawLine(Color(0xFFEF4444).copy(alpha = 0.6f), Offset(center.x - 24f, center.y), Offset(center.x + 24f, center.y), strokeWidth = 2f)
-                drawLine(Color(0xFF10B981).copy(alpha = 0.6f), Offset(center.x, center.y - 24f), Offset(center.x, center.y + 24f), strokeWidth = 2f)
+                // Center subtle locator indicator (minimal physical marker dot)
+                drawCircle(
+                    color = Color(0xFF38BDF8).copy(alpha = 0.5f),
+                    radius = 4f,
+                    center = pedestalCenter
+                )
             }
 
             // Floating Top HUD

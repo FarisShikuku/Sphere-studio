@@ -1,0 +1,38 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+
+#include "include/boxes_common.glsl"
+
+layout(binding = 0, rg8) uniform writeonly image2D outNormal;
+
+layout(push_constant) uniform BoxNormParams {
+    uint constructionType;
+    float depthScale;
+} uNorm;
+
+void main() {
+    ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 imgSize = imageSize(outNormal);
+    if (pixelCoord.x >= imgSize.x || pixelCoord.y >= imgSize.y) return;
+
+    vec2 uv = vec2(pixelCoord) / vec2(imgSize);
+    vec2 eps = vec2(1.0) / vec2(imgSize);
+
+    float hC = 0.0;
+    float hR = 0.0;
+    float hU = 0.0;
+
+    if (uNorm.constructionType == 0u) {
+        hC = CardboardCorrugation(uv, 0.02) * 0.15 + BoxNoise(uv * 64.0) * 0.05;
+        hR = CardboardCorrugation(uv + vec2(eps.x, 0.0), 0.02) * 0.15 + BoxNoise((uv + vec2(eps.x, 0.0)) * 64.0) * 0.05;
+        hU = CardboardCorrugation(uv + vec2(0.0, eps.y), 0.02) * 0.15 + BoxNoise((uv + vec2(0.0, eps.y)) * 64.0) * 0.05;
+    } else {
+        float slat = step(0.04, fract(uv.y * 6.0));
+        hC = slat * 0.4 + WoodGrain(uv, 45.0) * 0.1;
+        hR = step(0.04, fract((uv.y) * 6.0)) * 0.4 + WoodGrain(uv + vec2(eps.x, 0.0), 45.0) * 0.1;
+        hU = step(0.04, fract((uv.y + eps.y) * 6.0)) * 0.4 + WoodGrain(uv + vec2(0.0, eps.y), 45.0) * 0.1;
+    }
+
+    vec3 n = normalize(vec3((hC - hR) * uNorm.depthScale, (hC - hU) * uNorm.depthScale, 1.0));
+    imageStore(outNormal, pixelCoord, vec4(n.xy * 0.5 + 0.5, 0.0, 1.0));
+}

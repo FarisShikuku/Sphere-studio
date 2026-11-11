@@ -281,6 +281,31 @@ fun SurfaceAndStageTab(
 
                 Surface(
                     shape = RoundedCornerShape(8.dp),
+                    color = if (stageWidth == 100.0f && stageLength == 100.0f) Color(0xFF0284C7).copy(alpha = 0.35f) else Color(0xFF1E293B),
+                    border = CardDefaults.outlinedCardBorder().copy(
+                        brush = Brush.linearGradient(
+                            if (stageWidth == 100.0f && stageLength == 100.0f) listOf(Color(0xFF38BDF8), Color(0xFF0284C7))
+                            else listOf(Color(0xFF334155), Color(0xFF1E293B))
+                        )
+                    ),
+                    modifier = Modifier
+                        .clickable {
+                            onStageWidthChange(100.0f)
+                            onStageLengthChange(100.0f)
+                        }
+                        .testTag("preset_100x100m_button")
+                ) {
+                    Text(
+                        text = "100×100m (Mega Stage)",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (stageWidth == 100.0f && stageLength == 100.0f) Color(0xFF38BDF8) else Color(0xFFCBD5E1),
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
                     color = if (isAutoFit) Color(0xFF0D9488) else Color(0xFF0F766E).copy(alpha = 0.4f),
                     border = CardDefaults.outlinedCardBorder().copy(
                         brush = Brush.linearGradient(
@@ -315,7 +340,7 @@ fun SurfaceAndStageTab(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Width Slider
+            // Width Slider (allowing to exceed 100 meters)
             Text(
                 text = "Piece Width: ${((stageWidth * 10).toInt()) / 10f} m",
                 style = MaterialTheme.typography.bodySmall,
@@ -324,7 +349,7 @@ fun SurfaceAndStageTab(
             Slider(
                 value = stageWidth,
                 onValueChange = onStageWidthChange,
-                valueRange = 1.0f..50.0f,
+                valueRange = 1.0f..150.0f,
                 colors = SliderDefaults.colors(
                     thumbColor = Color(0xFF38BDF8),
                     activeTrackColor = Color(0xFF0284C7),
@@ -333,7 +358,7 @@ fun SurfaceAndStageTab(
                 modifier = Modifier.testTag("stage_width_slider")
             )
 
-            // Length Slider
+            // Length Slider (allowing to exceed 100 meters)
             Text(
                 text = "Piece Length: ${((stageLength * 10).toInt()) / 10f} m",
                 style = MaterialTheme.typography.bodySmall,
@@ -342,7 +367,7 @@ fun SurfaceAndStageTab(
             Slider(
                 value = stageLength,
                 onValueChange = onStageLengthChange,
-                valueRange = 1.0f..50.0f,
+                valueRange = 1.0f..150.0f,
                 colors = SliderDefaults.colors(
                     thumbColor = Color(0xFF38BDF8),
                     activeTrackColor = Color(0xFF0284C7),

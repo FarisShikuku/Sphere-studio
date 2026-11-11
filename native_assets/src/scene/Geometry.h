@@ -15,7 +15,7 @@ enum class StageMode {
 class GeometryGenerator {
 public:
     // Standard procedural PBR solids
-    static Mesh GenerateCube(float width = 1.0f, float height = 1.0f, float depth = 1.0f, const Vec3& center = {0, 0, 0});
+    static Mesh GenerateCube(float width = 1.0f, float height = 1.0f, float depth = 1.0f, const Vec3& center = {0, 0, 0}, float tileScaleMeters = 1.0f);
     static Mesh GenerateCalibrationCube(float size = 1.0f, float bevel = 0.04f);
     
     // Stages, Grounds and Reference Frames

@@ -53,9 +53,11 @@ void Scene::RebuildStageGeometry() {
     auto stageNode = std::make_shared<SceneGraphNode>("StagePlatformNode");
     stageNode->mesh = m_StageMesh;
     m_SceneGraph.GetRoot()->AddChild(stageNode);
-    auto gridNode = std::make_shared<SceneGraphNode>("GridLinesNode");
-    gridNode->mesh = m_GridLinesMesh;
-    m_SceneGraph.GetRoot()->AddChild(gridNode);
+    if (m_ShowGrid) {
+        auto gridNode = std::make_shared<SceneGraphNode>("GridLinesNode");
+        gridNode->mesh = m_GridLinesMesh;
+        m_SceneGraph.GetRoot()->AddChild(gridNode);
+    }
     if (m_StageMode == StageMode::CalibrationCube) {
         auto cubeNode = std::make_shared<SceneGraphNode>("CalibrationCubeNode");
         cubeNode->mesh = m_CalibrationCubeMesh;

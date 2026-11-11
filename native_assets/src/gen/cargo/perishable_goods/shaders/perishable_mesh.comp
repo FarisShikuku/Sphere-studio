@@ -1,0 +1,50 @@
+#version 450
+layout(local_size_x = 64) in;
+
+struct Vertex {
+    vec3 position;
+    vec3 normal;
+    vec4 tangent;
+    vec2 uv;
+    vec4 color;
+};
+
+layout(std430, binding = 0) buffer OutputPerishMesh {
+    Vertex vertices[];
+};
+
+layout(push_constant) uniform PerishMeshParams {
+    vec3 center;
+    float radius;
+    uint totalVertices;
+    uint rings;
+    uint sectors;
+} uGeom;
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= uGeom.totalVertices) return;
+
+    uint is = idx % (uGeom.sectors + 1u);
+    uint ir = idx / (uGeom.sectors + 1u);
+
+    float phi = 3.14159265 * float(ir) / float(uGeom.rings);
+    float theta = 6.2831853 * float(is) / float(uGeom.sectors);
+
+    float y = cos(phi) * uGeom.radius;
+    float ringR = sin(phi) * uGeom.radius;
+    float x = cos(theta) * ringR;
+    float z = sin(theta) * ringR;
+
+    vec3 pos = uGeom.center + vec3(x, y, z);
+    vec3 norm = normalize(vec3(x, y, z));
+
+    Vertex vert;
+    vert.position = pos;
+    vert.normal = norm;
+    vert.tangent = vec4(-sin(theta), 0.0, cos(theta), 1.0);
+    vert.uv = vec2(float(is) / float(uGeom.sectors), float(ir) / float(uGeom.rings));
+    vert.color = vec4(1.0);
+
+    vertices[idx] = vert;
+}

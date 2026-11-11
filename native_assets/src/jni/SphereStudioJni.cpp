@@ -4,11 +4,14 @@
 #include <android/native_window.h>
 #include <android/native_window_jni.h>
 #include <vulkan/vulkan.h>
-#include "textures/spec/shared_spec.h"
+#include "shared/materials/spec/shared_spec.h"
 #include "core/Application.h"
 #include "core/Log.h"
 #include "shared/GeneratorRegistry.h"
 #include "vulkan/VulkanNativeSceneRenderer.h"
+#include "weather/clouds/CloudRaymarch.h"
+#include "weather/clouds/CloudGen.h"
+#include "CargoRegistry.h"
 #define LOG_TAG "SphereStudioNative"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 extern "C" {
@@ -49,6 +52,13 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeGetTextureBindless
         return static_cast<jint>(sphere::textures::kRegisteredTextures[index].bindlessSlot);
     }
     return -1;
+}
+JNIEXPORT jstring JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeGetTextureKtx2Path(JNIEnv* env, jclass clazz, jint index) {
+    if (index >= 0 && index < static_cast<jint>(sphere::textures::kRegisteredTextures.size())) {
+        return env->NewStringUTF(sphere::textures::kRegisteredTextures[index].ktx2Path);
+    }
+    return env->NewStringUTF("");
 }
 JNIEXPORT jfloat JNICALL
 Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeEvaluateCookTorrance(
@@ -174,6 +184,150 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeIsVulkanInitialize
     JNIEnv* env, jclass clazz
 ) {
     return sphere::vk::VulkanNativeSceneRenderer::Get().IsInitialized() ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderVolumetricClouds(
+    JNIEnv* env, jclass clazz,
+    jintArray outArray, jint width, jint height,
+    jfloat camYaw, jfloat camPitch,
+    jfloat sunAzimuth, jfloat sunElevation,
+    jint cloudType, jfloat coverage, jfloat density,
+    jfloat time
+) {
+    if (!outArray || width <= 0 || height <= 0) {
+        return JNI_FALSE;
+    }
+
+    jsize len = env->GetArrayLength(outArray);
+    if (len < width * height) {
+        return JNI_FALSE;
+    }
+
+    jint* pixels = static_cast<jint*>(env->GetPrimitiveArrayCritical(outArray, nullptr));
+    if (!pixels) {
+        return JNI_FALSE;
+    }
+
+    sphere::weather::CloudParams params;
+    params.coverage = std::clamp(coverage, 0.05f, 1.0f);
+    params.density = std::clamp(density, 0.1f, 3.0f);
+
+    switch (cloudType) {
+        case 0: params.type = sphere::weather::CloudType::Stratus; break;
+        case 1: params.type = sphere::weather::CloudType::Stratocumulus; break;
+        case 2: params.type = sphere::weather::CloudType::Cumulus; break;
+        case 3: params.type = sphere::weather::CloudType::Cumulonimbus; break;
+        case 4: params.type = sphere::weather::CloudType::Altocumulus; break;
+        case 5: params.type = sphere::weather::CloudType::Cirrus; break;
+        default: params.type = sphere::weather::CloudType::Stratocumulus; break;
+    }
+
+    sphere::weather::CloudGen generator(params);
+    sphere::weather::CloudRaymarch raymarcher;
+
+    raymarcher.RenderCloudBuffer(
+        reinterpret_cast<uint32_t*>(pixels),
+        width, height,
+        camYaw, camPitch,
+        sunAzimuth, sunElevation,
+        generator, time
+    );
+
+    env->ReleasePrimitiveArrayCritical(outArray, pixels, 0);
+    return JNI_TRUE;
+}
+
+// ---------------------------------------------------------------------------
+// Cargo & Commodities Procedural JNI Bridge
+// ---------------------------------------------------------------------------
+
+JNIEXPORT jint JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeGetCargoCommoditiesCount(
+    JNIEnv* env, jclass clazz
+) {
+    return static_cast<jint>(sphere::cargo::CargoRegistry::Get().GetTotalCommoditiesCount());
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeGetCargoName(
+    JNIEnv* env, jclass clazz, jint id
+) {
+    if (id >= 0 && id < static_cast<jint>(sphere::cargo::CargoID::COUNT)) {
+        return env->NewStringUTF(sphere::cargo::GetCargoName(static_cast<sphere::cargo::CargoID>(id)));
+    }
+    return env->NewStringUTF("Unknown Cargo");
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeGetCargoCategory(
+    JNIEnv* env, jclass clazz, jint id
+) {
+    if (id >= 0 && id < static_cast<jint>(sphere::cargo::CargoID::COUNT)) {
+        return env->NewStringUTF(sphere::cargo::GetCargoCategory(static_cast<sphere::cargo::CargoID>(id)));
+    }
+    return env->NewStringUTF("Unknown Category");
+}
+
+JNIEXPORT jfloat JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeGetCargoWeight(
+    JNIEnv* env, jclass clazz, jint id
+) {
+    if (id >= 0 && id < static_cast<jint>(sphere::cargo::CargoID::COUNT)) {
+        const auto& def = sphere::cargo::CargoRegistry::Get().GetDef(static_cast<sphere::cargo::CargoID>(id));
+        return def.weight_kg;
+    }
+    return 50.0f;
+}
+
+JNIEXPORT jfloat JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeGetCargoVolume(
+    JNIEnv* env, jclass clazz, jint id
+) {
+    if (id >= 0 && id < static_cast<jint>(sphere::cargo::CargoID::COUNT)) {
+        const auto& def = sphere::cargo::CargoRegistry::Get().GetDef(static_cast<sphere::cargo::CargoID>(id));
+        return def.volume_m3;
+    }
+    return 0.08f;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeGetCargoDimensions(
+    JNIEnv* env, jclass clazz, jint id
+) {
+    jfloatArray result = env->NewFloatArray(3);
+    if (!result) return nullptr;
+
+    jfloat dims[3] = {0.8f, 0.5f, 0.2f};
+    if (id >= 0 && id < static_cast<jint>(sphere::cargo::CargoID::COUNT)) {
+        const auto& def = sphere::cargo::CargoRegistry::Get().GetDef(static_cast<sphere::cargo::CargoID>(id));
+        dims[0] = def.dimensions.x;
+        dims[1] = def.dimensions.y;
+        dims[2] = def.dimensions.z;
+    }
+    env->SetFloatArrayRegion(result, 0, 3, dims);
+    return result;
+}
+
+JNIEXPORT jintArray JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRequestCargoMeshStats(
+    JNIEnv* env, jclass clazz, jint id, jint lod
+) {
+    jintArray result = env->NewIntArray(2);
+    if (!result) return nullptr;
+
+    jint stats[2] = {0, 0};
+    if (id >= 0 && id < static_cast<jint>(sphere::cargo::CargoID::COUNT)) {
+        auto mesh = sphere::cargo::CargoRegistry::Get().RequestMesh(
+            static_cast<sphere::cargo::CargoID>(id), static_cast<uint32_t>(lod)
+        );
+        if (mesh) {
+            stats[0] = static_cast<jint>(mesh->vertices.size());
+            stats[1] = static_cast<jint>(mesh->indices.size() / 3);
+        }
+    }
+    env->SetIntArrayRegion(result, 0, 2, stats);
+    return result;
 }
 
 } // extern "C"

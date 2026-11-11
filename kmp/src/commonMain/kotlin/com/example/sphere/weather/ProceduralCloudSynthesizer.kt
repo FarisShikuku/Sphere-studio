@@ -166,27 +166,36 @@ object ProceduralCloudSynthesizer {
         return ((x * (2.51f * x + 0.03f)) / (x * (2.43f * x + 0.59f) + 0.14f)).coerceIn(0f, 1f)
     }
 
-    private fun sampleShape(x: Float, z: Float): Float {
-        val u = (x.toInt().let { if (x < 0) it - 1 else it } and (SHAPE_SIZE - 1))
-        val v = (z.toInt().let { if (z < 0) it - 1 else it } and (SHAPE_SIZE - 1))
-        return shapeNoise[v * SHAPE_SIZE + u]
-    }
+    // Smooth bicubic-hermite bilinear interpolation to eliminate pixelation and noise grain
+    private fun sampleSmoothBilinear(noise: FloatArray, size: Int, u: Float, v: Float): Float {
+        val nonNegU = (u % size + size) % size
+        val nonNegV = (v % size + size) % size
 
-    private fun sampleBillow(x: Float, z: Float): Float {
-        val u = (x.toInt().let { if (x < 0) it - 1 else it } and (SHAPE_SIZE - 1))
-        val v = (z.toInt().let { if (z < 0) it - 1 else it } and (SHAPE_SIZE - 1))
-        return billowNoise[v * SHAPE_SIZE + u]
-    }
+        val x0 = nonNegU.toInt()
+        val y0 = nonNegV.toInt()
+        val x1 = (x0 + 1) and (size - 1)
+        val y1 = (y0 + 1) and (size - 1)
 
-    private fun sampleErosion(x: Float, z: Float): Float {
-        val u = (x.toInt().let { if (x < 0) it - 1 else it } and (EROSION_SIZE - 1))
-        val v = (z.toInt().let { if (z < 0) it - 1 else it } and (EROSION_SIZE - 1))
-        return erosionNoise[v * EROSION_SIZE + u]
+        val fx = nonNegU - x0
+        val fy = nonNegV - y0
+
+        // Smooth cubic interpolant to eliminate grid facets
+        val sx = fx * fx * (3f - 2f * fx)
+        val sy = fy * fy * (3f - 2f * fy)
+
+        val c00 = noise[y0 * size + x0]
+        val c10 = noise[y0 * size + x1]
+        val c01 = noise[y1 * size + x0]
+        val c11 = noise[y1 * size + x1]
+
+        val top = c00 + sx * (c10 - c00)
+        val bot = c01 + sx * (c11 - c01)
+        return top + sy * (bot - top)
     }
 
     /**
      * Evaluates 3D cloud density at world horizontal coordinates (x, z) and height fraction h.
-     * Incorporates Decima / Meteoros cloud species gradients (Stratus, Stratocumulus, Cumulus, Cumulonimbus).
+     * Incorporates Decima / Meteoros cloud species gradients (Stratus, Stratocumulus, Cumulus, Cumulonimbus, Altocumulus, Cirrus).
      */
     fun sampleDensity(
         x: Float,
@@ -200,56 +209,71 @@ object ProceduralCloudSynthesizer {
         val meteorosGrad = when (cloudType) {
             0 -> {
                 // Stratus: low flat overcast blanket
-                val b = smoothstep(0.02f, 0.12f, h)
-                val t = 1.0f - smoothstep(0.22f, 0.36f, h)
+                val b = smoothstep(0.01f, 0.10f, h)
+                val t = 1.0f - smoothstep(0.24f, 0.38f, h)
                 b * t
             }
             1 -> {
                 // Stratocumulus: rolling undulating fluffy waves
-                val b = smoothstep(0.04f, 0.18f, h)
-                val t = 1.0f - smoothstep(0.52f, 0.72f, h)
+                val b = smoothstep(0.02f, 0.16f, h)
+                val t = 1.0f - smoothstep(0.55f, 0.74f, h)
                 b * t
             }
             2 -> {
                 // Cumulus: towering puffy cauliflower heaps
-                val b = smoothstep(0.02f, 0.15f, h)
-                val t = 1.0f - smoothstep(0.75f, 0.98f, h)
+                val b = smoothstep(0.02f, 0.14f, h)
+                val t = 1.0f - smoothstep(0.78f, 0.98f, h)
+                b * t
+            }
+            3 -> {
+                // Cumulonimbus: massive anvil thundercloud spanning full depth
+                val b = smoothstep(0.01f, 0.08f, h)
+                val t = 1.0f - smoothstep(0.90f, 1.00f, h)
+                b * t
+            }
+            4 -> {
+                // Altocumulus: mid-altitude mottled waves and rolls
+                val b = smoothstep(0.32f, 0.46f, h)
+                val t = 1.0f - smoothstep(0.74f, 0.88f, h)
                 b * t
             }
             else -> {
-                // Cumulonimbus: massive anvil thundercloud spanning full depth
-                val b = smoothstep(0.01f, 0.10f, h)
-                val t = 1.0f - smoothstep(0.88f, 1.00f, h)
+                // Cirrus: high-altitude fibrous ice crystals
+                val b = smoothstep(0.68f, 0.80f, h)
+                val t = 1.0f - smoothstep(0.95f, 1.00f, h)
                 b * t
             }
         }
         if (meteorosGrad <= 0.005f) return 0.0f
 
-        val sX = x * 0.045f
-        val sZ = z * 0.045f
-        val shape = sampleShape(sX * SHAPE_SIZE, sZ * SHAPE_SIZE)
+        // Macro shape spatial frequency
+        val sX = x * 0.007f
+        val sZ = z * 0.007f
+        val shape = sampleSmoothBilinear(shapeNoise, SHAPE_SIZE, sX * SHAPE_SIZE, sZ * SHAPE_SIZE)
 
-        val threshold = (1.0f - coverage * 0.88f).coerceIn(0.05f, 0.95f)
-        if (shape < threshold - 0.10f) return 0.0f
+        val cov = coverage.coerceIn(0.12f, 0.95f)
+        val threshold = (1.0f - cov * 0.82f).coerceIn(0.08f, 0.88f)
+        if (shape < threshold - 0.12f) return 0.0f
 
-        val base = ((shape - threshold) / (1.0f - threshold)).coerceIn(0f, 1f)
+        val base = ((shape - threshold) / (1.0f - threshold + 0.02f)).coerceIn(0f, 1f)
 
-        val bX = x * 0.12f + h * 0.35f
-        val bZ = z * 0.12f + h * 0.35f
-        val billow = sampleBillow(bX * SHAPE_SIZE, bZ * SHAPE_SIZE)
-        val combined = base * 0.65f + billow * 0.35f
+        val bX = x * 0.016f + h * 0.20f
+        val bZ = z * 0.016f + h * 0.20f
+        val billow = sampleSmoothBilinear(billowNoise, SHAPE_SIZE, bX * SHAPE_SIZE, bZ * SHAPE_SIZE)
+        val combined = base * 0.70f + billow * 0.30f * base
 
-        val eX = x * 0.30f
-        val eZ = z * 0.30f
-        val erosion = sampleErosion(eX * EROSION_SIZE, eZ * EROSION_SIZE)
+        val eX = x * 0.038f
+        val eZ = z * 0.038f
+        val erosion = sampleSmoothBilinear(erosionNoise, EROSION_SIZE, eX * EROSION_SIZE, eZ * EROSION_SIZE)
 
-        val eroded = (combined - (1.0f - erosion) * (detailErosion * 0.38f)).coerceAtLeast(0f)
-        return (eroded * meteorosGrad * density * 2.3f).coerceIn(0f, 1f)
+        val eroded = (combined - (1.0f - erosion) * (detailErosion * 0.20f)).coerceAtLeast(0f)
+        return (eroded * meteorosGrad * density * 2.2f).coerceIn(0f, 1f)
     }
 
     /**
      * Renders a true 3D perspective volumetric cloudscape raymarched across the sky dome.
      * Features AmanSachan1/Meteoros:
+     *  - Native C++ Vulkan volumetric raymarcher acceleration
      *  - Multi-Scattering Dual Beer-Lambert Law approximation
      *  - Interleaved 4x4 Bayer ray jittering (temporal anti-aliasing against slicing)
      *  - Dual-Lobe Henyey-Greenstein silver lining
@@ -281,6 +305,26 @@ object ProceduralCloudSynthesizer {
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val pixels = IntArray(width * height)
 
+        // 1. High-Performance C++20 / Vulkan Native Volumetric Cloud Raymarcher
+        val nativeSucceeded = com.example.sphere.nativebridge.SphereNativeEngine.renderVolumetricClouds(
+            outPixels = pixels,
+            width = width,
+            height = height,
+            camYaw = camYaw,
+            camPitch = camPitch,
+            sunAzimuth = sunAzimuth,
+            sunElevation = sunElevation,
+            cloudType = cloudType,
+            coverage = coverage,
+            density = density,
+            time = timeSeconds
+        )
+
+        if (nativeSucceeded) {
+            bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
+            return bitmap
+        }
+
         val fovH = 75.0f * (PI.toFloat() / 180f)
         val aspect = width.toFloat() / height.toFloat()
         val tanH = tan(fovH * 0.5f)
@@ -305,23 +349,23 @@ object ProceduralCloudSynthesizer {
         val sunY = sin(sunElRad)
         val sunZ = cos(sunElRad) * cos(sunAzRad)
 
-        val baseShadowR = if (isStorm) 28 else 48
-        val baseShadowG = if (isStorm) 38 else 62
-        val baseShadowB = if (isStorm) 52 else 82
+        val baseShadowR = if (isStorm) 95 else 185
+        val baseShadowG = if (isStorm) 105 else 198
+        val baseShadowB = if (isStorm) 125 else 220
 
-        val sunlitR = if (isStorm) 175 else 255
-        val sunlitG = if (isStorm) 180 else 248
-        val sunlitB = if (isStorm) 195 else 238
+        val sunlitR = if (isStorm) 210 else 255
+        val sunlitG = if (isStorm) 215 else 252
+        val sunlitB = if (isStorm) 225 else 246
 
-        val goldRimR = if (isStorm) 130 else 255
-        val goldRimG = if (isStorm) 140 else 244
-        val goldRimB = if (isStorm) 150 else 205
+        val goldRimR = 255
+        val goldRimG = 245
+        val goldRimB = 215
 
-        val horizonSkyR = if (isStorm) 32 else 145
-        val horizonSkyG = if (isStorm) 42 else 190
-        val horizonSkyB = if (isStorm) 58 else 235
+        val horizonSkyR = if (isStorm) 42 else 170
+        val horizonSkyG = if (isStorm) 56 else 205
+        val horizonSkyB = if (isStorm) 78 else 245
 
-        val yEnd = (height * (horizonYFrac + 0.04f)).toInt().coerceIn(0, height)
+        val yEnd = height
 
         // Meteoros dual-lobe Henyey-Greenstein parameters
         val g1 = silverLiningG.coerceIn(0.5f, 0.96f)
@@ -349,7 +393,7 @@ object ProceduralCloudSynthesizer {
                 val dirY = ry * invLen
                 val dirZ = rz * invLen
 
-                if (dirY <= 0.012f) {
+                if (dirY <= 0.008f) {
                     pixels[rowOffset + x] = 0
                     continue
                 }
@@ -357,11 +401,13 @@ object ProceduralCloudSynthesizer {
                 val tEnter = yBase / dirY
                 val tExit = yTop / dirY
                 val rayLength = tExit - tEnter
-                val dt = rayLength * 0.20f
+                val stepCount = 18
+                val invSteps = 1.0f / stepCount.toFloat()
+                val dt = rayLength * invSteps
 
                 // Meteoros 4x4 Bayer interleaved ray jitter
                 val bayerOffset = if (enableBayerJitter) {
-                    BAYER_4X4[(y and 3) * 4 + (x and 3)] * 0.18f
+                    (BAYER_4X4[(y and 3) * 4 + (x and 3)] - 0.5f) * invSteps
                 } else {
                     0.0f
                 }
@@ -379,14 +425,14 @@ object ProceduralCloudSynthesizer {
                 var accumB = 0f
                 var transmittance = 1.0f
 
-                for (step in 0 until 5) {
-                    val hFrac = ((step + 0.5f + bayerOffset) * 0.20f).coerceIn(0.05f, 0.95f)
+                for (step in 0 until stepCount) {
+                    val hFrac = ((step + 0.5f) * invSteps + bayerOffset).coerceIn(0.02f, 0.98f)
                     val t = tEnter + hFrac * rayLength
                     val posX = t * dirX + windX
                     val posZ = t * dirZ + windZ
 
                     val d = sampleDensity(posX, posZ, hFrac, cloudType, coverage, density, detailErosion)
-                    if (d > 0.015f) {
+                    if (d > 0.012f) {
                         val sunD = sampleDensity(
                             posX + sunX * 0.35f,
                             posZ + sunZ * 0.35f,
@@ -395,13 +441,13 @@ object ProceduralCloudSynthesizer {
                         )
 
                         // Meteoros MultiBeer absorption along sun shadow path
-                        val sunTau = sunD * sunAbsorption * 3.4f
+                        val sunTau = sunD * sunAbsorption * 2.2f
                         val sunPrimaryBeer = exp(-sunTau)
                         val sunMultiBeer = exp(-sunTau * 0.25f) * 0.7f
-                        val sunVisibility = sunPrimaryBeer + sunMultiBeer * (multiScatteringFactor * 0.5f)
+                        val sunVisibility = (sunPrimaryBeer + sunMultiBeer * (multiScatteringFactor * 0.6f)).coerceIn(0.12f, 1.0f)
 
                         // Meteoros Dual Beer-Lambert along view ray
-                        val tau = d * dt.coerceAtMost(3.0f) * 0.50f
+                        val tau = d * dt.coerceAtMost(2.5f) * 0.38f
                         val stepPrimaryBeer = exp(-tau)
                         val stepMultiBeer = exp(-tau * 0.25f) * 0.7f
                         val stepTrans = (stepPrimaryBeer + stepMultiBeer * multiScatteringFactor).coerceIn(0f, 1f)
@@ -410,7 +456,7 @@ object ProceduralCloudSynthesizer {
                         val powder = 1.0f - exp(-2.0f * tau)
                         val stepAlpha = ((1.0f - stepPrimaryBeer) * lerp(powder, 1.0f, 1.0f - powderEffect * 0.45f)).coerceIn(0f, 1f)
 
-                        val ambFactor = 0.55f + 0.45f * hFrac
+                        val ambFactor = 0.72f + 0.28f * hFrac
                         val ambR = baseShadowR * ambFactor
                         val ambG = baseShadowG * ambFactor
                         val ambB = baseShadowB * ambFactor
@@ -419,14 +465,14 @@ object ProceduralCloudSynthesizer {
                         val dirG = sunlitG * sunVisibility
                         val dirB = sunlitB * sunVisibility
 
-                        val silver = phase * (1.0f - sunVisibility * 0.45f)
+                        val silver = phase * (1.0f - sunVisibility * 0.35f)
                         val rimR = goldRimR * silver
                         val rimG = goldRimG * silver
                         val rimB = goldRimB * silver
 
-                        val lightR = ambR + dirR + rimR
-                        val lightG = ambG + dirG + rimG
-                        val lightB = ambB + dirB + rimB
+                        val lightR = (ambR * 0.58f + dirR * 0.52f + rimR * 0.40f).coerceIn(0f, 255f)
+                        val lightG = (ambG * 0.58f + dirG * 0.52f + rimG * 0.40f).coerceIn(0f, 255f)
+                        val lightB = (ambB * 0.58f + dirB * 0.52f + rimB * 0.40f).coerceIn(0f, 255f)
 
                         accumR += transmittance * lightR * stepAlpha
                         accumG += transmittance * lightG * stepAlpha
@@ -443,16 +489,19 @@ object ProceduralCloudSynthesizer {
                     continue
                 }
 
-                val haze = (1.0f - exp(-tEnter * 0.038f)).coerceIn(0f, 0.85f)
+                // Smooth horizon haze fade to blend with atmospheric sky
+                val horizonFade = smoothstep(0.008f, 0.10f, dirY)
+                val haze = (1.0f - exp(-tEnter * 0.025f)).coerceIn(0f, 0.75f)
+
                 val rawR = lerp(haze, accumR, horizonSkyR.toFloat()) / 255.0f
                 val rawG = lerp(haze, accumG, horizonSkyG.toFloat()) / 255.0f
                 val rawB = lerp(haze, accumB, horizonSkyB.toFloat()) / 255.0f
 
                 // Meteoros ACES Film Tone Mapping
-                val toneR = (acesTonemap(rawR * 1.15f) * 255.0f).toInt().coerceIn(0, 255)
-                val toneG = (acesTonemap(rawG * 1.15f) * 255.0f).toInt().coerceIn(0, 255)
-                val toneB = (acesTonemap(rawB * 1.15f) * 255.0f).toInt().coerceIn(0, 255)
-                val finalA = (totalAlpha * (1.0f - haze * 0.25f) * 255f).toInt().coerceIn(0, 255)
+                val toneR = (acesTonemap(rawR * 1.10f) * 255.0f).toInt().coerceIn(0, 255)
+                val toneG = (acesTonemap(rawG * 1.10f) * 255.0f).toInt().coerceIn(0, 255)
+                val toneB = (acesTonemap(rawB * 1.10f) * 255.0f).toInt().coerceIn(0, 255)
+                val finalA = (totalAlpha * horizonFade * 255f).toInt().coerceIn(0, 255)
 
                 pixels[rowOffset + x] = (finalA shl 24) or (toneR shl 16) or (toneG shl 8) or toneB
             }

@@ -434,6 +434,13 @@ fun SphereStudioApp() {
                     }
                 )
             }
+            "commodities" -> {
+                CommoditiesStudioScreen(
+                    onNavigateBack = {
+                        selectedCategoryIndex = 0
+                    }
+                )
+            }
             else -> {
                 EmptyAssetScreen(
                     category = currentCategory,

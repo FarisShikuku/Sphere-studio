@@ -1,0 +1,67 @@
+#version 450
+layout(local_size_x = 64) in;
+
+#include "include/bagged_common.glsl"
+
+struct Vertex {
+    vec3 position;
+    vec3 normal;
+    vec4 tangent;
+    vec2 uv;
+    vec4 color;
+};
+
+layout(std430, binding = 0) buffer OutputVertexBuffer {
+    Vertex vertices[];
+};
+
+layout(push_constant) uniform MeshParams {
+    vec3 dimensions; // length, width, height
+    float wrinkleAmplitude;
+    uint totalVertices;
+    uint gridX;
+    uint gridY;
+} uMesh;
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= uMesh.totalVertices) return;
+
+    // Resolve 2D grid index
+    uint halfVerts = uMesh.totalVertices / 2u;
+    bool isTop = (idx < halfVerts);
+    uint localIdx = isTop ? idx : (idx - halfVerts);
+
+    uint ix = localIdx % (uMesh.gridX + 1u);
+    uint iy = localIdx / (uMesh.gridX + 1u);
+
+    float u = float(ix) / float(uMesh.gridX);
+    float v = float(iy) / float(uMesh.gridY);
+
+    float halfL = uMesh.dimensions.x * 0.5;
+    float halfW = uMesh.dimensions.y * 0.5;
+    float halfH = uMesh.dimensions.z * 0.5;
+
+    float x = -halfL + u * (2.0 * halfL);
+    float y = -halfW + v * (2.0 * halfW);
+
+    float nx = x / halfL;
+    float ny = y / halfW;
+
+    float profX = max(0.0, 1.0 - pow(nx, 4.0));
+    float profY = max(0.0, 1.0 - pow(ny, 4.0));
+    float bulge = sqrt(profX * profY);
+
+    float wrinkle = sin(nx * 14.0 + ny * 8.0) * cos(ny * 12.0) * uMesh.wrinkleAmplitude * bulge;
+    float zSign = isTop ? 1.0 : -1.0;
+    float z = zSign * (bulge * halfH + wrinkle);
+
+    Vertex vert;
+    vert.position = vec3(x, z, y);
+    vert.normal = normalize(vec3(-nx * bulge, zSign, -ny * bulge));
+    vert.tangent = vec4(1.0, 0.0, 0.0, 1.0);
+    vert.uv = vec2(u, isTop ? (v * 0.5) : (0.5 + v * 0.5));
+    vert.color = vec4(1.0);
+
+    vertices[idx] = vert;
+}

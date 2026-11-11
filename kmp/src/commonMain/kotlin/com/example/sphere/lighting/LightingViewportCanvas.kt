@@ -48,6 +48,7 @@ fun LightingViewportCanvas(
     rotX: Float = 24.0f,
     rotY: Float = -36.0f,
     zoomFactor: Float = 1.0f,
+    showGrid: Boolean = false,
     onDrag: (Float, Float) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
@@ -83,7 +84,8 @@ fun LightingViewportCanvas(
                 rotY = rotY,
                 stageCenter = stageCenter,
                 atmosphereParams = atmosphereParams,
-                debugViewMode = debugViewMode
+                debugViewMode = debugViewMode,
+                showGrid = showGrid
             )
 
             // 2. RENDER CORNELL BOX WALLS (FOR SDF DIFFUSE GI COLOR BLEEDING)
@@ -119,7 +121,8 @@ fun LightingViewportCanvas(
                 debugViewMode = debugViewMode,
                 rotX = rotX,
                 rotY = rotY,
-                zoomFactor = zoomFactor
+                zoomFactor = zoomFactor,
+                showGrid = showGrid
             )
 
             // 5. RENDER SDF VOXEL DENSITY CAGE
@@ -214,7 +217,8 @@ private fun DrawScope.drawPhysicalSkyAndStage(
     rotY: Float,
     stageCenter: Offset,
     atmosphereParams: AtmosphereParameters,
-    debugViewMode: PipelineDebugViewMode
+    debugViewMode: PipelineDebugViewMode,
+    showGrid: Boolean = false
 ) {
     // Atmosphere Sky color based on Sun Elevation
     val elev = atmosphereParams.sunElevationDeg
@@ -269,17 +273,19 @@ private fun DrawScope.drawPhysicalSkyAndStage(
     }
     drawRect(groundColor, Offset(0f, horizonY), Size(width, height - horizonY))
 
-    // Ground Floor Grid Perspective Lines
-    val gridColor = Color(0x3390A4AE)
-    val gridStep = 40f
-    for (i in -10..10) {
-        val gx = stageCenter.x + (i * gridStep) + (rotY * 0.4f)
-        drawLine(gridColor, Offset(stageCenter.x, horizonY), Offset(gx * 1.5f - stageCenter.x * 0.5f, height), 1.0f)
-    }
-    for (j in 1..8) {
-        val gy = horizonY + (j * j * 3.5f)
-        if (gy < height) {
-            drawLine(gridColor, Offset(0f, gy), Offset(width, gy), 1.0f)
+    // Ground Floor Grid Perspective Lines (only if showGrid is true)
+    if (showGrid) {
+        val gridColor = Color(0x3390A4AE)
+        val gridStep = 40f
+        for (i in -10..10) {
+            val gx = stageCenter.x + (i * gridStep) + (rotY * 0.4f)
+            drawLine(gridColor, Offset(stageCenter.x, horizonY), Offset(gx * 1.5f - stageCenter.x * 0.5f, height), 1.0f)
+        }
+        for (j in 1..8) {
+            val gy = horizonY + (j * j * 3.5f)
+            if (gy < height) {
+                drawLine(gridColor, Offset(0f, gy), Offset(width, gy), 1.0f)
+            }
         }
     }
 }
@@ -292,7 +298,8 @@ private fun DrawScope.drawCornellStageWalls(
     rotY: Float,
     zoomFactor: Float,
     debugViewMode: PipelineDebugViewMode,
-    sdfGiParams: SdfGiParameters
+    sdfGiParams: SdfGiParameters,
+    showGrid: Boolean = false
 ) {
     if (debugViewMode == PipelineDebugViewMode.ATMOSPHERE_SKY_ONLY) return
 
@@ -315,7 +322,9 @@ private fun DrawScope.drawCornellStageWalls(
         Color(0xFFD32F2F)
     }
     drawPath(redWallPath, color = redColor)
-    drawPath(redWallPath, color = Color(0xFFFFCDD2).copy(alpha = 0.4f), style = Stroke(1.5f))
+    if (showGrid) {
+        drawPath(redWallPath, color = Color(0xFFFFCDD2).copy(alpha = 0.4f), style = Stroke(1.5f))
+    }
 
     // Back Blue Wall (Cornell Box Blue/Cyan Emitter)
     val blueWallBase = Offset(stageCenter.x - 70f * zoomFactor, stageCenter.y - 50f)
@@ -332,7 +341,9 @@ private fun DrawScope.drawCornellStageWalls(
         Color(0xFF1976D2)
     }
     drawPath(blueWallPath, color = blueColor)
-    drawPath(blueWallPath, color = Color(0xFFBBDEFB).copy(alpha = 0.4f), style = Stroke(1.5f))
+    if (showGrid) {
+        drawPath(blueWallPath, color = Color(0xFFBBDEFB).copy(alpha = 0.4f), style = Stroke(1.5f))
+    }
 
     // Diffuse GI Indirect Color Bleeding onto the Floor
     if (sdfGiParams.enabled && debugViewMode != PipelineDebugViewMode.DIRECT_LIGHT_ONLY) {
@@ -419,7 +430,8 @@ private fun DrawScope.drawPlainRendererMesh(
     debugViewMode: PipelineDebugViewMode,
     rotX: Float,
     rotY: Float,
-    zoomFactor: Float
+    zoomFactor: Float,
+    showGrid: Boolean = false
 ) {
     val meshBase = Offset(stageCenter.x, stageCenter.y - 15f)
     val s = 45f * zoomFactor
@@ -494,7 +506,9 @@ private fun DrawScope.drawPlainRendererMesh(
                 close()
             }
             drawPath(topPath, faceTopColor)
-            drawPath(topPath, Color.White.copy(alpha = 0.25f), style = Stroke(1.0f))
+            if (showGrid) {
+                drawPath(topPath, Color.White.copy(alpha = 0.25f), style = Stroke(1.0f))
+            }
 
             // Draw Left Face (Receives Red SDF GI bounce)
             val leftPath = Path().apply {
@@ -505,7 +519,9 @@ private fun DrawScope.drawPlainRendererMesh(
                 close()
             }
             drawPath(leftPath, faceLeftColor)
-            drawPath(leftPath, Color.White.copy(alpha = 0.25f), style = Stroke(1.0f))
+            if (showGrid) {
+                drawPath(leftPath, Color.White.copy(alpha = 0.25f), style = Stroke(1.0f))
+            }
 
             // Draw Right Face (Receives Blue SDF GI bounce)
             val rightPath = Path().apply {
@@ -516,7 +532,9 @@ private fun DrawScope.drawPlainRendererMesh(
                 close()
             }
             drawPath(rightPath, faceRightColor)
-            drawPath(rightPath, Color.White.copy(alpha = 0.25f), style = Stroke(1.0f))
+            if (showGrid) {
+                drawPath(rightPath, Color.White.copy(alpha = 0.25f), style = Stroke(1.0f))
+            }
         }
         TargetLightingMesh.PBR_SPHERE -> {
             val r = s * 1.1f

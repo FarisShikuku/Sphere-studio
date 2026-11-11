@@ -84,7 +84,6 @@ android {
   sourceSets {
     getByName("main") {
       kotlin.srcDirs("src/main/java", "../kmp/src/commonMain/kotlin", "../kmp/src/androidMain/kotlin")
-      assets.srcDirs("../textures")
     }
   }
   dependenciesInfo {

@@ -1,0 +1,49 @@
+#version 450
+layout(local_size_x = 64) in;
+
+struct Vertex {
+    vec3 position;
+    vec3 normal;
+    vec4 tangent;
+    vec2 uv;
+    vec4 color;
+};
+
+layout(std430, binding = 0) buffer OutputRawMesh {
+    Vertex vertices[];
+};
+
+layout(push_constant) uniform RawMeshParams {
+    vec3 dimensions;
+    uint totalVertices;
+    uint radialSegs;
+    uint lengthSegs;
+} uGeom;
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= uGeom.totalVertices) return;
+
+    uint ix = idx % (uGeom.radialSegs + 1u);
+    uint iy = idx / (uGeom.radialSegs + 1u);
+
+    float u = float(iy) / float(uGeom.lengthSegs);
+    float v = float(ix) / float(uGeom.radialSegs);
+
+    float halfL = uGeom.dimensions.x * 0.5;
+    float r = uGeom.dimensions.y * 0.5;
+
+    float angle = v * 6.2831853;
+    float x = -halfL + u * (2.0 * halfL);
+    float y = cos(angle) * r;
+    float z = sin(angle) * r;
+
+    Vertex vert;
+    vert.position = vec3(x, y + r, z);
+    vert.normal = normalize(vec3(0.0, cos(angle), sin(angle)));
+    vert.tangent = vec4(1.0, 0.0, 0.0, 1.0);
+    vert.uv = vec2(u, v);
+    vert.color = vec4(1.0);
+
+    vertices[idx] = vert;
+}

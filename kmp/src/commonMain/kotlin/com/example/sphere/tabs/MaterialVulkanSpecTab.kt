@@ -93,12 +93,63 @@ fun MaterialVulkanSpecTab(
                     Text("12 Levels (to 1x1)", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 12.sp)
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Compute Dispatch Grid", style = MaterialTheme.typography.bodySmall, color = Color(0xFF94A3B8))
-                    Text("[128, 128, 1] groups (16x16)", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = Color(0xFF38BDF8), fontSize = 12.sp)
-                }
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Total Compressed VRAM", style = MaterialTheme.typography.bodySmall, color = Color(0xFF94A3B8))
                     Text("10.66 MB (Mipmapped)", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = Color(0xFF4ADE80), fontSize = 12.sp)
+                }
+            }
+        }
+
+        // Vulkan C++ Native Pipeline Architecture Card
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+            border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.35f))
+        ) {
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Memory, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Native Vulkan C++ Pipeline (SaschaWillems / Khronos)",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = Color.White)
+                    )
+                }
+                Text(
+                    "PBR (Cook-Torrance GGX microfacet BRDF, D_GGX, V_Smith, F_Schlick) is exclusively evaluated by the native Vulkan C++ engine and GLSL shaders (native_assets/shaders/glsl/pbr.frag, pbr.vert).",
+                    style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFFCBD5E1), fontSize = 11.sp)
+                )
+                Surface(
+                    color = Color.Black.copy(alpha = 0.45f),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            "PHYSICAL INVARIANCE SPECIFICATION:",
+                            color = Color(0xFF38BDF8),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            "• Camera View Scale (Zoom): Alters camera projection / viewport FOV; zero effect on physical geometry or PBR material properties.",
+                            color = Color(0xFF94A3B8),
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            "• Metric Dimension (Measurements): Increases physical area and volume. Physical PBR properties (albedo, roughness, metallic, tile scale) remain constant in world space.",
+                            color = Color(0xFF94A3B8),
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            "• True UV Tiling: A 1m surface with 4 tiles (2x2) yields 16 tiles (4x4) at 4m² (2m x 2m), preserving constant physical component dimensions.",
+                            color = Color(0xFF4ADE80),
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
                 }
             }
         }

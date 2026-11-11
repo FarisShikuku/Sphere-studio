@@ -67,18 +67,18 @@ fun MaterialPreviewViewport(
     useRealWorldScale: Boolean = true,
     uvTilingMultiplierX: Float = 1.0f,
     uvTilingMultiplierY: Float = 1.0f,
+    showWireframe: Boolean = false,
+    onToggleWireframe: ((Boolean) -> Unit)? = null,
     onScaleChange: ((Float) -> Unit)? = null,
     onShapeChange: (PreviewMeshShape) -> Unit = {}
 ) {
     var rotX by remember { mutableFloatStateOf(18f) }
     var rotY by remember { mutableFloatStateOf(-32f) }
+    var cameraZoomFactor by remember { mutableFloatStateOf(1.0f) }
     var lightAngle by remember { mutableFloatStateOf(45f) }
     var splitPosition by remember { mutableFloatStateOf(0.5f) }
-
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val textureBitmap = remember(material.id, context) {
-        TextureManager.getTextureForMaterial(context, material)
-    }
+    var internalWireframe by remember { mutableStateOf(showWireframe) }
+    val isWireframeVisible = onToggleWireframe?.let { showWireframe } ?: internalWireframe
 
     Box(
         modifier = modifier
@@ -106,27 +106,29 @@ fun MaterialPreviewViewport(
                 )
             )
 
-            // Perspective Studio Ground Stage Lines
             val floorY = size.height * 0.78f
-            val cx = size.width * 0.5f
-            val gridStep = 44f
-            for (i in -12..12) {
-                val startX = cx + i * gridStep * 0.40f
-                val endX = cx + i * gridStep * 3.2f
-                val alpha = (1.0f - abs(i) / 13f) * 0.055f
-                drawLine(
-                    color = Color(0xFF38BDF8).copy(alpha = alpha),
-                    start = Offset(startX, floorY),
-                    end = Offset(endX, size.height),
-                    strokeWidth = 1f
-                )
+            // Perspective ground lines only rendered when wireframe mode is explicitly enabled
+            if (isWireframeVisible) {
+                val cx = size.width * 0.5f
+                val gridStep = 44f
+                for (i in -12..12) {
+                    val startX = cx + i * gridStep * 0.40f
+                    val endX = cx + i * gridStep * 3.2f
+                    val alpha = (1.0f - abs(i) / 13f) * 0.055f
+                    drawLine(
+                        color = Color(0xFF38BDF8).copy(alpha = alpha),
+                        start = Offset(startX, floorY),
+                        end = Offset(endX, size.height),
+                        strokeWidth = 1f
+                    )
+                }
             }
-            // Horizon Accent Line
+            // Subtle Horizon Accent Line
             drawLine(
-                color = Color(0xFF38BDF8).copy(alpha = 0.14f),
+                color = Color(0xFF38BDF8).copy(alpha = if (isWireframeVisible) 0.14f else 0.06f),
                 start = Offset(0f, floorY),
                 end = Offset(size.width, floorY),
-                strokeWidth = 1.2f
+                strokeWidth = 1.0f
             )
         }
 
@@ -151,8 +153,18 @@ fun MaterialPreviewViewport(
             // Eye direction in world space pointing from origin towards camera
             val eyeDir = Vec3D(sinY * cosX, sinX, cosY * cosX).normalized()
 
-            val cameraDist = 4.2f
-            val fovFactor = min(w, h) * 1.55f
+            // Physical bounding extent across active dimensions
+            val maxDimensionExtent = maxOf(
+                objectWidthScale * objectScale,
+                objectHeightScale * objectScale,
+                objectDepthScale * objectScale,
+                1.0f
+            )
+            // Camera distance adapts smoothly with sub-linear damping so large objects (> 100m) remain in view
+            // while physical mesh dimensions clearly expand and shrink visually on screen
+            val cameraDist = (3.8f + (maxDimensionExtent - 1.0f).coerceAtLeast(0f) * 0.40f)
+            // Camera FOV magnification depends purely on cameraZoomFactor (optical view zoom, not physical dimension)
+            val fovFactor = min(w, h) * 1.35f * cameraZoomFactor
 
             fun project(v: Vec3D): Point2D {
                 val x1 = v.x * cosY + v.z * sinY
@@ -210,7 +222,8 @@ fun MaterialPreviewViewport(
                     // =================================================================
                     // BRIGHT, HIGH-RESOLUTION 3D TEST CUBE WITH TEXT TELEMETRY
                     // =================================================================
-                    val baseHs = 0.96f * objectScale
+                    // Standard 1.00m Unit Cube (hw, hh, hd = 0.50m at 1.0x)
+                    val baseHs = 0.50f * objectScale
                     val hw = baseHs * objectWidthScale
                     val hh = baseHs * objectHeightScale
                     val hd = baseHs * objectDepthScale
@@ -296,24 +309,7 @@ fun MaterialPreviewViewport(
                             else -> Pair(hw * 2f, hh * 2f)
                         }
 
-                        if (textureBitmap != null) {
-                            val surfacePts = projPts.map { SurfacePoint2D(it.x, it.y) }
-                            TextureManager.drawTexturedQuad(
-                                drawScope = this,
-                                bitmap = textureBitmap,
-                                pts = surfacePts,
-                                facePath = facePath,
-                                material = material,
-                                diffuse = diffuse,
-                                specular = specular,
-                                channelMode = channelMode,
-                                surfaceWidthMeters = faceW,
-                                surfaceHeightMeters = faceH,
-                                useRealWorldScale = useRealWorldScale,
-                                uvTilingMultiplierX = uvTilingMultiplierX,
-                                uvTilingMultiplierY = uvTilingMultiplierY
-                            )
-                        } else {
+
                             when (channelMode) {
                                 MaterialChannelMode.ALBEDO_MAP -> {
                                     drawPath(path = facePath, color = material.baseColor)
@@ -347,9 +343,9 @@ fun MaterialPreviewViewport(
 
                                     drawPath(path = facePath, color = litColor)
 
-                                    // Procedural Texture with real-world repetition
-                                    val repX = ((faceW / material.tileScaleMeters.coerceAtLeast(0.1f)) * uvTilingMultiplierX).coerceIn(0.2f, 24f)
-                                    val repY = ((faceH / material.tileScaleMeters.coerceAtLeast(0.1f)) * uvTilingMultiplierY).coerceIn(0.2f, 24f)
+                                    // Procedural Texture with real-world repetition (constant metric scale, never stretched)
+                                    val repX = ((faceW / material.tileScaleMeters.coerceAtLeast(0.05f)) * uvTilingMultiplierX).coerceIn(0.2f, 1000f)
+                                    val repY = ((faceH / material.tileScaleMeters.coerceAtLeast(0.05f)) * uvTilingMultiplierY).coerceIn(0.2f, 1000f)
                                     drawProceduralFaceTexture(
                                         material = material,
                                         compositeSurface = compositeSurface,
@@ -359,15 +355,16 @@ fun MaterialPreviewViewport(
                                         repeatY = if (useRealWorldScale) repY else uvTilingMultiplierY
                                     )
                                 }
-                            }
                         }
 
-                        // Chamfer Bevel Rim Highlight
-                        drawPath(
-                            path = facePath,
-                            color = Color.White.copy(alpha = (0.35f + specular * 0.45f).coerceIn(0.20f, 0.85f)),
-                            style = Stroke(width = 1.8f)
-                        )
+                        // Edge Rim Highlight (only rendered when wireframe inspection mode is active)
+                        if (isWireframeVisible) {
+                            drawPath(
+                                path = facePath,
+                                color = Color.White.copy(alpha = (0.35f + specular * 0.45f).coerceIn(0.20f, 0.85f)),
+                                style = Stroke(width = 1.4f)
+                            )
+                        }
                     }
                 }
 
@@ -472,24 +469,7 @@ fun MaterialPreviewViewport(
                             Pair(ht * 2f, hh * 2f)
                         }
 
-                        if (textureBitmap != null && !wf.isCoping) {
-                            val surfacePts = pts.map { SurfacePoint2D(it.x, it.y) }
-                            TextureManager.drawTexturedQuad(
-                                drawScope = this,
-                                bitmap = textureBitmap,
-                                pts = surfacePts,
-                                facePath = path,
-                                material = material,
-                                diffuse = diffuse,
-                                specular = 0f,
-                                channelMode = channelMode,
-                                surfaceWidthMeters = wallFaceW,
-                                surfaceHeightMeters = wallFaceH,
-                                useRealWorldScale = useRealWorldScale,
-                                uvTilingMultiplierX = uvTilingMultiplierX,
-                                uvTilingMultiplierY = uvTilingMultiplierY
-                            )
-                        } else {
+
                             val baseCol = if (wf.isCoping) Color(0xFFC5C9CD) else material.baseColor
                             val litRed = (baseCol.red * diffuse).coerceIn(0f, 1f)
                             val litGreen = (baseCol.green * diffuse).coerceIn(0f, 1f)
@@ -497,8 +477,8 @@ fun MaterialPreviewViewport(
                             drawPath(path = path, color = Color(litRed, litGreen, litBlue))
 
                             if (wf.isFront) {
-                                val repX = ((wallFaceW / material.tileScaleMeters.coerceAtLeast(0.1f)) * uvTilingMultiplierX).coerceIn(0.2f, 24f)
-                                val repY = ((wallFaceH / material.tileScaleMeters.coerceAtLeast(0.1f)) * uvTilingMultiplierY).coerceIn(0.2f, 24f)
+                                val repX = ((wallFaceW / material.tileScaleMeters.coerceAtLeast(0.05f)) * uvTilingMultiplierX).coerceIn(0.2f, 1000f)
+                                val repY = ((wallFaceH / material.tileScaleMeters.coerceAtLeast(0.05f)) * uvTilingMultiplierY).coerceIn(0.2f, 1000f)
                                 drawProceduralFaceTexture(
                                     material = material,
                                     compositeSurface = compositeSurface,
@@ -508,20 +488,22 @@ fun MaterialPreviewViewport(
                                     repeatY = if (useRealWorldScale) repY else uvTilingMultiplierY
                                 )
                             }
-                        }
 
-                        drawPath(
-                            path = path,
-                            color = Color.White.copy(alpha = if (wf.isFront) 0.35f else 0.20f),
-                            style = Stroke(width = 1.6f)
-                        )
+                        if (isWireframeVisible) {
+                            drawPath(
+                                path = path,
+                                color = Color.White.copy(alpha = if (wf.isFront) 0.35f else 0.20f),
+                                style = Stroke(width = 1.4f)
+                            )
+                        }
                     }
                 }
 
                 PreviewMeshShape.SPHERE -> {
                     // Curved PBR sphere scaled with object dimension modifiers
-                    val sScale = (objectScale * ((objectWidthScale + objectHeightScale + objectDepthScale) / 3f)).coerceIn(0.35f, 2.5f)
-                    val sRadius = min(w, h) * 0.28f * sScale
+                    val sScale = objectScale * ((objectWidthScale + objectHeightScale + objectDepthScale) / 3f)
+                    val normalizedRadiusScale = (sScale / maxDimensionExtent).coerceIn(0.20f, 1.2f)
+                    val sRadius = min(w, h) * 0.28f * normalizedRadiusScale
                     val sCenter = Offset(cx, cy)
 
                     val shadowCenter = Offset(sCenter.x - lightDir.x * 24f, sCenter.y + sRadius * 0.94f)
@@ -533,40 +515,16 @@ fun MaterialPreviewViewport(
 
                     val highlight = Offset(sCenter.x + lightDir.x * sRadius * 0.40f, sCenter.y - lightDir.y * sRadius * 0.40f)
 
-                    if (textureBitmap != null) {
-                        val sphDiam = sScale * 1.6f
-                        TextureManager.drawTexturedSphere(
-                            drawScope = this,
-                            bitmap = textureBitmap,
-                            center = sCenter,
-                            radius = sRadius,
-                            sphereDiameterMeters = sphDiam,
-                            material = material,
-                            useRealWorldScale = useRealWorldScale,
-                            uvTilingMultiplier = uvTilingMultiplierX
-                        )
-                        val sphereShade = Brush.radialGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.42f),
-                                Color.Black.copy(alpha = 0.88f)
-                            ),
-                            center = highlight,
-                            radius = sRadius * 1.15f
-                        )
-                        drawCircle(brush = sphereShade, radius = sRadius, center = sCenter)
-                    } else {
-                        val sphereGrad = Brush.radialGradient(
-                            colors = listOf(
-                                material.baseColor,
-                                material.baseColor.copy(red = material.baseColor.red * 0.42f, green = material.baseColor.green * 0.42f, blue = material.baseColor.blue * 0.42f),
-                                Color.Black.copy(alpha = 0.92f)
-                            ),
-                            center = highlight,
-                            radius = sRadius * 1.15f
-                        )
-                        drawCircle(brush = sphereGrad, radius = sRadius, center = sCenter)
-                    }
+                    val sphereGrad = Brush.radialGradient(
+                        colors = listOf(
+                            material.baseColor,
+                            material.baseColor.copy(red = material.baseColor.red * 0.42f, green = material.baseColor.green * 0.42f, blue = material.baseColor.blue * 0.42f),
+                            Color.Black.copy(alpha = 0.92f)
+                        ),
+                        center = highlight,
+                        radius = sRadius * 1.15f
+                    )
+                    drawCircle(brush = sphereGrad, radius = sRadius, center = sCenter)
 
                     val specRadius = sRadius * (0.08f + material.roughness * 0.36f)
                     val specAlpha = ((1.0f - material.roughness) * (0.5f + material.metallic * 0.5f)).coerceIn(0.1f, 0.95f)
@@ -575,7 +533,9 @@ fun MaterialPreviewViewport(
                         radius = specRadius,
                         center = highlight
                     )
-                    drawCircle(color = Color.White.copy(alpha = 0.25f), radius = sRadius, center = sCenter, style = Stroke(width = 1.6f))
+                    if (isWireframeVisible) {
+                        drawCircle(color = Color.White.copy(alpha = 0.25f), radius = sRadius, center = sCenter, style = Stroke(width = 1.4f))
+                    }
                 }
 
                 PreviewMeshShape.PLANE -> {
@@ -658,27 +618,10 @@ fun MaterialPreviewViewport(
                         if (ff.isTop) {
                             val floorFaceW = hfw * 2f
                             val floorFaceD = hfd * 2f
-                            if (textureBitmap != null) {
-                                val surfacePts = pts.map { SurfacePoint2D(it.x, it.y) }
-                                TextureManager.drawTexturedQuad(
-                                    drawScope = this,
-                                    bitmap = textureBitmap,
-                                    pts = surfacePts,
-                                    facePath = path,
-                                    material = material,
-                                    diffuse = diffuse,
-                                    specular = 0f,
-                                    channelMode = channelMode,
-                                    surfaceWidthMeters = floorFaceW,
-                                    surfaceHeightMeters = floorFaceD,
-                                    useRealWorldScale = useRealWorldScale,
-                                    uvTilingMultiplierX = uvTilingMultiplierX,
-                                    uvTilingMultiplierY = uvTilingMultiplierY
-                                )
-                            } else {
+
                                 drawPath(path = path, color = material.baseColor)
-                                val repX = ((floorFaceW / material.tileScaleMeters.coerceAtLeast(0.1f)) * uvTilingMultiplierX).coerceIn(0.2f, 24f)
-                                val repY = ((floorFaceD / material.tileScaleMeters.coerceAtLeast(0.1f)) * uvTilingMultiplierY).coerceIn(0.2f, 24f)
+                                val repX = ((floorFaceW / material.tileScaleMeters.coerceAtLeast(0.05f)) * uvTilingMultiplierX).coerceIn(0.2f, 1000f)
+                                val repY = ((floorFaceD / material.tileScaleMeters.coerceAtLeast(0.05f)) * uvTilingMultiplierY).coerceIn(0.2f, 1000f)
                                 drawProceduralFaceTexture(
                                     material = material,
                                     compositeSurface = compositeSurface,
@@ -687,7 +630,6 @@ fun MaterialPreviewViewport(
                                     repeatX = if (useRealWorldScale) repX else uvTilingMultiplierX,
                                     repeatY = if (useRealWorldScale) repY else uvTilingMultiplierY
                                 )
-                            }
                         } else {
                             val edgeBase = Color(0xFF64748B)
                             val litCol = Color(
@@ -698,17 +640,94 @@ fun MaterialPreviewViewport(
                             drawPath(path = path, color = litCol)
                         }
 
-                        drawPath(
-                            path = path,
-                            color = Color.White.copy(alpha = if (ff.isTop) 0.35f else 0.20f),
-                            style = Stroke(width = 1.6f)
-                        )
+                        if (isWireframeVisible) {
+                            drawPath(
+                                path = path,
+                                color = Color.White.copy(alpha = if (ff.isTop) 0.35f else 0.20f),
+                                style = Stroke(width = 1.4f)
+                            )
+                        }
                     }
                 }
             }
         }
 
-        // Sun Light Rotation Control (Top End)
+        // Live Physical Metrics & PBR Constant Tiling Telemetry HUD (TopStart)
+        val hudActualW = when (shape) {
+            PreviewMeshShape.CUBE -> 1.0f * objectWidthScale * objectScale
+            PreviewMeshShape.WALL -> 2.0f * objectWidthScale * objectScale
+            PreviewMeshShape.PLANE -> 2.0f * objectWidthScale * objectScale
+            PreviewMeshShape.SPHERE -> 1.0f * objectWidthScale * objectScale
+        }
+        val hudActualH = when (shape) {
+            PreviewMeshShape.CUBE -> 1.0f * objectHeightScale * objectScale
+            PreviewMeshShape.WALL -> 1.5f * objectHeightScale * objectScale
+            PreviewMeshShape.PLANE -> 0.15f * objectHeightScale * objectScale
+            PreviewMeshShape.SPHERE -> 1.0f * objectHeightScale * objectScale
+        }
+        val hudActualD = when (shape) {
+            PreviewMeshShape.CUBE -> 1.0f * objectDepthScale * objectScale
+            PreviewMeshShape.WALL -> 0.25f * objectDepthScale * objectScale
+            PreviewMeshShape.PLANE -> 2.0f * objectDepthScale * objectScale
+            PreviewMeshShape.SPHERE -> 1.0f * objectDepthScale * objectScale
+        }
+        val hudPatternM = if (material.tileScaleMeters > 0.05f) material.tileScaleMeters else 1.0f
+        val hudPatternMm = (hudPatternM * 1000).toInt()
+        val hudTilesX = ((hudActualW / hudPatternM) * uvTilingMultiplierX).coerceAtLeast(1f).roundToInt()
+        val hudTilesY = (((if (shape == PreviewMeshShape.PLANE) hudActualD else hudActualH) / hudPatternM) * uvTilingMultiplierY).coerceAtLeast(1f).roundToInt()
+
+        Surface(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(10.dp)
+                .testTag("viewport_metrics_hud"),
+            color = Color(0xDD090D16),
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.35f))
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(Color(0xFF10B981), RoundedCornerShape(3.dp))
+                    )
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        text = "${shape.label.uppercase()} MEASUREMENT",
+                        color = Color(0xFF38BDF8),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+                Text(
+                    text = "${"%.2f".format(hudActualW)}m (W) × ${"%.2f".format(hudActualH)}m (H) × ${"%.2f".format(hudActualD)}m (D)",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+                Text(
+                    text = "Area: ${"%.2f".format(hudActualW * (if (shape == PreviewMeshShape.PLANE) hudActualD else hudActualH))} m²  •  Tiles: ${hudTilesX}×${hudTilesY} (${hudTilesX * hudTilesY})",
+                    color = Color(0xFF94A3B8),
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+                Text(
+                    text = "PBR Tile: ${hudPatternMm}mm (Constant physical scale)",
+                    color = Color(0xFF10B981),
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Medium,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+        }
+
+        // Controls Overlay (Top End): Wireframe Toggle & Sun Light Rotation
         Surface(
             modifier = Modifier
                 .align(Alignment.TopEnd)
@@ -721,6 +740,53 @@ fun MaterialPreviewViewport(
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Wireframe / Mesh visibility toggle button
+                IconButton(
+                    onClick = {
+                        val next = !isWireframeVisible
+                        if (onToggleWireframe != null) onToggleWireframe(next) else internalWireframe = next
+                    },
+                    modifier = Modifier.size(24.dp).testTag("toggle_wireframe_button")
+                ) {
+                    Icon(
+                        imageVector = if (isWireframeVisible) Icons.Default.GridOn else Icons.Default.GridOff,
+                        contentDescription = if (isWireframeVisible) "Hide Wireframe Mesh" else "Show Wireframe Mesh",
+                        tint = if (isWireframeVisible) Color(0xFF38BDF8) else Color(0xFF94A3B8),
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+                // Camera Zoom In / Out Controls (View Zoom: Scales screen FOV without changing physical dimensions)
+                IconButton(
+                    onClick = { cameraZoomFactor = (cameraZoomFactor * 0.85f).coerceIn(0.25f, 4.0f) },
+                    modifier = Modifier.size(24.dp).testTag("zoom_out_button")
+                ) {
+                    Icon(
+                        Icons.Default.ZoomOut,
+                        contentDescription = "Camera Zoom Out",
+                        tint = Color(0xFFCBD5E1),
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+                Text(
+                    "${"%.1f".format(cameraZoomFactor)}x",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                        color = Color(0xFF38BDF8),
+                        fontSize = 10.sp
+                    )
+                )
+                IconButton(
+                    onClick = { cameraZoomFactor = (cameraZoomFactor * 1.18f).coerceIn(0.25f, 4.0f) },
+                    modifier = Modifier.size(24.dp).testTag("zoom_in_button")
+                ) {
+                    Icon(
+                        Icons.Default.ZoomIn,
+                        contentDescription = "Camera Zoom In",
+                        tint = Color(0xFFCBD5E1),
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(4.dp))
                 IconButton(
                     onClick = { lightAngle = (lightAngle + 30f) % 360f },
                     modifier = Modifier.size(24.dp)
@@ -767,17 +833,332 @@ private fun DrawScope.drawProceduralFaceTexture(
     }
 
     val patternType = compositeSurface?.patternType ?: when {
+        material.id.contains("herringbone") -> SurfacePatternType.BRICK_HERRINGBONE
+        material.id.contains("four_leaf") || material.id.contains("four-leaf") -> SurfacePatternType.GRASS_PAVER_FOUR_LEAF
+        material.id.contains("picket") -> SurfacePatternType.GRASS_PAVER_PICKET_SQUARE
+        material.id.contains("asphalt") || material.id.contains("macadam") -> SurfacePatternType.ASPHALT_AGGREGATE_MACADAM
+        material.id.contains("chevron") -> SurfacePatternType.CHEVRON_PARQUET_WOOD
+        material.id.contains("paver") || material.id.contains("bowtie") -> SurfacePatternType.PAVER_INTERLOCKING_GEOMETRIC
+        material.id.contains("granite") && material.id.contains("sett") -> SurfacePatternType.GRANITE_SETTS_COBBLE
+        material.id.contains("flagstone") || material.id.contains("rubble") || material.id.contains("crazy") -> SurfacePatternType.STONE_RUBBLE_FLAGSTONE
+        material.id.contains("terrazzo") || material.id.contains("mosaic") || material.id.contains("inlay") -> SurfacePatternType.TERRAZZO_MOSAIC_CHIPS
+        material.id.contains("shingle") || material.id.contains("roof") -> SurfacePatternType.ROOF_SHINGLE_SCALLOP
+        material.id.contains("corrugated") || material.id.contains("profile") -> SurfacePatternType.METAL_CORRUGATED_RIBS
+        material.id.contains("tread") || material.id.contains("diamond") -> SurfacePatternType.METAL_DIAMOND_TREAD
+        material.id.contains("soil") || material.id.contains("mud") -> SurfacePatternType.ORGANIC_SOIL_LOAM
+        material.id.contains("grass") || material.id.contains("turf") -> SurfacePatternType.TURF_BLADE_ORGANIC
         material.id.contains("brick") -> SurfacePatternType.BRICK_BOND_MASONRY
         material.id.contains("tile") -> SurfacePatternType.TILED_GROUT_GRID
         material.id.contains("wood") -> SurfacePatternType.PLANK_GRAIN_FLOOR
-        material.id.contains("asphalt") -> SurfacePatternType.ASPHALT_ROAD_MARKING
         else -> SurfacePatternType.HOMOGENEOUS
     }
 
     when (patternType) {
+        SurfacePatternType.BRICK_HERRINGBONE -> {
+            // User Image 1: Pilotage Herringbone 45-degree terracotta bricks with sand joints
+            val steps = (8f * ((repeatX + repeatY) * 0.5f)).roundToInt().coerceIn(6, 200)
+            val mortarColor = Color(0xFFC4B8A6).copy(alpha = 0.85f)
+            val brickBevel = Color(0xFFD4684A).copy(alpha = 0.55f)
+
+            // Diagonal lines in 45-degree alternating zigzag
+            for (i in 0..steps) {
+                val t0 = i.toFloat() / steps
+                // Diagonal positive slope
+                drawLine(color = mortarColor, start = lerp(t0, 0f), end = lerp(1f, 1f - t0), strokeWidth = 2.0f)
+                drawLine(color = mortarColor, start = lerp(0f, t0), end = lerp(1f - t0, 1f), strokeWidth = 2.0f)
+                // Intersecting perpendicular cross-joints every 2 units
+                if (i % 2 == 0) {
+                    val mid = (i + 0.5f) / steps
+                    if (mid < 1.0f) {
+                        drawLine(color = brickBevel, start = lerp(mid, 0f), end = lerp(0f, mid), strokeWidth = 1.2f)
+                    }
+                }
+            }
+        }
+
+        SurfacePatternType.GRASS_PAVER_FOUR_LEAF -> {
+            // User Image 2: Concrete paver grid with four-leaf clover lawn grass insets
+            val gridCount = (4f * ((repeatX + repeatY) * 0.5f)).roundToInt().coerceIn(3, 80)
+            val frameColor = Color(0xFFC8CBCE).copy(alpha = 0.90f) // Light grey concrete
+            val grassColor = Color(0xFF4C8230).copy(alpha = 0.95f) // Deep lawn green
+            val innerGrass = Color(0xFF386622).copy(alpha = 0.95f)
+
+            // Draw concrete grid lines
+            for (i in 0..gridCount) {
+                val t = i.toFloat() / gridCount
+                drawLine(color = frameColor, start = lerp(0f, t), end = lerp(1f, t), strokeWidth = 3.0f)
+                drawLine(color = frameColor, start = lerp(t, 0f), end = lerp(t, 1f), strokeWidth = 3.0f)
+            }
+
+            // Draw four-leaf clover grass clusters in each grid cell
+            val step = 1.0f / gridCount
+            for (gx in 0 until gridCount) {
+                for (gy in 0 until gridCount) {
+                    val cx = (gx + 0.5f) * step
+                    val cy = (gy + 0.5f) * step
+                    val radius = step * 0.28f
+
+                    // 4 clover petals
+                    val p0 = lerp(cx, cy - radius * 0.55f)
+                    val p1 = lerp(cx + radius * 0.55f, cy)
+                    val p2 = lerp(cx, cy + radius * 0.55f)
+                    val p3 = lerp(cx - radius * 0.55f, cy)
+                    val centerPt = lerp(cx, cy)
+
+                    drawCircle(color = grassColor, radius = radius * 45f, center = p0)
+                    drawCircle(color = grassColor, radius = radius * 45f, center = p1)
+                    drawCircle(color = grassColor, radius = radius * 45f, center = p2)
+                    drawCircle(color = grassColor, radius = radius * 45f, center = p3)
+                    drawCircle(color = innerGrass, radius = radius * 26f, center = centerPt)
+                }
+            }
+        }
+
+        SurfacePatternType.GRASS_PAVER_PICKET_SQUARE -> {
+            // User Image 3: Permeable octagonal concrete pavers with square turf insets
+            val gridCount = (4f * ((repeatX + repeatY) * 0.5f)).roundToInt().coerceIn(3, 80)
+            val concreteColor = Color(0xFFD0D4D6).copy(alpha = 0.95f)
+            val seamColor = Color(0xFF8A8E92).copy(alpha = 0.70f)
+            val turfSquareColor = Color(0xFF467B2A).copy(alpha = 0.95f)
+            val step = 1.0f / gridCount
+
+            for (gx in 0 until gridCount) {
+                for (gy in 0 until gridCount) {
+                    val u0 = gx * step
+                    val v0 = gy * step
+                    val u1 = (gx + 1) * step
+                    val v1 = (gy + 1) * step
+
+                    // Draw octagonal border seam
+                    drawLine(color = seamColor, start = lerp(u0, v0), end = lerp(u1, v0), strokeWidth = 1.6f)
+                    drawLine(color = seamColor, start = lerp(u0, v0), end = lerp(u0, v1), strokeWidth = 1.6f)
+
+                    // Central square turf cutout
+                    val sqMargin = step * 0.25f
+                    val sq0 = lerp(u0 + sqMargin, v0 + sqMargin)
+                    val sq1 = lerp(u1 - sqMargin, v0 + sqMargin)
+                    val sq2 = lerp(u1 - sqMargin, v1 - sqMargin)
+                    val sq3 = lerp(u0 + sqMargin, v1 - sqMargin)
+
+                    val sqPath = Path().apply {
+                        moveTo(sq0.x, sq0.y)
+                        lineTo(sq1.x, sq1.y)
+                        lineTo(sq2.x, sq2.y)
+                        lineTo(sq3.x, sq3.y)
+                        close()
+                    }
+                    drawPath(path = sqPath, color = turfSquareColor)
+                }
+            }
+        }
+
+        SurfacePatternType.ASPHALT_AGGREGATE_MACADAM -> {
+            // High-detail bitumen matrix with embedded black basalt chips and mineral aggregate
+            val aggregateRows = (10f * repeatY).roundToInt().coerceIn(8, 120)
+            val aggregateCols = (10f * repeatX).roundToInt().coerceIn(8, 120)
+            val basaltChip = Color(0xFF141516).copy(alpha = 0.90f)
+            val stoneGrit = Color(0xFF787B80).copy(alpha = 0.75f)
+            val tarSheen = Color(0xFF383A3D).copy(alpha = 0.40f)
+
+            for (r in 0..aggregateRows) {
+                for (c in 0..aggregateCols) {
+                    val jitterU = (sin(r * 12.9898f + c * 78.233f) * 0.5f + 0.5f)
+                    val jitterV = (cos(r * 43.123f + c * 93.712f) * 0.5f + 0.5f)
+                    val u = ((c + jitterU * 0.8f) / aggregateCols).coerceIn(0.02f, 0.98f)
+                    val v = ((r + jitterV * 0.8f) / aggregateRows).coerceIn(0.02f, 0.98f)
+                    val pt = lerp(u, v)
+
+                    val chipSize = if ((r + c) % 3 == 0) 3.5f else 2.0f
+                    val chipColor = if ((r + c) % 2 == 0) basaltChip else stoneGrit
+                    drawCircle(color = chipColor, radius = chipSize, center = pt)
+                }
+            }
+
+            // Subtle road wear lines
+            val wearCol = tarSheen
+            drawLine(color = wearCol, start = lerp(0.15f, 0f), end = lerp(0.15f, 1f), strokeWidth = 14f)
+            drawLine(color = wearCol, start = lerp(0.85f, 0f), end = lerp(0.85f, 1f), strokeWidth = 14f)
+        }
+
+        SurfacePatternType.PAVER_INTERLOCKING_GEOMETRIC -> {
+            // Basalt V-pavers, bowtie pavers, concrete interlocking units
+            val rows = (6f * repeatY).roundToInt().coerceIn(4, 200)
+            val cols = (5f * repeatX).roundToInt().coerceIn(3, 200)
+            val jointColor = Color(0xFF3C3E40).copy(alpha = 0.85f)
+            val bevelColor = Color(0xFF888B90).copy(alpha = 0.45f)
+
+            for (r in 0 until rows) {
+                val v0 = r.toFloat() / rows
+                val v1 = (r + 1).toFloat() / rows
+                val shift = if (r % 2 == 1) 0.5f / cols else 0f
+                for (c in 0 until cols) {
+                    val u0 = (c.toFloat() / cols + shift) % 1.0f
+                    val u1 = ((c + 1).toFloat() / cols + shift) % 1.0f
+                    // V-chevron paver seam
+                    val pMid = lerp((u0 + u1) * 0.5f, (v0 + v1) * 0.5f)
+                    drawLine(color = jointColor, start = lerp(u0, v0), end = pMid, strokeWidth = 1.8f)
+                    drawLine(color = jointColor, start = pMid, end = lerp(u1, v0), strokeWidth = 1.8f)
+                    drawLine(color = bevelColor, start = pMid, end = lerp((u0 + u1) * 0.5f, v1), strokeWidth = 1.2f)
+                }
+            }
+        }
+
+        SurfacePatternType.STONE_RUBBLE_FLAGSTONE -> {
+            // Natural flagstone rubble and granite crazy paving
+            val divCount = (6f * ((repeatX + repeatY) * 0.5f)).roundToInt().coerceIn(4, 150)
+            val jointColor = Color(0xFF6B655D).copy(alpha = 0.90f)
+            val flagHighlight = Color(0xFFC0BAB0).copy(alpha = 0.35f)
+
+            for (i in 1 until divCount) {
+                val t = i.toFloat() / divCount
+                // Organic wandering mortar joints
+                val p0 = lerp(0f, t)
+                val p1 = lerp(0.35f, (t + 0.08f * sin(i * 3.14f)).coerceIn(0.05f, 0.95f))
+                val p2 = lerp(0.70f, (t - 0.06f * cos(i * 2.71f)).coerceIn(0.05f, 0.95f))
+                val p3 = lerp(1.0f, t)
+                drawLine(color = jointColor, start = p0, end = p1, strokeWidth = 2.2f)
+                drawLine(color = jointColor, start = p1, end = p2, strokeWidth = 2.2f)
+                drawLine(color = jointColor, start = p2, end = p3, strokeWidth = 2.2f)
+            }
+        }
+
+        SurfacePatternType.GRANITE_SETTS_COBBLE -> {
+            // Scottish granite setts in staggered courses
+            val rows = (8f * repeatY).roundToInt().coerceIn(5, 200)
+            val cols = (6f * repeatX).roundToInt().coerceIn(4, 200)
+            val groutColor = Color(0xFF55595C).copy(alpha = 0.85f)
+
+            for (r in 1 until rows) {
+                val v = r.toFloat() / rows
+                drawLine(color = groutColor, start = lerp(0f, v), end = lerp(1f, v), strokeWidth = 2.0f)
+            }
+            for (r in 0 until rows) {
+                val v0 = r.toFloat() / rows
+                val v1 = (r + 1).toFloat() / rows
+                val shift = if (r % 2 == 1) 0.5f / cols else 0f
+                for (c in 1 until cols) {
+                    val u = (c.toFloat() / cols + shift) % 1.0f
+                    drawLine(color = groutColor, start = lerp(u, v0), end = lerp(u, v1), strokeWidth = 1.8f)
+                }
+            }
+        }
+
+        SurfacePatternType.TERRAZZO_MOSAIC_CHIPS -> {
+            // Galletta terrazzo & marble star/hex mosaic
+            val chipCount = (12f * ((repeatX + repeatY) * 0.5f)).roundToInt().coerceIn(8, 60)
+            val amberChip = Color(0xFFC49A58).copy(alpha = 0.80f)
+            val greyChip = Color(0xFF6E7278).copy(alpha = 0.80f)
+            val whiteChip = Color(0xFFFFFFFF).copy(alpha = 0.85f)
+
+            for (i in 0 until chipCount) {
+                for (j in 0 until chipCount) {
+                    val u = (i + 0.5f + sin(i * 9.2f) * 0.35f) / chipCount
+                    val v = (j + 0.5f + cos(j * 8.4f) * 0.35f) / chipCount
+                    val pt = lerp(u.coerceIn(0.02f, 0.98f), v.coerceIn(0.02f, 0.98f))
+                    val col = when ((i * 3 + j) % 3) {
+                        0 -> amberChip
+                        1 -> greyChip
+                        else -> whiteChip
+                    }
+                    drawCircle(color = col, radius = 2.5f, center = pt)
+                }
+            }
+        }
+
+        SurfacePatternType.CHEVRON_PARQUET_WOOD -> {
+            // Wenge chevron timber parquet flooring
+            val chevrons = (6f * repeatY).roundToInt().coerceIn(4, 200)
+            val seamCol = Color(0xFF221712).copy(alpha = 0.90f)
+            val grainCol = Color(0xFF523D2E).copy(alpha = 0.45f)
+
+            for (c in 0 until chevrons) {
+                val v0 = c.toFloat() / chevrons
+                val v1 = (c + 1).toFloat() / chevrons
+                val vMid = (v0 + v1) * 0.5f
+                drawLine(color = seamCol, start = lerp(0f, v0), end = lerp(0.5f, vMid), strokeWidth = 2.0f)
+                drawLine(color = seamCol, start = lerp(0.5f, vMid), end = lerp(1f, v0), strokeWidth = 2.0f)
+                // Center seam
+                drawLine(color = seamCol, start = lerp(0.5f, 0f), end = lerp(0.5f, 1f), strokeWidth = 1.8f)
+            }
+        }
+
+        SurfacePatternType.ROOF_SHINGLE_SCALLOP -> {
+            // Bitumen hexagonal roof shingles
+            val courses = (6f * repeatY).roundToInt().coerceIn(4, 200)
+            val shingleLine = Color(0xFF2B2D2F).copy(alpha = 0.95f)
+            val shingleShad = Color(0xFF181A1B).copy(alpha = 0.60f)
+
+            for (k in 1 until courses) {
+                val v = k.toFloat() / courses
+                drawLine(color = shingleLine, start = lerp(0f, v), end = lerp(1f, v), strokeWidth = 2.5f)
+                drawLine(color = shingleShad, start = lerp(0f, v + 0.02f), end = lerp(1f, v + 0.02f), strokeWidth = 1.5f)
+            }
+        }
+
+        SurfacePatternType.METAL_CORRUGATED_RIBS -> {
+            // Box profile steel and corrugated aluminium ribs
+            val ribs = (8f * repeatX).roundToInt().coerceIn(4, 200)
+            val lightRib = Color.White.copy(alpha = 0.65f)
+            val shadowRib = Color.Black.copy(alpha = 0.50f)
+
+            for (r in 0 until ribs) {
+                val u = r.toFloat() / ribs
+                drawLine(color = lightRib, start = lerp(u, 0f), end = lerp(u, 1f), strokeWidth = 2.0f)
+                drawLine(color = shadowRib, start = lerp(u + 0.02f, 0f), end = lerp(u + 0.02f, 1f), strokeWidth = 2.5f)
+            }
+        }
+
+        SurfacePatternType.METAL_DIAMOND_TREAD -> {
+            // Single and four bar diamond tread plate
+            val studs = (6f * ((repeatX + repeatY) * 0.5f)).roundToInt().coerceIn(4, 150)
+            val lugLight = Color.White.copy(alpha = 0.70f)
+            val lugDark = Color.Black.copy(alpha = 0.50f)
+
+            for (i in 0 until studs) {
+                for (j in 0 until studs) {
+                    val u = (i + 0.5f) / studs
+                    val v = (j + 0.5f) / studs
+                    val p0 = lerp(u - 0.03f, v - 0.02f)
+                    val p1 = lerp(u + 0.03f, v + 0.02f)
+                    drawLine(color = lugLight, start = p0, end = p1, strokeWidth = 2.4f)
+                    drawLine(color = lugDark, start = p0, end = lerp(u - 0.02f, v - 0.03f), strokeWidth = 1.5f)
+                }
+            }
+        }
+
+        SurfacePatternType.ORGANIC_SOIL_LOAM, SurfacePatternType.FOLIAGE_SOIL_SPLATMAP -> {
+            // Rich loam soil with pebbles and scattered foliage
+            val pebbles = 16
+            val pebbleCol = Color(0xFF7E7262).copy(alpha = 0.85f)
+            val mossGreen = Color(0xFF5B7828).copy(alpha = 0.75f)
+
+            for (i in 0 until pebbles) {
+                val u = (sin(i * 14.3f) * 0.45f + 0.5f)
+                val v = (cos(i * 11.7f) * 0.45f + 0.5f)
+                drawCircle(color = if (i % 2 == 0) pebbleCol else mossGreen, radius = 3.0f, center = lerp(u, v))
+            }
+        }
+
+        SurfacePatternType.TURF_BLADE_ORGANIC -> {
+            // Live lawn grass blade tufts
+            val tufts = (10f * repeatX).roundToInt().coerceIn(6, 120)
+            val bladeGreen = Color(0xFF68A33A).copy(alpha = 0.85f)
+            val darkGreen = Color(0xFF385E1E).copy(alpha = 0.90f)
+
+            for (i in 0 until tufts) {
+                for (j in 0 until tufts) {
+                    val u = (i + 0.5f) / tufts
+                    val v = (j + 0.5f) / tufts
+                    val pt0 = lerp(u, v)
+                    val pt1 = lerp(u + 0.02f, (v - 0.04f).coerceAtLeast(0f))
+                    drawLine(color = if ((i + j) % 2 == 0) bladeGreen else darkGreen, start = pt0, end = pt1, strokeWidth = 1.6f)
+                }
+            }
+        }
+
         SurfacePatternType.BRICK_BOND_MASONRY -> {
-            val rows = (6f * repeatY).roundToInt().coerceIn(3, 26)
-            val cols = (4f * repeatX).roundToInt().coerceIn(2, 22)
+            val rows = (6f * repeatY).roundToInt().coerceIn(3, 200)
+            val cols = (4f * repeatX).roundToInt().coerceIn(2, 200)
             val mortarColor = Color(0xFFD4C8B8).copy(alpha = 0.70f) // Light sandy mortar
 
             // Horizontal Mortar Seams
@@ -799,17 +1180,23 @@ private fun DrawScope.drawProceduralFaceTexture(
         }
 
         SurfacePatternType.TILED_GROUT_GRID -> {
-            val divs = (4f * ((repeatX + repeatY) * 0.5f)).roundToInt().coerceIn(2, 18)
+            // Physical tile behavior: If a 1m floor has 4 tiles (2x2), then 4 m² (2m x 2m) has 16 tiles (4x4)
+            // Each physical tile maintains fixed physical dimensions (e.g. 0.5m x 0.5m), tiling more units across the surface.
+            val tilesX = (2f * repeatX).roundToInt().coerceIn(2, 240)
+            val tilesY = (2f * repeatY).roundToInt().coerceIn(2, 240)
             val groutCol = Color(0xFF94A3B8).copy(alpha = 0.75f)
-            for (i in 1 until divs) {
-                val t = i.toFloat() / divs
-                drawLine(color = groutCol, start = lerp(0f, t), end = lerp(1f, t), strokeWidth = 1.8f)
+            for (i in 1 until tilesX) {
+                val t = i.toFloat() / tilesX
                 drawLine(color = groutCol, start = lerp(t, 0f), end = lerp(t, 1f), strokeWidth = 1.8f)
+            }
+            for (j in 1 until tilesY) {
+                val t = j.toFloat() / tilesY
+                drawLine(color = groutCol, start = lerp(0f, t), end = lerp(1f, t), strokeWidth = 1.8f)
             }
         }
 
         SurfacePatternType.PLANK_GRAIN_FLOOR -> {
-            val planks = (5f * repeatY).roundToInt().coerceIn(3, 22)
+            val planks = (5f * repeatY).roundToInt().coerceIn(3, 200)
             val seamCol = Color(0xFF382212).copy(alpha = 0.85f)
             for (p in 1 until planks) {
                 val v = p.toFloat() / planks
@@ -834,7 +1221,6 @@ private fun DrawScope.drawProceduralFaceTexture(
 
         else -> {
             if (material.id.contains("concrete")) {
-                // 4 Formwork Tie Holes
                 val holes = listOf(lerp(0.25f, 0.25f), lerp(0.75f, 0.25f), lerp(0.25f, 0.75f), lerp(0.75f, 0.75f))
                 for (h in holes) {
                     drawCircle(color = Color.Black.copy(alpha = 0.75f), radius = 4f, center = h)
