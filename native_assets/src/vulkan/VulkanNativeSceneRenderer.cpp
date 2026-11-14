@@ -1,4 +1,5 @@
 #include "VulkanNativeSceneRenderer.h"
+#include "scene/NativeMeshRasterizer.h"
 #include "core/Log.h"
 #include <vector>
 #include <array>
@@ -6,6 +7,7 @@
 
 #if defined(__ANDROID__)
 #include <android/log.h>
+#include <unistd.h>
 #define LOG_TAG "VulkanNativeScene"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
@@ -27,6 +29,29 @@ VulkanNativeSceneRenderer::~VulkanNativeSceneRenderer() {
     DestroySurface();
 }
 
+bool VulkanNativeSceneRenderer::IsGpuNodeAccessible() {
+#if defined(__ANDROID__)
+    static constexpr const char* kGpuNodes[] = {
+        "/dev/dri/renderD128",
+        "/dev/dri/renderD129",
+        "/dev/kgsl-3d0",
+        "/dev/mali0",
+        "/dev/mali",
+        "/dev/pvrsrvkm",
+        "/dev/pvr_sync",
+        "/dev/nvhost-gpu"
+    };
+    for (const char* node : kGpuNodes) {
+        if (access(node, F_OK) == 0) {
+            return true;
+        }
+    }
+    return false;
+#else
+    return true;
+#endif
+}
+
 bool VulkanNativeSceneRenderer::InitializeSurface(void* nativeWindowHandle, uint32_t width, uint32_t height) {
     LOGI("VulkanNativeSceneRenderer::InitializeSurface starting (%u x %u)...", width, height);
     m_Width = width;
@@ -38,19 +63,38 @@ bool VulkanNativeSceneRenderer::InitializeSurface(void* nativeWindowHandle, uint
         LOGE("Failed to initialize: ANativeWindow is null");
         return false;
     }
-    // Note: ANativeWindow_setBuffersGeometry is avoided here because vkCreateAndroidSurfaceKHR
-    // and vkCreateSwapchainKHR configure buffer extent/formats directly, avoiding legacy gralloc rendernode queries.
 #endif
 
-    if (!CreateInstance()) return false;
-    if (!SelectPhysicalDevice()) return false;
-    if (!CreateLogicalDevice()) return false;
-    if (!CreateSurface(nativeWindowHandle)) return false;
-    if (!CreateSwapChain(width, height)) return false;
-    if (!CreateRenderPass()) return false;
-    if (!CreateFramebuffers()) return false;
-    if (!CreateCommandBuffers()) return false;
-    if (!CreateSyncObjects()) return false;
+    if (!IsGpuNodeAccessible()) {
+#if defined(__ANDROID__)
+        LOGI("No Vulkan DRM render node present; activating native C++ ANativeWindow PBR rasterizer.");
+        ANativeWindow_setBuffersGeometry(
+            m_NativeWindow,
+            static_cast<int32_t>(std::max(1u, width)),
+            static_cast<int32_t>(std::max(1u, height)),
+            WINDOW_FORMAT_RGBA_8888
+        );
+        m_SoftwareWindowMode = true;
+        m_Initialized = true;
+        return true;
+#else
+        DestroySurface();
+        return false;
+#endif
+    }
+
+    if (!CreateInstance() ||
+        !SelectPhysicalDevice() ||
+        !CreateLogicalDevice() ||
+        !CreateSurface(nativeWindowHandle) ||
+        !CreateSwapChain(width, height) ||
+        !CreateRenderPass() ||
+        !CreateFramebuffers() ||
+        !CreateCommandBuffers() ||
+        !CreateSyncObjects()) {
+        DestroySurface();
+        return false;
+    }
 
     m_Initialized = true;
     LOGI("VulkanNativeSceneRenderer: Successfully initialized native Vulkan swapchain on ANativeWindow!");
@@ -59,6 +103,7 @@ bool VulkanNativeSceneRenderer::InitializeSurface(void* nativeWindowHandle, uint
 
 bool VulkanNativeSceneRenderer::CreateInstance() {
     if (m_Instance != VK_NULL_HANDLE) return true;
+    if (!IsGpuNodeAccessible()) return false;
 
     VkApplicationInfo appInfo{};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -317,6 +362,18 @@ void VulkanNativeSceneRenderer::Resize(uint32_t width, uint32_t height) {
     m_Width = width;
     m_Height = height;
 
+#if defined(__ANDROID__)
+    if (m_SoftwareWindowMode && m_NativeWindow) {
+        ANativeWindow_setBuffersGeometry(
+            m_NativeWindow,
+            static_cast<int32_t>(std::max(1u, width)),
+            static_cast<int32_t>(std::max(1u, height)),
+            WINDOW_FORMAT_RGBA_8888
+        );
+        return;
+    }
+#endif
+
     if (!m_LogicalDevice) return;
 
     vkDeviceWaitIdle(m_LogicalDevice);
@@ -343,7 +400,42 @@ void VulkanNativeSceneRenderer::Resize(uint32_t width, uint32_t height) {
 
 void VulkanNativeSceneRenderer::RenderFrame(const NativeRenderParams& params) {
     m_CurrentParams = params;
-    if (!m_Initialized || !m_LogicalDevice || !m_SwapChain) return;
+    if (!m_Initialized) return;
+
+#if defined(__ANDROID__)
+    if (m_SoftwareWindowMode && m_NativeWindow) {
+        ANativeWindow_Buffer buffer{};
+        if (ANativeWindow_lock(m_NativeWindow, &buffer, nullptr) == 0) {
+            if (buffer.bits && buffer.width > 0 && buffer.height > 0) {
+                sphere::scene::PbrStageRasterParams stageParams;
+                stageParams.lightPosX = params.lightPosX;
+                stageParams.lightPosY = params.lightPosY;
+                stageParams.lightPosZ = params.lightPosZ;
+                stageParams.lightIntensity = params.lightIntensity;
+                stageParams.lightColorR = params.lightColorR;
+                stageParams.lightColorG = params.lightColorG;
+                stageParams.lightColorB = params.lightColorB;
+                stageParams.roughness = params.roughness;
+                stageParams.metallic = params.metallic;
+                stageParams.objectWidth = params.objectWidth;
+                stageParams.objectHeight = params.objectHeight;
+                stageParams.objectDepth = params.objectDepth;
+                stageParams.stageMode = params.stageMode;
+                sphere::scene::NativeMeshRasterizer::RenderPbrStageRGBA8888(
+                    static_cast<uint32_t*>(buffer.bits),
+                    buffer.stride,
+                    buffer.width,
+                    buffer.height,
+                    stageParams
+                );
+            }
+            ANativeWindow_unlockAndPost(m_NativeWindow);
+        }
+        return;
+    }
+#endif
+
+    if (!m_LogicalDevice || !m_SwapChain) return;
 
     vkWaitForFences(m_LogicalDevice, 1, &m_InFlightFence, VK_TRUE, UINT64_MAX);
     vkResetFences(m_LogicalDevice, 1, &m_InFlightFence);
@@ -425,33 +517,33 @@ void VulkanNativeSceneRenderer::RenderFrame(const NativeRenderParams& params) {
 }
 
 void VulkanNativeSceneRenderer::DestroySurface() {
-    if (!m_LogicalDevice) return;
-    LOGI("VulkanNativeSceneRenderer::DestroySurface cleaning up Vulkan resources...");
+    if (m_LogicalDevice) {
+        LOGI("VulkanNativeSceneRenderer::DestroySurface cleaning up Vulkan resources...");
+        vkDeviceWaitIdle(m_LogicalDevice);
 
-    vkDeviceWaitIdle(m_LogicalDevice);
+        if (m_ImageAvailableSemaphore) vkDestroySemaphore(m_LogicalDevice, m_ImageAvailableSemaphore, nullptr);
+        if (m_RenderFinishedSemaphore) vkDestroySemaphore(m_LogicalDevice, m_RenderFinishedSemaphore, nullptr);
+        if (m_InFlightFence) vkDestroyFence(m_LogicalDevice, m_InFlightFence, nullptr);
 
-    if (m_ImageAvailableSemaphore) vkDestroySemaphore(m_LogicalDevice, m_ImageAvailableSemaphore, nullptr);
-    if (m_RenderFinishedSemaphore) vkDestroySemaphore(m_LogicalDevice, m_RenderFinishedSemaphore, nullptr);
-    if (m_InFlightFence) vkDestroyFence(m_LogicalDevice, m_InFlightFence, nullptr);
+        if (m_CommandPool) vkDestroyCommandPool(m_LogicalDevice, m_CommandPool, nullptr);
 
-    if (m_CommandPool) vkDestroyCommandPool(m_LogicalDevice, m_CommandPool, nullptr);
+        for (auto fb : m_Framebuffers) {
+            if (fb) vkDestroyFramebuffer(m_LogicalDevice, fb, nullptr);
+        }
+        m_Framebuffers.clear();
 
-    for (auto fb : m_Framebuffers) {
-        if (fb) vkDestroyFramebuffer(m_LogicalDevice, fb, nullptr);
+        if (m_RenderPass) vkDestroyRenderPass(m_LogicalDevice, m_RenderPass, nullptr);
+
+        for (auto iv : m_SwapChainImageViews) {
+            if (iv) vkDestroyImageView(m_LogicalDevice, iv, nullptr);
+        }
+        m_SwapChainImageViews.clear();
+
+        if (m_SwapChain) vkDestroySwapchainKHR(m_LogicalDevice, m_SwapChain, nullptr);
+        vkDestroyDevice(m_LogicalDevice, nullptr);
     }
-    m_Framebuffers.clear();
 
-    if (m_RenderPass) vkDestroyRenderPass(m_LogicalDevice, m_RenderPass, nullptr);
-
-    for (auto iv : m_SwapChainImageViews) {
-        if (iv) vkDestroyImageView(m_LogicalDevice, iv, nullptr);
-    }
-    m_SwapChainImageViews.clear();
-
-    if (m_SwapChain) vkDestroySwapchainKHR(m_LogicalDevice, m_SwapChain, nullptr);
     if (m_Surface && m_Instance) vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
-
-    if (m_LogicalDevice) vkDestroyDevice(m_LogicalDevice, nullptr);
     if (m_Instance) vkDestroyInstance(m_Instance, nullptr);
 
     m_ImageAvailableSemaphore = VK_NULL_HANDLE;
@@ -472,6 +564,7 @@ void VulkanNativeSceneRenderer::DestroySurface() {
 #endif
 
     m_Initialized = false;
+    m_SoftwareWindowMode = false;
     LOGI("VulkanNativeSceneRenderer: Cleaned up successfully.");
 }
 

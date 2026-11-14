@@ -1,0 +1,13 @@
+#version 450 core
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+layout(binding = 0, rgba8) uniform writeonly image2D outAlbedoImage;
+layout(push_constant) uniform PushConstants { vec4 baseColor; vec4 accentColor; float wear; } pc;
+void main() {
+    ivec2 c = ivec2(gl_GlobalInvocationID.xy);
+    if (c.x >= 1024 || c.y >= 1024) return;
+    vec2 uv = (vec2(c) + 0.5) / 1024.0;
+    float trim = step(0.88, uv.y) + step(uv.y, 0.12);
+    vec3 col = mix(pc.baseColor.rgb, pc.accentColor.rgb, clamp(trim, 0.0, 1.0));
+    col = mix(col, vec3(0.26, 0.23, 0.19), pc.wear * (1.0 - smoothstep(0.0, 0.25, uv.y)));
+    imageStore(outAlbedoImage, c, vec4(col, pc.baseColor.a));
+}

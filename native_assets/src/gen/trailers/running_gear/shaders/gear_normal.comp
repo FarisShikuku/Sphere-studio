@@ -1,0 +1,14 @@
+#version 450 core
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(binding = 0, rgba8) uniform writeonly image2D outNormalImage;
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= 1024 || coord.y >= 1024) return;
+    vec2 uv = (vec2(coord) + 0.5) / 1024.0;
+    float treadX = sin(uv.x * 31.4159) * 0.22;
+    float treadY = sin(uv.y * 175.9) * 0.22;
+    vec3 n = normalize(vec3(treadX, treadY, 1.0));
+    imageStore(outNormalImage, coord, vec4(n * 0.5 + 0.5, 1.0));
+}

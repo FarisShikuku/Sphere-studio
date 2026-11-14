@@ -1,0 +1,15 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#include "include/chassis_parts_common.glsl"
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+layout(rgba8, binding = 0) writeonly uniform image2D outAlbedo;
+layout(push_constant) uniform Push { ChassisPartPushConstants pc; };
+
+void main() {
+    ivec2 gid = ivec2(gl_GlobalInvocationID.xy);
+    vec2 uv = vec2(gid) / vec2(imageSize(outAlbedo));
+    float brush = sin(uv.x * 320.0) * 0.025;
+    vec3 col = mix(pc.steelColor.rgb, pc.alloyColor.rgb, step(0.5, uv.y)) + brush;
+    imageStore(outAlbedo, gid, vec4(clamp(col, 0.0, 1.0), 1.0));
+}

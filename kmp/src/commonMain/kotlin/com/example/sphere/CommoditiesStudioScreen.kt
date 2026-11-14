@@ -1,5 +1,6 @@
 package com.example.sphere
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -7,43 +8,48 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.LocalShipping
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.QrCode
 import androidx.compose.material.icons.outlined.Terminal
-import androidx.compose.material.icons.outlined.Texture
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -161,6 +167,7 @@ fun CommoditiesStudioScreen(
                         selected = isSelected,
                         onClick = {
                             selectedCategory = category
+                            isDropdownExpanded = false
                             val firstInCat = catalog.firstOrNull { it.category == category }
                             if (firstInCat != null) {
                                 selectedCommodityId = firstInCat.id
@@ -180,38 +187,72 @@ fun CommoditiesStudioScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp)
             ) {
-                ExposedDropdownMenuBox(
-                    expanded = isDropdownExpanded,
-                    onExpandedChange = { isDropdownExpanded = !isDropdownExpanded }
+                Surface(
+                    onClick = { isDropdownExpanded = !isDropdownExpanded },
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    border = BorderStroke(
+                        width = if (isDropdownExpanded) 2.dp else 1.dp,
+                        color = if (isDropdownExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = 56.dp)
+                        .testTag("dropdown_commodity_selector")
                 ) {
-                    OutlinedTextField(
-                        value = currentCommodity.name,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Select Commodity Variant (${filteredItems.size} in category)") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isDropdownExpanded) },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Outlined.Inventory2,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        },
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .menuAnchor()
-                            .testTag("dropdown_commodity_selector")
-                    )
-
-                    ExposedDropdownMenu(
-                        expanded = isDropdownExpanded,
-                        onDismissRequest = { isDropdownExpanded = false }
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        filteredItems.forEach { item ->
+                        Icon(
+                            imageVector = Icons.Outlined.Inventory2,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Select Commodity Variant (${filteredItems.size} in category)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (isDropdownExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = currentCommodity.name,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Filled.ArrowDropDown,
+                            contentDescription = "Expand commodity list",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.rotate(if (isDropdownExpanded) 180f else 0f)
+                        )
+                    }
+                }
+
+                DropdownMenu(
+                    expanded = isDropdownExpanded,
+                    onDismissRequest = { isDropdownExpanded = false },
+                    modifier = Modifier
+                        .widthIn(min = 280.dp, max = 380.dp)
+                        .heightIn(max = 360.dp)
+                ) {
+                    filteredItems.forEach { item ->
+                        key(item.id) {
+                            val isCurrent = item.id == currentCommodity.id
                             DropdownMenuItem(
                                 text = {
                                     Column {
-                                        Text(item.name, fontWeight = FontWeight.SemiBold)
+                                        Text(
+                                            item.name,
+                                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.SemiBold,
+                                            color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                        )
                                         Text(
                                             "${item.weightKg} kg • ${item.lengthM}x${item.widthM}x${item.heightM} m",
                                             style = MaterialTheme.typography.bodySmall,
@@ -219,6 +260,16 @@ fun CommoditiesStudioScreen(
                                         )
                                     }
                                 },
+                                trailingIcon = if (isCurrent) {
+                                    {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Check,
+                                            contentDescription = "Selected",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                } else null,
                                 onClick = {
                                     selectedCommodityId = item.id
                                     isDropdownExpanded = false
@@ -236,7 +287,7 @@ fun CommoditiesStudioScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(340.dp)
+                    .height(380.dp)
                     .padding(horizontal = 16.dp)
                     .clip(RoundedCornerShape(18.dp))
                     .testTag("commodities_canvas_container")
@@ -248,8 +299,16 @@ fun CommoditiesStudioScreen(
                     rotY = rotY,
                     zoomFactor = zoomFactor,
                     onDrag = { dx, dy ->
-                        rotY += dx * 0.4f
-                        rotX = (rotX + dy * 0.4f).coerceIn(-75f, 75f)
+                        rotY = (rotY + dx * 0.45f) % 360f
+                        rotX = (rotX + dy * 0.45f).coerceIn(-85f, 85f)
+                    },
+                    onZoomChange = { newZoom ->
+                        zoomFactor = newZoom
+                    },
+                    onResetView = {
+                        rotX = 20f
+                        rotY = 35f
+                        zoomFactor = 1.0f
                     },
                     showStraps = showStraps,
                     showShrinkwrap = showShrinkwrap,

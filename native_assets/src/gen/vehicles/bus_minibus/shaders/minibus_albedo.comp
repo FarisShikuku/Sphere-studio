@@ -1,0 +1,13 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#include "include/minibus_common.glsl"
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(rgba8, binding = 0) writeonly uniform image2D outAlbedo;
+layout(push_constant) uniform Push { MinibusPushConstants pc; };
+void main() {
+    ivec2 gid = ivec2(gl_GlobalInvocationID.xy);
+    vec2 uv = vec2(gid) / vec2(imageSize(outAlbedo));
+    float cell = hashMinibus(floor(uv * 8.0), pc.seed);
+    vec3 graffiti = mix(pc.baseColor.rgb, pc.accentColor.rgb, step(0.45, cell));
+    imageStore(outAlbedo, gid, vec4(graffiti, 1.0));
+}

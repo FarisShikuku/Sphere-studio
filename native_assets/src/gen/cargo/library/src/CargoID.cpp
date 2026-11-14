@@ -11,6 +11,7 @@ const char* GetCargoCategoryName(CargoCategory cat) {
         case CargoCategory::CONTAINERS_BOTTLES: return "Containers & Bottles";
         case CargoCategory::SPECIALTY_INDUSTRIAL: return "Specialty Industrial";
         case CargoCategory::PERISHABLE_GOODS: return "Perishable Goods";
+        case CargoCategory::BUILDING_MATERIALS: return "Building Materials";
         default: return "Unknown";
     }
 }
@@ -22,6 +23,12 @@ CargoCategory GetCargoCategoryEnum(CargoID id) {
     if (id <= CargoID::GRAVEL_PILE) return CargoCategory::RAW_MATERIALS;
     if (id <= CargoID::TIN_CAN) return CargoCategory::CONTAINERS_BOTTLES;
     if (id <= CargoID::TYRE_STACK) return CargoCategory::SPECIALTY_INDUSTRIAL;
+    if (id >= CargoID::CHOPPED_FIREWOOD_SPLIT && id <= CargoID::TIMBER_STUMP_BLOCKS) {
+        return CargoCategory::RAW_MATERIALS;
+    }
+    if (id >= CargoID::STEEL_IBEAM_6M && id <= CargoID::TERRA_ROOF_TILES_PALLET) {
+        return CargoCategory::BUILDING_MATERIALS;
+    }
     return CargoCategory::PERISHABLE_GOODS;
 }
 
@@ -72,6 +79,24 @@ const char* GetCargoName(CargoID id) {
         case CargoID::PRODUCE_BAG_POTATO: return "Ventilated Mesh Potato Bag 25kg";
         case CargoID::FISH_CRATE: return "Iced Fresh Catch Seafood Crate";
         case CargoID::MEAT_BOX: return "Refrigerated Insulated Meat Carton";
+
+        case CargoID::CHOPPED_FIREWOOD_SPLIT: return "Quarter-Split Oak Firewood Wedges";
+        case CargoID::HALF_ROUND_FIREWOOD: return "Half-Split Silver Birch Logs";
+        case CargoID::STACKED_CORDWOOD_RICK: return "Cross-Stacked Cordwood Timber Rick";
+        case CargoID::WOODEN_RAILWAY_SLEEPER: return "Creosote Hardwood Sleeper Beam";
+        case CargoID::CHOPPED_KINDLING_BUNDLE: return "Bundled Split Pine Kindling Sticks";
+        case CargoID::TIMBER_STUMP_BLOCKS: return "Axe-Flared Butcher Hardwood Stump";
+
+        case CargoID::STEEL_IBEAM_6M: return "Structural Wide-Flange Steel I-Beam 6m (HEA 240)";
+        case CargoID::TIMBER_GLULAM_BEAM: return "Laminated Glulam Structural Roof Beam 4.8m";
+        case CargoID::SILICA_SAND_HEAP: return "Washed River & Masonry Silica Sand Heap";
+        case CargoID::SILICA_SAND_FIBC_1T: return "FIBC Builder's Sharp Sand Bulk Bag (1000kg)";
+        case CargoID::FLOAT_GLASS_STILLAGE: return "Tempered Architectural Float Glass A-Frame Pack";
+        case CargoID::HOLLOW_CONCRETE_CMU: return "Hollow Core Concrete Masonry Blocks (CMU Pallet)";
+        case CargoID::PRECAST_CONCRETE_SLAB: return "Prestressed Hollow-Core Concrete Deck Slab 3.6m";
+        case CargoID::GYPSUM_DRYWALL_STACK: return "Moisture-Resistant Gypsum Drywall Board Stack";
+        case CargoID::CORRUGATED_ROOF_SHEETS: return "Galvanized Corrugated Steel Roofing Sheet Pack";
+        case CargoID::TERRA_ROOF_TILES_PALLET: return "Interlocking Barrel Terracotta Clay Roof Tiles";
         default: return "Custom Cargo Commodity";
     }
 }

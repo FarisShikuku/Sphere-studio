@@ -12,6 +12,7 @@ enum class CargoCategory : uint32_t {
     CONTAINERS_BOTTLES,
     SPECIALTY_INDUSTRIAL,
     PERISHABLE_GOODS,
+    BUILDING_MATERIALS,
     COUNT
 };
 
@@ -64,6 +65,26 @@ enum class CargoID : uint32_t {
     PRODUCE_BAG_POTATO,
     FISH_CRATE,
     MEAT_BOX,
+
+    // Chopped Wood & Forestry Variants (Raw Materials)
+    CHOPPED_FIREWOOD_SPLIT,
+    HALF_ROUND_FIREWOOD,
+    STACKED_CORDWOOD_RICK,
+    WOODEN_RAILWAY_SLEEPER,
+    CHOPPED_KINDLING_BUNDLE,
+    TIMBER_STUMP_BLOCKS,
+
+    // Building Materials (Structural Beams, Sand, Architectural Glass, Concrete & Roofing)
+    STEEL_IBEAM_6M,
+    TIMBER_GLULAM_BEAM,
+    SILICA_SAND_HEAP,
+    SILICA_SAND_FIBC_1T,
+    FLOAT_GLASS_STILLAGE,
+    HOLLOW_CONCRETE_CMU,
+    PRECAST_CONCRETE_SLAB,
+    GYPSUM_DRYWALL_STACK,
+    CORRUGATED_ROOF_SHEETS,
+    TERRA_ROOF_TILES_PALLET,
 
     COUNT
 };

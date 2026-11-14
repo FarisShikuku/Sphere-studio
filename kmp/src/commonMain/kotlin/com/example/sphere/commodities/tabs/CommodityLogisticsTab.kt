@@ -45,8 +45,7 @@ fun CommodityLogisticsTab(
 ) {
     Column(
         modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .fillMaxWidth()
             .padding(14.dp)
             .testTag("commodity_logistics_tab")
     ) {

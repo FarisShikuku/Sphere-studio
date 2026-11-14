@@ -1,0 +1,16 @@
+#version 450 core
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(binding = 2, rgba8) uniform writeonly image2D outORMImage;
+
+layout(push_constant) uniform PushConstants {
+    float roughness;
+    float metallic;
+    float cavityAO;
+} pc;
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= 1024 || coord.y >= 1024) return;
+    imageStore(outORMImage, coord, vec4(pc.cavityAO, pc.roughness, pc.metallic, 1.0));
+}

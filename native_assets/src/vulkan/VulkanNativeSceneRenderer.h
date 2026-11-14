@@ -66,6 +66,7 @@ public:
      */
     void DestroySurface();
 
+    static bool IsGpuNodeAccessible();
     bool IsInitialized() const { return m_Initialized; }
     uint32_t GetWidth() const { return m_Width; }
     uint32_t GetHeight() const { return m_Height; }
@@ -82,6 +83,7 @@ private:
     bool CreateSyncObjects();
 
     bool m_Initialized = false;
+    bool m_SoftwareWindowMode = false;
     uint32_t m_Width = 1080;
     uint32_t m_Height = 1920;
 

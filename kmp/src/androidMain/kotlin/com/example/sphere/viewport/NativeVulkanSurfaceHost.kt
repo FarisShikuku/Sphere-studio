@@ -11,9 +11,9 @@ import kotlinx.coroutines.isActive
 /**
  * NativeVulkanSurfaceHost
  *
- * Direct Android SurfaceView host for Sascha Willems' Vulkan 1.3 C++ swapchain.
- * Employs ANativeWindow and VK_KHR_android_surface to provide 120 FPS hardware-composited
- * rendering directly from the native C++ engine into Android SurfaceFlinger.
+ * Direct Android SurfaceView host for the native C++ VulkanNativeSceneRenderer.
+ * All rendering executes exclusively in C++ (Vulkan swapchain on hardware GPU or
+ * native ANativeWindow C++ PBR software rasterizer when no /dev/dri/renderD* node exists).
  */
 @Composable
 fun NativeVulkanSurfaceHost(
@@ -34,8 +34,14 @@ fun NativeVulkanSurfaceHost(
 ) {
     var isSurfaceReady by remember { mutableStateOf(false) }
 
-    // Display VSync-synchronized render loop while surface is active
-    LaunchedEffect(isSurfaceReady, lightPosX, lightPosY, lightPosZ, intensity, colorR, colorG, colorB, roughness, metallic, objectWidth, objectHeight, objectDepth, stageMode) {
+    LaunchedEffect(
+        isSurfaceReady,
+        lightPosX, lightPosY, lightPosZ,
+        intensity, colorR, colorG, colorB,
+        roughness, metallic,
+        objectWidth, objectHeight, objectDepth,
+        stageMode
+    ) {
         if (!isSurfaceReady) return@LaunchedEffect
         while (isActive) {
             withFrameNanos {
@@ -58,66 +64,50 @@ fun NativeVulkanSurfaceHost(
             SurfaceView(context).apply {
                 holder.addCallback(object : SurfaceHolder.Callback {
                     override fun surfaceCreated(surfaceHolder: SurfaceHolder) {
-                        try {
-                            val w = width.coerceAtLeast(640)
-                            val h = height.coerceAtLeast(480)
-                            val initialized = SphereNativeEngine.createVulkanSurface(surfaceHolder.surface, w, h)
-                            if (initialized) {
-                                SphereNativeEngine.renderVulkanFrame(
-                                    lightPosX, lightPosY, lightPosZ,
-                                    intensity, colorR, colorG, colorB,
-                                    roughness, metallic,
-                                    objectWidth, objectHeight, objectDepth,
-                                    stageMode
-                                )
-                                isSurfaceReady = true
-                            }
-                        } catch (e: Throwable) {
-                            android.util.Log.w("VulkanSurfaceHost", "Native Vulkan surface creation handled: ${e.message}")
+                        val w = width.coerceAtLeast(640)
+                        val h = height.coerceAtLeast(480)
+                        val initialized = SphereNativeEngine.createVulkanSurface(surfaceHolder.surface, w, h)
+                        if (initialized) {
+                            SphereNativeEngine.renderVulkanFrame(
+                                lightPosX, lightPosY, lightPosZ,
+                                intensity, colorR, colorG, colorB,
+                                roughness, metallic,
+                                objectWidth, objectHeight, objectDepth,
+                                stageMode
+                            )
+                            isSurfaceReady = true
                         }
                     }
 
                     override fun surfaceChanged(surfaceHolder: SurfaceHolder, format: Int, w: Int, h: Int) {
-                        try {
-                            SphereNativeEngine.resizeVulkanSurface(w, h)
-                            if (SphereNativeEngine.isVulkanInitialized()) {
-                                SphereNativeEngine.renderVulkanFrame(
-                                    lightPosX, lightPosY, lightPosZ,
-                                    intensity, colorR, colorG, colorB,
-                                    roughness, metallic,
-                                    objectWidth, objectHeight, objectDepth,
-                                    stageMode
-                                )
-                            }
-                        } catch (e: Throwable) {
-                            android.util.Log.w("VulkanSurfaceHost", "Native Vulkan resize handled: ${e.message}")
+                        SphereNativeEngine.resizeVulkanSurface(w, h)
+                        if (SphereNativeEngine.isVulkanInitialized()) {
+                            SphereNativeEngine.renderVulkanFrame(
+                                lightPosX, lightPosY, lightPosZ,
+                                intensity, colorR, colorG, colorB,
+                                roughness, metallic,
+                                objectWidth, objectHeight, objectDepth,
+                                stageMode
+                            )
                         }
                     }
 
                     override fun surfaceDestroyed(surfaceHolder: SurfaceHolder) {
                         isSurfaceReady = false
-                        try {
-                            SphereNativeEngine.destroyVulkanSurface()
-                        } catch (e: Throwable) {
-                            android.util.Log.w("VulkanSurfaceHost", "Native Vulkan destroy handled: ${e.message}")
-                        }
+                        SphereNativeEngine.destroyVulkanSurface()
                     }
                 })
             }
         },
         update = {
-            try {
-                if (SphereNativeEngine.isVulkanInitialized()) {
-                    SphereNativeEngine.renderVulkanFrame(
-                        lightPosX, lightPosY, lightPosZ,
-                        intensity, colorR, colorG, colorB,
-                        roughness, metallic,
-                        objectWidth, objectHeight, objectDepth,
-                        stageMode
-                    )
-                }
-            } catch (e: Throwable) {
-                // Safe recovery
+            if (SphereNativeEngine.isVulkanInitialized()) {
+                SphereNativeEngine.renderVulkanFrame(
+                    lightPosX, lightPosY, lightPosZ,
+                    intensity, colorR, colorG, colorB,
+                    roughness, metallic,
+                    objectWidth, objectHeight, objectDepth,
+                    stageMode
+                )
             }
         }
     )

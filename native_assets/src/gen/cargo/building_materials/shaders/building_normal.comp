@@ -1,0 +1,21 @@
+#version 450 core
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(binding = 1, rg8) uniform writeonly image2D outNormalImage;
+
+layout(push_constant) uniform PushConstants {
+    float frequency;
+    float amplitude;
+    uint materialForm;
+} pc;
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= 1024 || coord.y >= 1024) return;
+    vec2 uv = (vec2(coord) + 0.5) / 1024.0;
+
+    float gx = cos(uv.x * pc.frequency) * pc.amplitude;
+    float gy = sin(uv.y * pc.frequency) * pc.amplitude;
+    vec3 n = normalize(vec3(gx, gy, 1.0));
+    imageStore(outNormalImage, coord, vec4(n.xy * 0.5 + 0.5, 0.0, 1.0));
+}

@@ -14,7 +14,7 @@ public:
     const char* GetCategory() const override { return "Raw Materials"; }
 
     const CargoDef& GetDef() const override { return m_Def; }
-    void SetDef(const CargoDef& def) override { m_Def = def; }
+    void SetDef(const CargoDef& def) override { m_Def = def; m_CachedMesh.reset(); }
 
     std::shared_ptr<Mesh> GenerateMesh(uint32_t lod = 0) override;
     std::shared_ptr<Mesh> GetCachedMesh() const override { return m_CachedMesh; }

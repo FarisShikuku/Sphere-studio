@@ -1,5 +1,7 @@
 package com.example.sphere.nativebridge
 
+import android.graphics.Bitmap
+
 /**
  * SphereNativeEngine
  *
@@ -7,10 +9,8 @@ package com.example.sphere.nativebridge
  * based on Sascha Willems' Vulkan samples (https://github.com/SaschaWillems/Vulkan)
  * and PlainRenderer multi-pass lighting architecture.
  *
- * Provides:
- * 1. Native engine lifecycle and KTX2 texture bindless registry
- * 2. Exact Cook-Torrance microfacet BRDF & lighting attenuation math
- * 3. ANativeWindow / vkCreateAndroidSurfaceKHR WSI swapchain control
+ * All 3D procedural geometry (CargoRegistry, TrailerRegistry), volumetric cloud raymarching
+ * (CloudRaymarch), Cook-Torrance PBR shading, and scene rasterization execute strictly in C++.
  */
 object SphereNativeEngine {
 
@@ -20,8 +20,7 @@ object SphereNativeEngine {
         try {
             System.loadLibrary("SphereStudioEngine")
             isLibraryLoaded = true
-        } catch (e: UnsatisfiedLinkError) {
-            // Graceful fallback on standard JVM tests, browser preview, or emulators without native lib
+        } catch (_: UnsatisfiedLinkError) {
             isLibraryLoaded = false
         }
     }
@@ -33,14 +32,14 @@ object SphereNativeEngine {
     // -----------------------------------------------------------------------
 
     fun initEngine(): Boolean {
-        return if (isLibraryLoaded) nativeInitEngine() else true
+        return if (isLibraryLoaded) nativeInitEngine() else false
     }
 
     fun getEngineVersion(): String {
         return if (isLibraryLoaded) {
             nativeGetEngineVersion()
         } else {
-            "SphereStudioEngine 1.3 (Sascha Willems Vulkan Framework / C++20 / NDK r26b)"
+            "SphereStudioEngine 1.3 (C++20 Native Core)"
         }
     }
 
@@ -53,7 +52,7 @@ object SphereNativeEngine {
     }
 
     // -----------------------------------------------------------------------
-    // Physical Optics & Lighting Calculations (C++20 GGX / Cook-Torrance)
+    // Physical Optics & Lighting Calculations (C++20 GGX / Cook-Torrance Only)
     // -----------------------------------------------------------------------
 
     fun evaluateCookTorrance(
@@ -64,44 +63,27 @@ object SphereNativeEngine {
         NdotH: Float,
         VdotH: Float
     ): Float {
-        if (isLibraryLoaded) {
-            return nativeEvaluateCookTorrance(roughness, metallic, NdotL, NdotV, NdotH, VdotH)
+        return if (isLibraryLoaded) {
+            nativeEvaluateCookTorrance(roughness, metallic, NdotL, NdotV, NdotH, VdotH)
+        } else {
+            0f
         }
-        // High-precision Kotlin fallback matching Sascha Willems PBR fragment shader
-        val alpha = roughness * roughness
-        val alpha2 = alpha * alpha
-        val denom = NdotH * NdotH * (alpha2 - 1.0f) + 1.0f
-        val d = alpha2 / (3.14159265f * denom * denom + 1e-5f)
-
-        val k = ((roughness + 1.0f) * (roughness + 1.0f)) / 8.0f
-        val g1 = NdotL / (NdotL * (1.0f - k) + k + 1e-5f)
-        val g2 = NdotV / (NdotV * (1.0f - k) + k + 1e-5f)
-        val g = g1 * g2
-
-        val f0 = 0.04f * (1.0f - metallic) + metallic
-        val f = f0 + (1.0f - f0) * Math.pow((1.0f - VdotH).toDouble(), 5.0).toFloat()
-
-        return (d * g * f) / (4.0f * NdotL * NdotV + 1e-4f)
     }
 
     fun evaluateSpotAttenuation(cosAngle: Float, cosInner: Float, cosOuter: Float, exponent: Float): Float {
-        if (isLibraryLoaded) {
-            return nativeEvaluateSpotAttenuation(cosAngle, cosInner, cosOuter, exponent)
+        return if (isLibraryLoaded) {
+            nativeEvaluateSpotAttenuation(cosAngle, cosInner, cosOuter, exponent)
+        } else {
+            0f
         }
-        val diff = (cosInner - cosOuter).coerceAtLeast(0.001f)
-        val atten = ((cosAngle - cosOuter) / diff).coerceIn(0.0f, 1.0f)
-        return Math.pow(atten.toDouble(), exponent.toDouble()).toFloat()
     }
 
     fun evaluateDistanceAttenuation(distance: Float, range: Float): Float {
-        if (isLibraryLoaded) {
-            return nativeEvaluateDistanceAttenuation(distance, range)
+        return if (isLibraryLoaded) {
+            nativeEvaluateDistanceAttenuation(distance, range)
+        } else {
+            0f
         }
-        val safeDist = distance.coerceAtLeast(0.001f)
-        val invSq = 1.0f / (safeDist * safeDist)
-        val factor = (safeDist / range).coerceIn(0.0f, 1.0f)
-        val smoothFactor = (1.0f - factor * factor * factor * factor).coerceAtLeast(0.0f)
-        return invSq * (smoothFactor * smoothFactor)
     }
 
     // -----------------------------------------------------------------------
@@ -148,6 +130,18 @@ object SphereNativeEngine {
 
     fun isVulkanInitialized(): Boolean {
         return if (isLibraryLoaded) nativeIsVulkanInitialized() else false
+    }
+
+    fun isVulkanGpuAvailable(): Boolean {
+        return if (isLibraryLoaded) {
+            try {
+                nativeIsVulkanGpuAvailable()
+            } catch (_: Throwable) {
+                false
+            }
+        } else {
+            false
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -216,6 +210,7 @@ object SphereNativeEngine {
         stageMode: Int
     )
     private external fun nativeIsVulkanInitialized(): Boolean
+    private external fun nativeIsVulkanGpuAvailable(): Boolean
 
     private external fun nativeRenderVolumetricClouds(
         outPixels: IntArray,
@@ -236,7 +231,7 @@ object SphereNativeEngine {
     // -----------------------------------------------------------------------
 
     fun getCargoCommoditiesCount(): Int {
-        return if (isLibraryLoaded) nativeGetCargoCommoditiesCount() else 35
+        return if (isLibraryLoaded) nativeGetCargoCommoditiesCount() else 51
     }
 
     fun getCargoName(id: Int): String {
@@ -265,11 +260,254 @@ object SphereNativeEngine {
 
     private external fun nativeGetCargoCommoditiesCount(): Int
     private external fun nativeGetCargoName(id: Int): String
-    private external fun nativeGetCargoCategory(id: Int): String
     private external fun nativeGetCargoWeight(id: Int): Float
+    private external fun nativeGetCargoCategory(id: Int): String
     private external fun nativeGetCargoVolume(id: Int): Float
     private external fun nativeGetCargoDimensions(id: Int): FloatArray?
     private external fun nativeRequestCargoMeshStats(id: Int, lod: Int): IntArray?
+
+    // -----------------------------------------------------------------------
+    // Procedural Trailers & Haulage Registry Bridge
+    // -----------------------------------------------------------------------
+
+    fun getTrailersCount(): Int {
+        return if (isLibraryLoaded) nativeGetTrailersCount() else 51
+    }
+
+    fun getTrailerName(id: Int): String {
+        return if (isLibraryLoaded) nativeGetTrailerName(id) else "Standard 40ft Flatbed"
+    }
+
+    fun getTrailerCategory(id: Int): String {
+        return if (isLibraryLoaded) nativeGetTrailerCategory(id) else "Flatbeds"
+    }
+
+    fun getTrailerSpecs(id: Int): FloatArray {
+        return if (isLibraryLoaded) {
+            nativeGetTrailerSpecs(id) ?: floatArrayOf(6200f, 32000f, 13.6f, 2.55f, 1.55f, 1.35f)
+        } else {
+            floatArrayOf(6200f, 32000f, 13.6f, 2.55f, 1.55f, 1.35f)
+        }
+    }
+
+    fun requestTrailerMeshStats(id: Int, lod: Int = 0): IntArray {
+        return if (isLibraryLoaded) nativeRequestTrailerMeshStats(id, lod) ?: intArrayOf(1200, 1800) else intArrayOf(1200, 1800)
+    }
+
+    fun renderCargoBitmap(
+        bitmap: Bitmap,
+        cargoId: Int,
+        stackingMode: Int,
+        rotX: Float,
+        rotY: Float,
+        zoom: Float,
+        showPallet: Boolean,
+        showStraps: Boolean,
+        showShrinkwrap: Boolean,
+        primaryArgb: Int,
+        secondaryArgb: Int,
+        roughness: Float,
+        metallic: Float,
+        wear: Float,
+        wrinkle: Float,
+        opacity: Float,
+        lowDetail: Boolean
+    ): IntArray {
+        return if (isLibraryLoaded) {
+            nativeRenderCargoBitmap(
+                bitmap, cargoId, stackingMode, rotX, rotY, zoom,
+                showPallet, showStraps, showShrinkwrap,
+                primaryArgb, secondaryArgb, roughness, metallic, wear, wrinkle, opacity, lowDetail
+            ) ?: intArrayOf(0, 0)
+        } else {
+            intArrayOf(0, 0)
+        }
+    }
+
+    fun renderTrailerBitmap(
+        bitmap: Bitmap,
+        trailerId: Int,
+        rotX: Float,
+        rotY: Float,
+        zoom: Float,
+        landingGearExtended: Boolean,
+        showLoadedCargo: Boolean,
+        cargoId: Int,
+        cargoQty: Int,
+        curtainOpenRatio: Float,
+        hydraulicLiftRatio: Float,
+        curtainOpacity: Float,
+        baseArgb: Int,
+        secondaryArgb: Int,
+        roughness: Float,
+        metallic: Float,
+        axleCount: Int,
+        suspensionOrdinal: Int,
+        brakeOrdinal: Int,
+        hasLiftAxle: Boolean,
+        liftAxleRaised: Boolean,
+        hasSteerableAxle: Boolean,
+        steerAngleDeg: Float
+    ): IntArray {
+        return if (isLibraryLoaded) {
+            nativeRenderTrailerBitmap(
+                bitmap, trailerId, rotX, rotY, zoom,
+                landingGearExtended, showLoadedCargo, cargoId, cargoQty,
+                curtainOpenRatio, hydraulicLiftRatio, curtainOpacity,
+                baseArgb, secondaryArgb, roughness, metallic,
+                axleCount, suspensionOrdinal, brakeOrdinal,
+                hasLiftAxle, liftAxleRaised, hasSteerableAxle, steerAngleDeg
+            ) ?: intArrayOf(0, 0)
+        } else {
+            intArrayOf(0, 0)
+        }
+    }
+
+    private external fun nativeGetTrailersCount(): Int
+    private external fun nativeGetTrailerName(id: Int): String
+    private external fun nativeGetTrailerCategory(id: Int): String
+    private external fun nativeGetTrailerSpecs(id: Int): FloatArray?
+    private external fun nativeRequestTrailerMeshStats(id: Int, lod: Int): IntArray?
+
+    private external fun nativeRenderCargoBitmap(
+        bitmap: Bitmap,
+        cargoId: Int,
+        stackingMode: Int,
+        rotX: Float,
+        rotY: Float,
+        zoom: Float,
+        showPallet: Boolean,
+        showStraps: Boolean,
+        showShrinkwrap: Boolean,
+        primaryArgb: Int,
+        secondaryArgb: Int,
+        roughness: Float,
+        metallic: Float,
+        wear: Float,
+        wrinkle: Float,
+        opacity: Float,
+        lowDetail: Boolean
+    ): IntArray?
+
+    private external fun nativeRenderTrailerBitmap(
+        bitmap: Bitmap,
+        trailerId: Int,
+        rotX: Float,
+        rotY: Float,
+        zoom: Float,
+        landingGearExtended: Boolean,
+        showLoadedCargo: Boolean,
+        cargoId: Int,
+        cargoQty: Int,
+        curtainOpenRatio: Float,
+        hydraulicLiftRatio: Float,
+        curtainOpacity: Float,
+        baseArgb: Int,
+        secondaryArgb: Int,
+        roughness: Float,
+        metallic: Float,
+        axleCount: Int,
+        suspensionOrdinal: Int,
+        brakeOrdinal: Int,
+        hasLiftAxle: Boolean,
+        liftAxleRaised: Boolean,
+        hasSteerableAxle: Boolean,
+        steerAngleDeg: Float
+    ): IntArray?
+
+    // -----------------------------------------------------------------------
+    // Procedural Vehicles & Transports Registry Bridge (Lorries & Buses)
+    // -----------------------------------------------------------------------
+
+    fun getVehiclesCount(): Int {
+        return if (isLibraryLoaded) nativeGetVehiclesCount() else 21
+    }
+
+    fun getVehicleName(id: Int): String {
+        return if (isLibraryLoaded) nativeGetVehicleName(id) else "Rigid Box Delivery Lorry (18T)"
+    }
+
+    fun getVehicleCategory(id: Int): String {
+        return if (isLibraryLoaded) nativeGetVehicleCategory(id) else "Rigid Lorries"
+    }
+
+    fun getVehicleSpecs(id: Int): FloatArray {
+        return if (isLibraryLoaded) {
+            nativeGetVehicleSpecs(id) ?: floatArrayOf(7250f, 18000f, 4.8f, 0f, 1150f, 290f, 2f, 8.2f, 2.5f, 3.45f)
+        } else {
+            floatArrayOf(7250f, 18000f, 4.8f, 0f, 1150f, 290f, 2f, 8.2f, 2.5f, 3.45f)
+        }
+    }
+
+    fun renderVehicleBitmap(
+        bitmap: Bitmap,
+        vehicleId: Int,
+        rotX: Float,
+        rotY: Float,
+        zoom: Float,
+        liveryOrdinal: Int,
+        randomSeed: Int,
+        baseArgb: Int,
+        accentArgb: Int,
+        roughness: Float,
+        metallic: Float,
+        wheelbaseM: Float,
+        fifthWheelOffsetM: Float,
+        actionRatio: Float,
+        steerAngleDeg: Float,
+        headlightsOn: Boolean,
+        hasRoofRack: Boolean,
+        hasExhaustStacks: Boolean,
+        hitchTrailer: Boolean,
+        trailerId: Int,
+        showLoadedCargo: Boolean,
+        cargoId: Int,
+        cargoQty: Int
+    ): IntArray {
+        return if (isLibraryLoaded) {
+            nativeRenderVehicleBitmap(
+                bitmap, vehicleId, rotX, rotY, zoom,
+                liveryOrdinal, randomSeed, baseArgb, accentArgb,
+                roughness, metallic, wheelbaseM, fifthWheelOffsetM,
+                actionRatio, steerAngleDeg, headlightsOn, hasRoofRack, hasExhaustStacks,
+                hitchTrailer, trailerId, showLoadedCargo, cargoId, cargoQty
+            ) ?: intArrayOf(0, 0, 0, 0)
+        } else {
+            intArrayOf(0, 0, 0, 0)
+        }
+    }
+
+    private external fun nativeGetVehiclesCount(): Int
+    private external fun nativeGetVehicleName(id: Int): String
+    private external fun nativeGetVehicleCategory(id: Int): String
+    private external fun nativeGetVehicleSpecs(id: Int): FloatArray?
+
+    private external fun nativeRenderVehicleBitmap(
+        bitmap: Bitmap,
+        vehicleId: Int,
+        rotX: Float,
+        rotY: Float,
+        zoom: Float,
+        liveryOrdinal: Int,
+        randomSeed: Int,
+        baseArgb: Int,
+        accentArgb: Int,
+        roughness: Float,
+        metallic: Float,
+        wheelbaseM: Float,
+        fifthWheelOffsetM: Float,
+        actionRatio: Float,
+        steerAngleDeg: Float,
+        headlightsOn: Boolean,
+        hasRoofRack: Boolean,
+        hasExhaustStacks: Boolean,
+        hitchTrailer: Boolean,
+        trailerId: Int,
+        showLoadedCargo: Boolean,
+        cargoId: Int,
+        cargoQty: Int
+    ): IntArray?
 }
+
 
 

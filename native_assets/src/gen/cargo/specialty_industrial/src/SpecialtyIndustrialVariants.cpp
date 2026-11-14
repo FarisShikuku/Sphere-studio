@@ -82,7 +82,7 @@ CargoDef SpecialtyIndustrialVariants::CreateCargoDef(const SpecialtyVariantConfi
     def.is_liquid_or_bulk = false;
     def.is_perishable = false;
 
-    def.albedo_format = VK_FORMAT_BC7_UNORM_SRGB_BLOCK;
+    def.albedo_format = VK_FORMAT_BC7_SRGB_BLOCK;
     def.normal_format = VK_FORMAT_BC5_UNORM_BLOCK;
     def.orm_format = VK_FORMAT_BC7_UNORM_BLOCK;
     def.texture_width = 1024;

@@ -1,0 +1,11 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#include "include/city_bus_common.glsl"
+layout(local_size_x = 64) in;
+layout(std430, binding = 0) buffer BusVerts { vec4 v[]; };
+layout(push_constant) uniform Push { CityBusPushConstants pc; };
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= 64u) return;
+    v[i] = vec4(-6.0 + float(i) * 0.2, pc.floorHeight, 1.275, 1.0);
+}

@@ -1,0 +1,36 @@
+#version 450 core
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+struct Vertex {
+    vec4 position;
+    vec4 normal;
+    vec4 uv_tangent;
+};
+
+layout(std430, binding = 0) buffer OutVertexBuffer {
+    Vertex vertices[];
+};
+
+layout(push_constant) uniform PushConstants {
+    float wheelRadius;
+    float tireWidth;
+    float steerAngleRad;
+    uint axleIndex;
+} pc;
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= 2048u) return;
+    float u = float(idx % 64u) / 63.0;
+    float v = float(idx / 64u) / 31.0;
+    float theta = u * 6.2831853;
+    float c = cos(theta), s = sin(theta);
+    float r = pc.wheelRadius * (0.55 + 0.45 * sin(v * 3.14159265));
+    float z = (v - 0.5) * pc.tireWidth;
+
+    float cs = cos(pc.steerAngleRad), ss = sin(pc.steerAngleRad);
+    vec3 p = vec3(r * c * cs - z * ss, r * s + pc.wheelRadius, r * c * ss + z * cs);
+    vertices[idx].position = vec4(p, 1.0);
+    vertices[idx].normal = vec4(c * cs, s, c * ss, 0.0);
+    vertices[idx].uv_tangent = vec4(u, v, 1.0, 0.0);
+}

@@ -67,6 +67,84 @@ static const std::vector<RawVariantConfig> kRawVariants = {
         0.92f,
         0.02f,
         0.90f
+    },
+    {
+        CargoID::CHOPPED_FIREWOOD_SPLIT,
+        "CHOPPED_FIREWOOD_SPLIT",
+        "Quarter-Split Seasoned Oak Firewood Wedges",
+        42.0f,
+        0.48f, 0.36f, 0.32f,
+        RawMaterialForm::QUARTER_SPLIT_WEDGE_FIREWOOD,
+        Vec4(0.42f, 0.30f, 0.20f, 1.0f),
+        Vec4(0.84f, 0.68f, 0.44f, 1.0f),
+        0.86f,
+        0.0f,
+        0.72f
+    },
+    {
+        CargoID::HALF_ROUND_FIREWOOD,
+        "HALF_ROUND_FIREWOOD",
+        "Half-Split Silver Birch Logs (Lenticel Bark)",
+        55.0f,
+        0.52f, 0.40f, 0.28f,
+        RawMaterialForm::HALF_SPLIT_BIRCH_LOGS,
+        Vec4(0.86f, 0.85f, 0.80f, 1.0f),
+        Vec4(0.88f, 0.74f, 0.50f, 1.0f),
+        0.78f,
+        0.0f,
+        0.55f
+    },
+    {
+        CargoID::STACKED_CORDWOOD_RICK,
+        "STACKED_CORDWOOD_RICK",
+        "Cross-Stacked Cribbed Cordwood Timber Rick",
+        380.0f,
+        1.20f, 0.50f, 0.90f,
+        RawMaterialForm::CROSS_STACKED_CORDWOOD_RICK,
+        Vec4(0.46f, 0.33f, 0.22f, 1.0f),
+        Vec4(0.82f, 0.66f, 0.43f, 1.0f),
+        0.88f,
+        0.0f,
+        0.68f
+    },
+    {
+        CargoID::WOODEN_RAILWAY_SLEEPER,
+        "WOODEN_RAILWAY_SLEEPER",
+        "Chamfered Hardwood Sleeper Beam (Creosote)",
+        88.0f,
+        2.60f, 0.26f, 0.16f,
+        RawMaterialForm::CHAMFERED_RAILWAY_SLEEPER,
+        Vec4(0.24f, 0.18f, 0.14f, 1.0f),
+        Vec4(0.55f, 0.42f, 0.28f, 1.0f),
+        0.80f,
+        0.04f,
+        0.48f
+    },
+    {
+        CargoID::CHOPPED_KINDLING_BUNDLE,
+        "CHOPPED_KINDLING_BUNDLE",
+        "Twine-Bound Split Pine Kindling Bundle",
+        14.5f,
+        0.38f, 0.28f, 0.28f,
+        RawMaterialForm::CONSTRICTED_KINDLING_BUNDLE,
+        Vec4(0.85f, 0.71f, 0.46f, 1.0f),
+        Vec4(0.55f, 0.38f, 0.20f, 1.0f),
+        0.74f,
+        0.0f,
+        0.38f
+    },
+    {
+        CargoID::TIMBER_STUMP_BLOCKS,
+        "TIMBER_STUMP_BLOCKS",
+        "Axe-Flared Butcher Hardwood Stump Block",
+        96.0f,
+        0.58f, 0.58f, 0.55f,
+        RawMaterialForm::FLARED_BUTCHER_STUMP_BLOCK,
+        Vec4(0.38f, 0.27f, 0.18f, 1.0f),
+        Vec4(0.83f, 0.69f, 0.46f, 1.0f),
+        0.90f,
+        0.0f,
+        0.82f
     }
 };
 
@@ -95,7 +173,7 @@ CargoDef RawMaterialsVariants::CreateCargoDef(const RawVariantConfig& cfg) {
     def.is_liquid_or_bulk = (cfg.form == RawMaterialForm::BULK_COAL_PILE || cfg.form == RawMaterialForm::AGGREGATE_GRAVEL_MOUND);
     def.is_perishable = false;
 
-    def.albedo_format = VK_FORMAT_BC7_UNORM_SRGB_BLOCK;
+    def.albedo_format = VK_FORMAT_BC7_SRGB_BLOCK;
     def.normal_format = VK_FORMAT_BC5_UNORM_BLOCK;
     def.orm_format = VK_FORMAT_BC7_UNORM_BLOCK;
     def.texture_width = 1024;

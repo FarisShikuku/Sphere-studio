@@ -1,19 +1,25 @@
 package com.example.sphere.commodities
 
+import android.graphics.Bitmap
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.RotateRight
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
@@ -21,14 +27,49 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.sphere.model.CommodityCategoryType
 import com.example.sphere.model.CommodityItem
 import com.example.sphere.model.StackingMode
+import com.example.sphere.model.StencilStampType
+import com.example.sphere.nativebridge.SphereNativeEngine
 import kotlin.math.*
+
+private data class CargoRenderKey(
+    val bmpW: Int,
+    val bmpH: Int,
+    val cargoId: Int,
+    val stackingMode: Int,
+    val rotX: Float,
+    val rotY: Float,
+    val zoom: Float,
+    val showPallet: Boolean,
+    val showStraps: Boolean,
+    val showShrinkwrap: Boolean,
+    val primaryArgb: Int,
+    val secondaryArgb: Int,
+    val roughness: Float,
+    val metallic: Float,
+    val wear: Float,
+    val wrinkle: Float,
+    val opacity: Float,
+    val lowDetail: Boolean
+)
+
+private class NativeCargoRasterBuffer {
+    var bitmap: Bitmap? = null
+    var imageBitmap: ImageBitmap? = null
+    var lastKey: CargoRenderKey? = null
+    var stats: IntArray = intArrayOf(0, 0)
+}
 
 @Composable
 fun CommoditiesViewportCanvas(
@@ -38,19 +79,38 @@ fun CommoditiesViewportCanvas(
     rotY: Float,
     zoomFactor: Float,
     onDrag: (Float, Float) -> Unit,
+    onZoomChange: (Float) -> Unit = {},
+    onResetView: () -> Unit = {},
     showStraps: Boolean,
     showShrinkwrap: Boolean,
     showPalletBase: Boolean,
     modifier: Modifier = Modifier
 ) {
+    var showTelemetryInfo by remember { mutableStateOf(false) }
+    var meshStats by remember { mutableStateOf(intArrayOf(0, 0)) }
+    val textMeasurer = rememberTextMeasurer()
+    val rasterBuffer = remember { NativeCargoRasterBuffer() }
+
+    val isMultiUnitStack = stackingMode != StackingMode.SINGLE_UNIT
+    val effOpacity = remember(item.opacityBias, item.opacity) {
+        if (item.opacityBias <= 0.01f) {
+            1.0f
+        } else {
+            (1.0f - item.opacityBias * 0.6f).coerceIn(0.35f, 1.0f)
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFF07090E))
             .pointerInput(Unit) {
-                detectDragGestures { change, dragAmount ->
-                    change.consume()
-                    onDrag(dragAmount.x, dragAmount.y)
+                detectTransformGestures { _, pan, zoom, _ ->
+                    onDrag(pan.x, pan.y)
+                    if (zoom != 1.0f) {
+                        val newZoom = (zoomFactor * zoom).coerceIn(0.5f, 2.5f)
+                        onZoomChange(newZoom)
+                    }
                 }
             }
             .testTag("commodities_3d_viewport")
@@ -58,604 +118,417 @@ fun CommoditiesViewportCanvas(
         Canvas(modifier = Modifier.fillMaxSize()) {
             val w = size.width
             val h = size.height
-            val center = Offset(w / 2f, h / 2f)
+            val wPx = w.roundToInt().coerceAtLeast(1)
+            val hPx = h.roundToInt().coerceAtLeast(1)
 
-            // Studio background radial vignette
-            drawRect(
-                brush = Brush.radialGradient(
-                    colors = listOf(Color(0xFF131A2A), Color(0xFF04060A)),
-                    center = center,
-                    radius = w * 0.85f
+            val maxDim = max(wPx, hPx)
+            val resScale = if (maxDim > 720) 720f / maxDim.toFloat() else 1f
+            val bmpW = (wPx * resScale).roundToInt().coerceAtLeast(64)
+            val bmpH = (hPx * resScale).roundToInt().coerceAtLeast(64)
+
+            val key = CargoRenderKey(
+                bmpW = bmpW,
+                bmpH = bmpH,
+                cargoId = item.id,
+                stackingMode = stackingMode.ordinal,
+                rotX = rotX,
+                rotY = rotY,
+                zoom = zoomFactor,
+                showPallet = showPalletBase,
+                showStraps = showStraps,
+                showShrinkwrap = showShrinkwrap,
+                primaryArgb = item.baseColor.toArgb(),
+                secondaryArgb = item.secondaryColor.toArgb(),
+                roughness = item.roughness,
+                metallic = item.metallic,
+                wear = item.wearAndTear,
+                wrinkle = item.wrinkleCreaseDepth,
+                opacity = effOpacity,
+                lowDetail = isMultiUnitStack
+            )
+
+            var bmp = rasterBuffer.bitmap
+            if (bmp == null || bmp.width != bmpW || bmp.height != bmpH) {
+                bmp = Bitmap.createBitmap(bmpW, bmpH, Bitmap.Config.ARGB_8888)
+                rasterBuffer.bitmap = bmp
+                rasterBuffer.lastKey = null
+            }
+
+            if (rasterBuffer.lastKey != key) {
+                val stats = SphereNativeEngine.renderCargoBitmap(
+                    bitmap = bmp,
+                    cargoId = key.cargoId,
+                    stackingMode = key.stackingMode,
+                    rotX = key.rotX,
+                    rotY = key.rotY,
+                    zoom = key.zoom,
+                    showPallet = key.showPallet,
+                    showStraps = key.showStraps,
+                    showShrinkwrap = key.showShrinkwrap,
+                    primaryArgb = key.primaryArgb,
+                    secondaryArgb = key.secondaryArgb,
+                    roughness = key.roughness,
+                    metallic = key.metallic,
+                    wear = key.wear,
+                    wrinkle = key.wrinkle,
+                    opacity = key.opacity,
+                    lowDetail = key.lowDetail
                 )
-            )
+                rasterBuffer.lastKey = key
+                rasterBuffer.stats = stats
+                rasterBuffer.imageBitmap = bmp.asImageBitmap()
+                if (stats[0] != meshStats[0] || stats[1] != meshStats[1]) {
+                    meshStats = stats
+                }
+            }
 
-            // Perspective Setup
-            val radX = rotX * (PI.toFloat() / 180f)
-            val radY = rotY * (PI.toFloat() / 180f)
-            val cosY = cos(radY)
-            val sinY = sin(radY)
-            val cosX = cos(radX)
-            val sinX = sin(radX)
-
-            val baseScale = (min(w, h) * 0.28f) * zoomFactor
-
-            // Studio Ground Shadow Disc
-            val shadowY = center.y + baseScale * 0.85f
-            drawOval(
-                brush = Brush.radialGradient(
-                    colors = listOf(Color(0xFF010409).copy(alpha = 0.88f), Color(0x00010409)),
-                    center = Offset(center.x, shadowY),
-                    radius = baseScale * 1.6f
-                ),
-                topLeft = Offset(center.x - baseScale * 1.6f, shadowY - baseScale * 0.45f),
-                size = Size(baseScale * 3.2f, baseScale * 0.9f)
-            )
-
-            // Optional Pallet Base
-            if (showPalletBase || stackingMode != StackingMode.SINGLE_UNIT) {
-                drawProceduralPallet(
-                    center = Offset(center.x, shadowY - baseScale * 0.12f),
-                    scale = baseScale * 1.15f,
-                    cosY = cosY, sinY = sinY, cosX = cosX, sinX = sinX
+            val img = rasterBuffer.imageBitmap
+            if (img != null) {
+                drawImage(
+                    image = img,
+                    dstOffset = IntOffset.Zero,
+                    dstSize = IntSize(wPx, hPx),
+                    filterQuality = FilterQuality.Medium
                 )
             }
 
-            // Draw Commodity Shape based on Category and StackingMode
-            val totalUnits = stackingMode.multiplier
-            val rows = if (totalUnits > 1) 2 else 1
-            val cols = if (totalUnits > 1) 2 else 1
-            val tiers = if (totalUnits > 1) min(4, totalUnits / 4) else 1
+            // Projected 3D stencil & barcode decal aligned to C++ front-most unit camera projection
+            val sceneCenter = Offset(w * 0.5f, h * 0.53f)
+            val baseScale = min(w, h) * 0.44f * zoomFactor
+            val radX = rotX * (PI.toFloat() / 180f)
+            val radY = rotY * (PI.toFloat() / 180f)
+            val cosY = cos(radY); val sinY = sin(radY)
+            val cosX = cos(radX); val sinX = sin(radX)
 
-            for (tier in 0 until tiers) {
-                val tierOffsetY = -tier * (baseScale * 0.35f)
+            val cols: Int
+            val rows: Int
+            val tiers: Int
+            val unitScaleRatio: Float
+            when (stackingMode) {
+                StackingMode.SINGLE_UNIT -> { cols = 1; rows = 1; tiers = 1; unitScaleRatio = 1.0f }
+                StackingMode.PALLET_STACK -> { cols = 2; rows = 2; tiers = 2; unitScaleRatio = 0.48f }
+                StackingMode.WAREHOUSE_RACK -> { cols = 2; rows = 2; tiers = 3; unitScaleRatio = 0.42f }
+                StackingMode.TRUCK_BED -> { cols = 3; rows = 2; tiers = 3; unitScaleRatio = 0.36f }
+            }
+
+            val cSpanX = item.lengthM.coerceAtLeast(0.04f)
+            val cSpanY = item.heightM.coerceAtLeast(0.04f)
+            val cSpanZ = item.widthM.coerceAtLeast(0.04f)
+            val effectiveScale = (0.85f / maxOf(cSpanX, cSpanY, cSpanZ)) * unitScaleRatio
+
+            val meshW = (cSpanX * effectiveScale).coerceAtLeast(0.20f)
+            val meshH = (cSpanY * effectiveScale).coerceAtLeast(0.14f)
+            val meshD = (cSpanZ * effectiveScale).coerceAtLeast(0.20f)
+            val stepX = meshW * 1.08f
+            val stepZ = meshD * 1.08f
+            val stepY = meshH * 1.01f
+
+            val hasPallet = (showPalletBase || stackingMode.multiplier > 1) && item.id != 10
+            val palletScaleRatio = when (stackingMode) {
+                StackingMode.SINGLE_UNIT -> 1.05f
+                StackingMode.PALLET_STACK -> 1.25f
+                StackingMode.WAREHOUSE_RACK -> 1.32f
+                StackingMode.TRUCK_BED -> 1.50f
+            }
+            val cargoFloorY = if (hasPallet) {
+                -0.34f + 0.144f * (0.76f / 1.20f) * palletScaleRatio
+            } else {
+                -0.34f
+            }
+
+            var bestFrontZ = Float.NEGATIVE_INFINITY
+            var bestCenter = sceneCenter
+            var bestScalePx = baseScale * unitScaleRatio
+
+            for (t in 0 until tiers) {
+                val wy = cargoFloorY + meshH * 0.5f + t * stepY
                 for (r in 0 until rows) {
+                    val wz = (r - (rows - 1) * 0.5f) * stepZ
                     for (c in 0 until cols) {
-                        val gridOffsetX = (c - (cols - 1) * 0.5f) * (baseScale * 0.45f)
-                        val gridOffsetZ = (r - (rows - 1) * 0.5f) * (baseScale * 0.45f)
-
-                        // 3D Rotation of grid position
-                        val gx = gridOffsetX * cosY - gridOffsetZ * sinY
-                        val gz = gridOffsetX * sinY + gridOffsetZ * cosY
-                        val itemPos = Offset(center.x + gx, center.y + tierOffsetY + gz * sinX * 0.5f)
-
-                        drawCommodityShape(
-                            item = item,
-                            pos = itemPos,
-                            scale = baseScale * (if (totalUnits > 1) 0.65f else 1.0f),
-                            cosY = cosY, sinY = sinY, cosX = cosX, sinX = sinX
-                        )
+                        val wx = (c - (cols - 1) * 0.5f) * stepX
+                        val rx = wx * cosY - wz * sinY
+                        val rz = wx * sinY + wz * cosY
+                        val ry = wy * cosX - rz * sinX
+                        val fz = wy * sinX + rz * cosX
+                        val persp = 3.4f / (3.4f - fz).coerceAtLeast(0.45f)
+                        if (fz > bestFrontZ) {
+                            bestFrontZ = fz
+                            bestCenter = Offset(
+                                sceneCenter.x + rx * baseScale * persp,
+                                sceneCenter.y - ry * baseScale * persp
+                            )
+                            bestScalePx = baseScale * unitScaleRatio * persp
+                        }
                     }
                 }
             }
 
-            // Strapping / Shrinkwrap Visual Overlays
-            if (showShrinkwrap && totalUnits > 1) {
-                drawRect(
-                    brush = Brush.linearGradient(
-                        colors = listOf(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.04f)),
-                        start = Offset(center.x - baseScale, center.y - baseScale * 0.8f),
-                        end = Offset(center.x + baseScale, center.y + baseScale * 0.8f)
-                    ),
-                    topLeft = Offset(center.x - baseScale * 0.85f, center.y - baseScale * 0.75f),
-                    size = Size(baseScale * 1.7f, baseScale * 1.4f)
-                )
-            }
-
-            if (showStraps && totalUnits > 1) {
-                // High-tensile yellow polyester strapping lines
-                val strapBrush = Brush.linearGradient(listOf(Color(0xFFEAB308), Color(0xFFCA8A04)))
-                drawLine(
-                    brush = strapBrush,
-                    start = Offset(center.x - baseScale * 0.5f, center.y - baseScale * 0.7f),
-                    end = Offset(center.x - baseScale * 0.5f, center.y + baseScale * 0.6f),
-                    strokeWidth = 6f
-                )
-                drawLine(
-                    brush = strapBrush,
-                    start = Offset(center.x + baseScale * 0.5f, center.y - baseScale * 0.7f),
-                    end = Offset(center.x + baseScale * 0.5f, center.y + baseScale * 0.6f),
-                    strokeWidth = 6f
-                )
-            }
+            drawProjectedStencilOverlay(
+                item = item,
+                center = bestCenter,
+                worldScalePx = bestScalePx,
+                rotXDeg = rotX,
+                rotYDeg = rotY,
+                textMeasurer = textMeasurer
+            )
         }
 
-        // Top-Left Telemetry HUD: Physical Mass, Volume, Density & Stacking
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Color(0xDD0D111A)),
-            shape = RoundedCornerShape(10.dp),
-            border = CardDefaults.outlinedCardBorder().copy(
-                brush = Brush.linearGradient(listOf(Color(0xFF1E293B), Color(0xFF334155)))
-            ),
+        // Top Control Floating Bar: Info Toggle & Zoom & Reset
+        Row(
             modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(10.dp)
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.padding(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .background(Color(0xFF22C55E), RoundedCornerShape(4.dp))
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        "PHYSICAL MECHANICS",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = Color(0xFF38BDF8),
-                        letterSpacing = 1.sp
-                    )
-                }
-                Spacer(Modifier.height(4.dp))
-                val totalMassKg = item.nominalWeightKg * stackingMode.multiplier
-                val totalVolM3 = item.volumeM3 * stackingMode.multiplier
-                val density = if (item.volumeM3 > 0.0001f) (item.nominalWeightKg / item.volumeM3).roundToInt() else 625
-
-                Text("• Mass: ${totalMassKg.roundToInt()} kg (${if (totalMassKg >= 1000f) String.format("%.2f t", totalMassKg / 1000f) else "${item.nominalWeightKg} kg/ea"})",
-                    style = MaterialTheme.typography.labelSmall, color = Color(0xFFE2E8F0), fontFamily = FontFamily.Monospace)
-                Text("• Volume: ${String.format("%.3f", totalVolM3)} m³",
-                    style = MaterialTheme.typography.labelSmall, color = Color(0xFF94A3B8), fontFamily = FontFamily.Monospace)
-                Text("• Density: $density kg/m³",
-                    style = MaterialTheme.typography.labelSmall, color = Color(0xFF94A3B8), fontFamily = FontFamily.Monospace)
-                Text("• Dims: ${item.lengthM}m × ${item.widthM}m × ${item.heightM}m",
-                    style = MaterialTheme.typography.labelSmall, color = Color(0xFF94A3B8), fontFamily = FontFamily.Monospace)
-                Text("• Load: ${stackingMode.label}",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = Color(0xFFFBBF24), fontFamily = FontFamily.Monospace)
-            }
-        }
-
-        // Top-Right Telemetry HUD: Vulkan Pipeline, BC7/BC5 Compression & Descriptors
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Color(0xDD0D111A)),
-            shape = RoundedCornerShape(10.dp),
-            border = CardDefaults.outlinedCardBorder().copy(
-                brush = Brush.linearGradient(listOf(Color(0xFF1E293B), Color(0xFF334155)))
-            ),
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(10.dp)
-        ) {
-            Column(modifier = Modifier.padding(10.dp)) {
+            FilledTonalButton(
+                onClick = { showTelemetryInfo = !showTelemetryInfo },
+                shape = RoundedCornerShape(20.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = if (showTelemetryInfo) MaterialTheme.colorScheme.primaryContainer else Color(0xCC0F172A),
+                    contentColor = if (showTelemetryInfo) MaterialTheme.colorScheme.onPrimaryContainer else Color(0xFFE2E8F0)
+                ),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                modifier = Modifier
+                    .height(34.dp)
+                    .testTag("toggle_telemetry_info_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = "Toggle Info",
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(6.dp))
                 Text(
-                    "VULKAN PIPELINE",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = Color(0xFFF472B6),
-                    letterSpacing = 1.sp
+                    if (showTelemetryInfo) "Hide Specs" else "Show Specs",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
-                Spacer(Modifier.height(4.dp))
-                Text("• Albedo: ${item.vkAlbedoFormat}",
-                    style = MaterialTheme.typography.labelSmall, color = Color(0xFFE2E8F0), fontFamily = FontFamily.Monospace, fontSize = 9.sp)
-                Text("• Normal: ${item.vkNormalFormat}",
-                    style = MaterialTheme.typography.labelSmall, color = Color(0xFF94A3B8), fontFamily = FontFamily.Monospace, fontSize = 9.sp)
-                Text("• ORM: ${item.vkOrmFormat}",
-                    style = MaterialTheme.typography.labelSmall, color = Color(0xFF94A3B8), fontFamily = FontFamily.Monospace, fontSize = 9.sp)
-                Text("• Compute: 1024×1024 (16×16)",
-                    style = MaterialTheme.typography.labelSmall, color = Color(0xFF38BDF8), fontFamily = FontFamily.Monospace, fontSize = 9.sp)
-                Text("• Mesh: C++20 ICargo::GenerateMesh()",
-                    style = MaterialTheme.typography.labelSmall, color = Color(0xFF4ADE80), fontFamily = FontFamily.Monospace, fontSize = 9.sp)
+            }
+
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = Color(0xCC0F172A),
+                border = CardDefaults.outlinedCardBorder()
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                ) {
+                    IconButton(
+                        onClick = { onZoomChange((zoomFactor - 0.15f).coerceIn(0.5f, 2.5f)) },
+                        modifier = Modifier
+                            .size(32.dp)
+                            .testTag("zoom_out_button")
+                    ) {
+                        Icon(Icons.Default.Remove, contentDescription = "Zoom Out", tint = Color.White, modifier = Modifier.size(16.dp))
+                    }
+
+                    Text(
+                        "${(zoomFactor * 100).roundToInt()}%",
+                        color = Color(0xFF38BDF8),
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.padding(horizontal = 6.dp)
+                    )
+
+                    IconButton(
+                        onClick = { onZoomChange((zoomFactor + 0.15f).coerceIn(0.5f, 2.5f)) },
+                        modifier = Modifier
+                            .size(32.dp)
+                            .testTag("zoom_in_button")
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Zoom In", tint = Color.White, modifier = Modifier.size(16.dp))
+                    }
+
+                    Spacer(Modifier.width(2.dp))
+
+                    IconButton(
+                        onClick = onResetView,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .testTag("reset_view_button")
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.RotateRight, contentDescription = "Reset View", tint = Color(0xFFA5D6A7), modifier = Modifier.size(16.dp))
+                    }
+                }
             }
         }
 
-        // Bottom Stencil Branding Badge
+        // Toggleable Compact Telemetry Overlay (Physical + C++ Vulkan Pipeline)
+        AnimatedVisibility(
+            visible = showTelemetryInfo,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 52.dp, start = 14.dp, end = 14.dp)
+        ) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xEE0B101B)),
+                shape = RoundedCornerShape(12.dp),
+                border = CardDefaults.outlinedCardBorder().copy(
+                    brush = Brush.linearGradient(listOf(Color(0xFF2563EB), Color(0xFF0284C7)))
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("telemetry_info_panel")
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .background(Color(0xFF22C55E), CircleShape)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                "C++ CARGO REGISTRY & VULKAN TELEMETRY",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = Color(0xFF38BDF8),
+                                letterSpacing = 1.sp
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { showTelemetryInfo = false },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(Icons.Outlined.Close, contentDescription = "Close", tint = Color.Gray, modifier = Modifier.size(16.dp))
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            val totalMassKg = item.nominalWeightKg * stackingMode.multiplier
+                            val totalVolM3 = item.volumeM3 * stackingMode.multiplier
+                            val density = if (item.volumeM3 > 0.0001f) (item.nominalWeightKg / item.volumeM3).roundToInt() else 625
+
+                            Text("Logistics Specs", fontWeight = FontWeight.Bold, fontSize = 10.sp, color = Color(0xFF94A3B8))
+                            Text("• Mass: ${totalMassKg.roundToInt()} kg (${item.nominalWeightKg} kg/ea)", fontSize = 10.sp, color = Color.White, fontFamily = FontFamily.Monospace)
+                            Text("• Volume: ${String.format("%.3f", totalVolM3)} m³", fontSize = 10.sp, color = Color.White, fontFamily = FontFamily.Monospace)
+                            Text("• Density: $density kg/m³", fontSize = 10.sp, color = Color.White, fontFamily = FontFamily.Monospace)
+                            Text("• Dims: ${item.lengthM}m × ${item.widthM}m × ${item.heightM}m", fontSize = 10.sp, color = Color.White, fontFamily = FontFamily.Monospace)
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Native C++ Pipeline", fontWeight = FontWeight.Bold, fontSize = 10.sp, color = Color(0xFFF472B6))
+                            Text("• Albedo: ${item.vkAlbedoFormat}", fontSize = 9.sp, color = Color.White, fontFamily = FontFamily.Monospace)
+                            Text("• Normal: ${item.vkNormalFormat}", fontSize = 9.sp, color = Color.White, fontFamily = FontFamily.Monospace)
+                            Text("• Mesh: ${meshStats[1]} tris (${meshStats[0]} vtx)", fontSize = 9.sp, color = Color(0xFF22C55E), fontFamily = FontFamily.Monospace)
+                            Text("• Engine: C++ CargoRegistry", fontSize = 9.sp, color = Color(0xFF38BDF8), fontFamily = FontFamily.Monospace)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Bottom Product Label Badge
         Surface(
-            shape = RoundedCornerShape(8.dp),
-            color = Color(0xCC0F172A),
+            shape = RoundedCornerShape(20.dp),
+            color = Color(0xCC0B111E),
             border = CardDefaults.outlinedCardBorder(),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 12.dp)
+                .padding(bottom = 8.dp)
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "STENCIL LABEL: ",
+                    "C++ MESH: ",
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = Color(0xFF94A3B8)
+                    color = Color(0xFF38BDF8),
+                    fontSize = 10.sp
                 )
                 Text(
-                    item.defaultLabel,
+                    item.name,
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                     color = Color.White,
-                    fontFamily = FontFamily.Monospace
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp
                 )
             }
         }
     }
 }
 
-// ---------------------------------------------------------------------------
-// 3D Procedural Commodity Render Helpers
-// ---------------------------------------------------------------------------
-
-private fun DrawScope.drawProceduralPallet(
+private fun DrawScope.drawProjectedStencilOverlay(
+    item: CommodityItem,
     center: Offset,
-    scale: Float,
-    cosY: Float, sinY: Float, cosX: Float, sinX: Float
+    worldScalePx: Float,
+    rotXDeg: Float,
+    rotYDeg: Float,
+    textMeasurer: TextMeasurer
 ) {
-    val palletColor = Color(0xFF8D6E46)
-    val darkWood = Color(0xFF5A4428)
+    if (!item.showStencil || item.stencilLabel.isBlank()) return
 
-    // Bottom skids (3 runners)
-    for (i in -1..1) {
-        val ox = i * (scale * 0.42f)
-        drawRect(
-            color = darkWood,
-            topLeft = Offset(center.x + ox - scale * 0.08f, center.y + scale * 0.15f),
-            size = Size(scale * 0.16f, scale * 0.06f)
-        )
-    }
+    val radX = rotXDeg * (PI.toFloat() / 180f)
+    val radY = rotYDeg * (PI.toFloat() / 180f)
+    val cosY = cos(radY); val sinY = sin(radY)
+    val cosX = cos(radX); val sinX = sin(radX)
 
-    // Top deck boards (5 slats)
-    for (i in -2..2) {
-        val oy = i * (scale * 0.08f)
-        drawRoundRect(
-            color = palletColor,
-            topLeft = Offset(center.x - scale * 0.55f, center.y + oy),
-            size = Size(scale * 1.1f, scale * 0.06f),
-            cornerRadius = CornerRadius(4f, 4f)
-        )
-    }
-}
+    val nz = cosY * cosX
+    if (nz < 0.05f) return
 
-private fun DrawScope.drawCommodityShape(
-    item: CommodityItem,
-    pos: Offset,
-    scale: Float,
-    cosY: Float, sinY: Float, cosX: Float, sinX: Float
-) {
-    when (item.category) {
-        CommodityCategoryType.BAGGED_GOODS -> {
-            drawProceduralBag(item, pos, scale, cosY, sinY, cosX, sinX)
-        }
-        CommodityCategoryType.BOXES_CRATES -> {
-            drawProceduralBox(item, pos, scale, cosY, sinY, cosX, sinX)
-        }
-        CommodityCategoryType.LIQUID_BULK -> {
-            drawProceduralDrum(item, pos, scale, cosY, sinY, cosX, sinX)
-        }
-        CommodityCategoryType.RAW_MATERIALS -> {
-            drawProceduralRaw(item, pos, scale, cosY, sinY, cosX, sinX)
-        }
-        CommodityCategoryType.CONTAINERS_BOTTLES -> {
-            drawProceduralBottle(item, pos, scale, cosY, sinY, cosX, sinX)
-        }
-        CommodityCategoryType.SPECIALTY_INDUSTRIAL -> {
-            drawProceduralSpecialty(item, pos, scale, cosY, sinY, cosX, sinX)
-        }
-        CommodityCategoryType.PERISHABLE_GOODS -> {
-            drawProceduralPerishable(item, pos, scale, cosY, sinY, cosX, sinX)
-        }
-    }
-}
+    val zAnchor = 0.28f
+    val rx = -zAnchor * sinY
+    val rz = zAnchor * cosY
+    val ry = 0.04f * cosX - rz * sinX
+    val fz = 0.04f * sinX + rz * cosX
 
-private fun DrawScope.drawProceduralBag(
-    item: CommodityItem,
-    pos: Offset,
-    scale: Float,
-    cosY: Float, sinY: Float, cosX: Float, sinX: Float
-) {
-    val halfW = scale * 0.55f
-    val halfH = scale * 0.38f
+    val persp = 3.4f / (3.4f - fz).coerceAtLeast(0.5f)
+    val px = center.x + rx * worldScalePx * persp
+    val py = center.y - ry * worldScalePx * persp
 
-    // Puffed pillow shape path
-    val path = Path().apply {
-        moveTo(pos.x - halfW, pos.y)
-        cubicTo(
-            pos.x - halfW * 0.9f, pos.y - halfH,
-            pos.x + halfW * 0.9f, pos.y - halfH,
-            pos.x + halfW, pos.y
-        )
-        cubicTo(
-            pos.x + halfW * 0.9f, pos.y + halfH,
-            pos.x - halfW * 0.9f, pos.y + halfH,
-            pos.x - halfW, pos.y
-        )
-        close()
-    }
-
-    // Cook-Torrance illuminated gradient
-    val lightOffset = Offset(pos.x - halfW * 0.3f, pos.y - halfH * 0.5f)
-    drawPath(
-        path = path,
-        brush = Brush.radialGradient(
-            colors = listOf(
-                item.baseColor,
-                item.baseColor.copy(alpha = 0.92f),
-                item.baseColor.copy(alpha = 0.65f)
-            ),
-            center = lightOffset,
-            radius = scale * 0.85f
+    val textRes = textMeasurer.measure(
+        text = item.stencilLabel.take(22),
+        style = TextStyle(
+            fontSize = (9.5f * item.stencilScale).coerceIn(7f, 15f).sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            color = item.stencilColor.copy(alpha = (nz * 0.95f).coerceIn(0.3f, 0.95f))
         )
     )
 
-    // Seam stitching edge line
-    drawPath(
-        path = path,
-        color = item.baseColor.copy(alpha = 0.4f),
-        style = Stroke(width = 3f)
-    )
+    val padX = 10f
+    val padY = 5f
+    val boxW = textRes.size.width + padX * 2f
+    val boxH = textRes.size.height + padY * 2f
 
-    // Fabric fold ripples
-    for (i in -2..2) {
-        val foldY = pos.y + i * (scale * 0.12f)
-        drawLine(
-            color = Color.Black.copy(alpha = 0.18f),
-            start = Offset(pos.x - halfW * 0.7f, foldY),
-            end = Offset(pos.x + halfW * 0.7f, foldY + scale * 0.04f),
-            strokeWidth = 2.5f
-        )
-    }
-
-    // Branding Stencil area
-    drawRoundRect(
-        color = item.secondaryColor.copy(alpha = 0.85f),
-        topLeft = Offset(pos.x - scale * 0.30f, pos.y - scale * 0.12f),
-        size = Size(scale * 0.60f, scale * 0.24f),
-        cornerRadius = CornerRadius(6f, 6f)
-    )
-}
-
-private fun DrawScope.drawProceduralBox(
-    item: CommodityItem,
-    pos: Offset,
-    scale: Float,
-    cosY: Float, sinY: Float, cosX: Float, sinX: Float
-) {
-    val hw = scale * 0.52f
-    val hh = scale * 0.45f
-    val depth = scale * 0.28f
-
-    // Isometric / rotated box 3-faces
-    val topFace = Path().apply {
-        moveTo(pos.x, pos.y - hh - depth)
-        lineTo(pos.x + hw, pos.y - hh)
-        lineTo(pos.x, pos.y - hh + depth)
-        lineTo(pos.x - hw, pos.y - hh)
-        close()
-    }
-    val frontFace = Path().apply {
-        moveTo(pos.x - hw, pos.y - hh)
-        lineTo(pos.x, pos.y - hh + depth)
-        lineTo(pos.x, pos.y + hh + depth)
-        lineTo(pos.x - hw, pos.y + hh)
-        close()
-    }
-    val sideFace = Path().apply {
-        moveTo(pos.x, pos.y - hh + depth)
-        lineTo(pos.x + hw, pos.y - hh)
-        lineTo(pos.x + hw, pos.y + hh)
-        lineTo(pos.x, pos.y + hh + depth)
-        close()
-    }
-
-    drawPath(topFace, item.baseColor.copy(alpha = 1.0f))
-    drawPath(frontFace, item.baseColor.copy(alpha = 0.85f))
-    drawPath(sideFace, item.baseColor.copy(alpha = 0.70f))
-
-    // Seam & tape
-    drawLine(
-        color = Color(0xFF785532),
-        start = Offset(pos.x - hw * 0.1f, pos.y - hh),
-        end = Offset(pos.x + hw * 0.1f, pos.y - hh + depth),
-        strokeWidth = 10f
-    )
-
-    // Outline edges
-    val edgeCol = Color.Black.copy(alpha = 0.35f)
-    drawPath(topFace, edgeCol, style = Stroke(width = 2f))
-    drawPath(frontFace, edgeCol, style = Stroke(width = 2f))
-    drawPath(sideFace, edgeCol, style = Stroke(width = 2f))
-}
-
-private fun DrawScope.drawProceduralDrum(
-    item: CommodityItem,
-    pos: Offset,
-    scale: Float,
-    cosY: Float, sinY: Float, cosX: Float, sinX: Float
-) {
-    val r = scale * 0.36f
-    val halfH = scale * 0.52f
-
-    // Cylindrical drum body
-    val body = Path().apply {
-        moveTo(pos.x - r, pos.y - halfH)
-        lineTo(pos.x + r, pos.y - halfH)
-        lineTo(pos.x + r, pos.y + halfH)
-        lineTo(pos.x - r, pos.y + halfH)
-        close()
-    }
-
-    drawPath(
-        path = body,
-        brush = Brush.linearGradient(
-            colors = listOf(item.baseColor.copy(alpha = 0.6f), item.baseColor, item.baseColor.copy(alpha = 0.5f)),
-            start = Offset(pos.x - r, pos.y),
-            end = Offset(pos.x + r, pos.y)
-        )
-    )
-
-    // Top chime lid
-    drawOval(
-        color = item.baseColor.copy(alpha = 0.95f),
-        topLeft = Offset(pos.x - r, pos.y - halfH - r * 0.25f),
-        size = Size(r * 2f, r * 0.5f)
-    )
-
-    // Rolling hoop ribs at 1/3 and 2/3
-    val ribY1 = pos.y - halfH * 0.35f
-    val ribY2 = pos.y + halfH * 0.35f
-    drawLine(Color.White.copy(alpha = 0.45f), Offset(pos.x - r, ribY1), Offset(pos.x + r, ribY1), strokeWidth = 5f)
-    drawLine(Color.White.copy(alpha = 0.45f), Offset(pos.x - r, ribY2), Offset(pos.x + r, ribY2), strokeWidth = 5f)
-
-    // Hazard Diamond Placard
-    val diamond = Path().apply {
-        val dy = pos.y
-        moveTo(pos.x, dy - scale * 0.12f)
-        lineTo(pos.x + scale * 0.12f, dy)
-        lineTo(pos.x, dy + scale * 0.12f)
-        lineTo(pos.x - scale * 0.12f, dy)
-        close()
-    }
-    drawPath(diamond, item.secondaryColor)
-}
-
-private fun DrawScope.drawProceduralRaw(
-    item: CommodityItem,
-    pos: Offset,
-    scale: Float,
-    cosY: Float, sinY: Float, cosX: Float, sinX: Float
-) {
-    if (item.id == 20 || item.id == 21) {
-        // Conical aggregate pile (coal / gravel)
-        val pile = Path().apply {
-            moveTo(pos.x - scale * 0.65f, pos.y + scale * 0.35f)
-            lineTo(pos.x, pos.y - scale * 0.45f)
-            lineTo(pos.x + scale * 0.65f, pos.y + scale * 0.35f)
-            close()
-        }
-        drawPath(
-            pile,
-            brush = Brush.radialGradient(
-                colors = listOf(item.baseColor, item.baseColor.copy(alpha = 0.7f)),
-                center = Offset(pos.x, pos.y - scale * 0.2f),
-                radius = scale * 0.6f
-            )
-        )
-    } else {
-        // Tree Log or Timber bundle
-        val r = scale * 0.22f
-        val len = scale * 0.85f
-
-        // Bark trunk cylinder
-        drawRoundRect(
-            brush = Brush.linearGradient(
-                colors = listOf(item.baseColor.copy(alpha = 0.7f), item.baseColor, item.baseColor.copy(alpha = 0.6f)),
-                start = Offset(pos.x, pos.y - r),
-                end = Offset(pos.x, pos.y + r)
-            ),
-            topLeft = Offset(pos.x - len * 0.5f, pos.y - r),
-            size = Size(len, r * 2f),
-            cornerRadius = CornerRadius(6f, 6f)
-        )
-
-        // Sawn end sapwood rings
-        drawOval(
-            color = item.secondaryColor,
-            topLeft = Offset(pos.x + len * 0.5f - r * 0.3f, pos.y - r),
-            size = Size(r * 0.6f, r * 2f)
-        )
-    }
-}
-
-private fun DrawScope.drawProceduralBottle(
-    item: CommodityItem,
-    pos: Offset,
-    scale: Float,
-    cosY: Float, sinY: Float, cosX: Float, sinX: Float
-) {
-    val r = scale * 0.18f
-    val halfH = scale * 0.55f
-
-    // Bottle body
-    val bottle = Path().apply {
-        moveTo(pos.x - r, pos.y + halfH)
-        lineTo(pos.x - r, pos.y - halfH * 0.2f)
-        lineTo(pos.x - r * 0.4f, pos.y - halfH * 0.65f)
-        lineTo(pos.x - r * 0.4f, pos.y - halfH)
-        lineTo(pos.x + r * 0.4f, pos.y - halfH)
-        lineTo(pos.x + r * 0.4f, pos.y - halfH * 0.65f)
-        lineTo(pos.x + r, pos.y - halfH * 0.2f)
-        lineTo(pos.x + r, pos.y + halfH)
-        close()
-    }
-
-    drawPath(
-        path = bottle,
-        brush = Brush.linearGradient(
-            colors = listOf(
-                item.baseColor.copy(alpha = item.opacity * 0.6f),
-                item.baseColor.copy(alpha = item.opacity),
-                item.baseColor.copy(alpha = item.opacity * 0.5f)
-            ),
-            start = Offset(pos.x - r, pos.y),
-            end = Offset(pos.x + r, pos.y)
-        )
-    )
-
-    // Body Label
     drawRect(
-        color = item.secondaryColor,
-        topLeft = Offset(pos.x - r * 0.9f, pos.y - halfH * 0.1f),
-        size = Size(r * 1.8f, halfH * 0.5f)
+        color = Color.White.copy(alpha = (0.78f * nz).coerceIn(0.25f, 0.85f)),
+        topLeft = Offset(px - boxW * 0.5f, py - boxH * 0.5f),
+        size = Size(boxW, boxH)
     )
-
-    // Crown Cap
     drawRect(
-        color = Color(0xFFE5E7EB),
-        topLeft = Offset(pos.x - r * 0.45f, pos.y - halfH - 4f),
-        size = Size(r * 0.9f, 8f)
+        color = item.stencilColor.copy(alpha = 0.65f * nz),
+        topLeft = Offset(px - boxW * 0.5f, py - boxH * 0.5f),
+        size = Size(boxW, boxH),
+        style = Stroke(1.5f)
     )
-}
-
-private fun DrawScope.drawProceduralSpecialty(
-    item: CommodityItem,
-    pos: Offset,
-    scale: Float,
-    cosY: Float, sinY: Float, cosX: Float, sinX: Float
-) {
-    if (item.id == 30) {
-        // Tyre stack (4 stacked toruses)
-        val tyreR = scale * 0.42f
-        for (i in 0..3) {
-            val ty = pos.y + (i - 1.5f) * (scale * 0.22f)
-            drawOval(
-                color = item.baseColor,
-                topLeft = Offset(pos.x - tyreR, ty - scale * 0.08f),
-                size = Size(tyreR * 2f, scale * 0.16f)
-            )
-            // Inner rim hole
-            drawOval(
-                color = Color(0xFF090A0F),
-                topLeft = Offset(pos.x - tyreR * 0.5f, ty - scale * 0.04f),
-                size = Size(tyreR, scale * 0.08f)
-            )
-        }
-    } else {
-        // Steel pipe or brick pallet
-        drawProceduralBox(item, pos, scale, cosY, sinY, cosX, sinX)
-    }
-}
-
-private fun DrawScope.drawProceduralPerishable(
-    item: CommodityItem,
-    pos: Offset,
-    scale: Float,
-    cosY: Float, sinY: Float, cosX: Float, sinX: Float
-) {
-    // Plastic crate container
-    val hw = scale * 0.52f
-    val hh = scale * 0.32f
-    drawRect(
-        color = Color(0xFF1E293B),
-        topLeft = Offset(pos.x - hw, pos.y - hh * 0.5f),
-        size = Size(hw * 2f, hh)
+    drawText(
+        textLayoutResult = textRes,
+        topLeft = Offset(px - textRes.size.width * 0.5f, py - textRes.size.height * 0.5f)
     )
 
-    // Clustered fresh spherical produce
-    val produceR = scale * 0.09f
-    for (ix in -2..2) {
-        for (iz in -1..1) {
-            val px = pos.x + ix * (produceR * 1.8f)
-            val py = pos.y - hh * 0.5f + iz * (produceR * 1.2f)
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(Color.White.copy(alpha = 0.5f), item.baseColor),
-                    center = Offset(px - produceR * 0.3f, py - produceR * 0.3f),
-                    radius = produceR
-                ),
-                radius = produceR,
-                center = Offset(px, py)
+    if (item.stampType == StencilStampType.BARCODE_GS1) {
+        val by = py + boxH * 0.5f + 4f
+        for (b in 0..9) {
+            val bx = px - boxW * 0.3f + b * (boxW * 0.065f)
+            drawLine(
+                color = item.stencilColor.copy(alpha = 0.8f * nz),
+                start = Offset(bx, by),
+                end = Offset(bx, by + 8f),
+                strokeWidth = if (b % 2 == 0) 2.5f else 1.2f
             )
         }
     }

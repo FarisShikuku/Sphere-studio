@@ -1,0 +1,13 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#include "include/coach_common.glsl"
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(rgba8, binding = 0) writeonly uniform image2D outAlbedo;
+layout(push_constant) uniform Push { CoachPushConstants pc; };
+void main() {
+    ivec2 gid = ivec2(gl_GlobalInvocationID.xy);
+    vec2 uv = vec2(gid) / vec2(imageSize(outAlbedo));
+    vec3 glass = vec3(0.07, 0.11, 0.18);
+    vec3 col = mix(pc.metallicPaint.rgb, glass, step(0.55, uv.y));
+    imageStore(outAlbedo, gid, vec4(col, 1.0));
+}

@@ -441,6 +441,20 @@ fun SphereStudioApp() {
                     }
                 )
             }
+            "trailers" -> {
+                TrailersStudioScreen(
+                    onNavigateBack = {
+                        selectedCategoryIndex = 0
+                    }
+                )
+            }
+            "vehicles" -> {
+                VehiclesStudioScreen(
+                    onNavigateBack = {
+                        selectedCategoryIndex = 0
+                    }
+                )
+            }
             else -> {
                 EmptyAssetScreen(
                     category = currentCategory,

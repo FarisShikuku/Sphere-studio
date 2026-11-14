@@ -6,6 +6,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(Vulkan REQUIRED)
 find_library(log-lib log)
 find_library(android-lib android)
+find_library(jnigraphics-lib jnigraphics)
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/base
@@ -25,6 +26,29 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/cargo/containers_bottles/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/cargo/specialty_industrial/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/cargo/perishable_goods/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/cargo/building_materials/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/trailers/library/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/trailers/flatbed/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/trailers/tanker/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/trailers/box_van/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/trailers/chassis/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/trailers/logging/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/trailers/curtainsider/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/trailers/bulk_hopper/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/trailers/car_carrier/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/trailers/heavy_haulage/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/trailers/dolly/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/trailers/recreational/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/trailers/specialty/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/trailers/running_gear/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/vehicles/library/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/vehicles/lorry_rigid/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/vehicles/lorry_articulated/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/vehicles/bus_city/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/vehicles/bus_coach/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/vehicles/bus_minibus/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/vehicles/cab_components/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/vehicles/chassis_components/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jni
     ${Vulkan_INCLUDE_DIRS}
 )
@@ -37,6 +61,8 @@ add_subdirectory(src/sky)
 add_subdirectory(src/weather)
 add_subdirectory(src/lighting)
 add_subdirectory(src/gen/cargo)
+add_subdirectory(src/gen/trailers)
+add_subdirectory(src/gen/vehicles)
 add_library(SphereStudioEngine SHARED
     src/jni/SphereStudioJni.cpp
 )
@@ -50,7 +76,10 @@ target_link_libraries(SphereStudioEngine PRIVATE
     weather
     lighting
     cargo
+    trailers
+    vehicles
     Vulkan::Vulkan
     ${log-lib}
     ${android-lib}
+    ${jnigraphics-lib}
 )

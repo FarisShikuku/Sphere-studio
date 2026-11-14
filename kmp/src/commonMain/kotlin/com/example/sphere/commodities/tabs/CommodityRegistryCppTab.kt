@@ -186,7 +186,7 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeGetCargoCommoditie
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            text = "7 procedural modules under native_assets/src/gen/cargo/",
+                            text = "8 procedural modules under native_assets/src/gen/cargo/",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

@@ -6,6 +6,7 @@
 #include "../../containers_bottles/include/ContainersBottlesCargo.h"
 #include "../../specialty_industrial/include/SpecialtyIndustrialCargo.h"
 #include "../../perishable_goods/include/PerishableGoodsCargo.h"
+#include "../../building_materials/include/BuildingMaterialsCargo.h"
 
 namespace sphere::cargo {
 
@@ -70,6 +71,13 @@ void CargoRegistry::RegisterDefaultGenerators() {
     // 7. Perishable Goods (4 variants)
     for (const auto& v : PerishableGoodsVariants::GetAllVariants()) {
         auto gen = std::make_shared<PerishableGoodsCargo>(v.id);
+        m_Generators[v.id] = gen;
+        m_Definitions[v.id] = gen->GetDef();
+    }
+
+    // 8. Building Materials (10 variants)
+    for (const auto& v : BuildingMaterialsVariants::GetAllVariants()) {
+        auto gen = std::make_shared<BuildingMaterialsCargo>(v.id);
         m_Generators[v.id] = gen;
         m_Definitions[v.id] = gen->GetDef();
     }

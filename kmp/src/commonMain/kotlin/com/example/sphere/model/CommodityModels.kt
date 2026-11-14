@@ -9,7 +9,8 @@ enum class CommodityCategoryType(val label: String, val code: String) {
     RAW_MATERIALS("Raw Materials", "raw_materials"),
     CONTAINERS_BOTTLES("Containers & Bottles", "containers_bottles"),
     SPECIALTY_INDUSTRIAL("Specialty Industrial", "specialty_industrial"),
-    PERISHABLE_GOODS("Perishable Goods", "perishable_goods");
+    PERISHABLE_GOODS("Perishable Goods", "perishable_goods"),
+    BUILDING_MATERIALS("Building Materials", "building_materials");
 
     val displayName: String get() = label
 }
@@ -359,6 +360,84 @@ val defaultCommodityItems = listOf(
         defaultLabel = "CRUSHED AGGREGATE 20MM",
         description = "Conical storage mound of angular granite road-base gravel aggregate."
     ),
+    CommodityItem(
+        id = 35,
+        name = "Quarter-Split Oak Firewood Wedges",
+        category = CommodityCategoryType.RAW_MATERIALS,
+        nominalWeightKg = 42.0f,
+        volumeM3 = 0.055f,
+        lengthM = 0.48f, widthM = 0.36f, heightM = 0.32f,
+        baseColor = Color(0xFF6B4C33),
+        secondaryColor = Color(0xFFD6AD6E),
+        roughness = 0.86f, metallic = 0.0f,
+        defaultLabel = "SEASONED OAK SPLIT 90°",
+        description = "Quarter-split seasoned oak logs modeled with 90-degree radial split planes and furrowed outer bark arc."
+    ),
+    CommodityItem(
+        id = 36,
+        name = "Half-Split Silver Birch Logs",
+        category = CommodityCategoryType.RAW_MATERIALS,
+        nominalWeightKg = 55.0f,
+        volumeM3 = 0.058f,
+        lengthM = 0.52f, widthM = 0.40f, heightM = 0.28f,
+        baseColor = Color(0xFFDCDAD2),
+        secondaryColor = Color(0xFFE0BD80),
+        roughness = 0.78f, metallic = 0.0f,
+        defaultLabel = "KILN SILVER BIRCH HALF-ROUND",
+        description = "Semicircular split birch firewood with white lenticel bark crust and bright blond heartwood face."
+    ),
+    CommodityItem(
+        id = 37,
+        name = "Cross-Stacked Cordwood Timber Rick",
+        category = CommodityCategoryType.RAW_MATERIALS,
+        nominalWeightKg = 380.0f,
+        volumeM3 = 0.540f,
+        lengthM = 1.20f, widthM = 0.50f, heightM = 0.90f,
+        baseColor = Color(0xFF755438),
+        secondaryColor = Color(0xFFD1A86E),
+        roughness = 0.88f, metallic = 0.0f,
+        defaultLabel = "CRIBBED CORDWOOD RICK",
+        description = "Cross-stacked multi-tier cordwood rick combining split hardwood billets and notched end-grain rounds."
+    ),
+    CommodityItem(
+        id = 38,
+        name = "Chamfered Hardwood Sleeper Beam",
+        category = CommodityCategoryType.RAW_MATERIALS,
+        nominalWeightKg = 88.0f,
+        volumeM3 = 0.108f,
+        lengthM = 2.60f, widthM = 0.26f, heightM = 0.16f,
+        baseColor = Color(0xFF3D2E24),
+        secondaryColor = Color(0xFF8C6B47),
+        roughness = 0.80f, metallic = 0.04f,
+        defaultLabel = "CREOSOTE SLEEPER BEAM",
+        description = "Superellipse-chamfered heavy hardwood railway sleeper with adzed edges and longitudinal check fissure."
+    ),
+    CommodityItem(
+        id = 39,
+        name = "Twine-Bound Split Pine Kindling",
+        category = CommodityCategoryType.RAW_MATERIALS,
+        nominalWeightKg = 14.5f,
+        volumeM3 = 0.029f,
+        lengthM = 0.38f, widthM = 0.28f, heightM = 0.28f,
+        baseColor = Color(0xFFD9B575),
+        secondaryColor = Color(0xFF8C6133),
+        roughness = 0.74f, metallic = 0.0f,
+        defaultLabel = "RESINOUS PINE KINDLING",
+        description = "Compact hexagonal cluster of split pine kindling sticks cinched by a central Gaussian twine waist."
+    ),
+    CommodityItem(
+        id = 40,
+        name = "Axe-Flared Butcher Stump Block",
+        category = CommodityCategoryType.RAW_MATERIALS,
+        nominalWeightKg = 96.0f,
+        volumeM3 = 0.185f,
+        lengthM = 0.58f, widthM = 0.58f, heightM = 0.55f,
+        baseColor = Color(0xFF61452E),
+        secondaryColor = Color(0xFFD4B075),
+        roughness = 0.90f, metallic = 0.0f,
+        defaultLabel = "CHOPPING BLOCK STUMP",
+        description = "Flared root-buttress hardwood round with harmonic fluted base and broad concentric heartwood top."
+    ),
 
     // 5. Containers & Bottles
     CommodityItem(
@@ -370,7 +449,7 @@ val defaultCommodityItems = listOf(
         lengthM = 0.062f, widthM = 0.062f, heightM = 0.228f,
         baseColor = Color(0xFF5A3614),
         secondaryColor = Color(0xFFEAB308),
-        roughness = 0.08f, metallic = 0.0f, opacity = 0.35f,
+        roughness = 0.08f, metallic = 0.0f, opacity = 1.0f,
         defaultLabel = "PREMIUM CRAFT PILSNER 330ML",
         description = "Amber glass bottle with crimped tin crown cap and gold embossed foil wrap label."
     ),
@@ -383,7 +462,7 @@ val defaultCommodityItems = listOf(
         lengthM = 0.108f, widthM = 0.108f, heightM = 0.325f,
         baseColor = Color(0xFF260D07),
         secondaryColor = Color(0xFFDC2626),
-        roughness = 0.12f, metallic = 0.0f, opacity = 0.45f,
+        roughness = 0.12f, metallic = 0.0f, opacity = 1.0f,
         defaultLabel = "SPARKLING COLA 2L",
         description = "Fluted clear PET carbonated beverage bottle with dark caramel liquid and red wrap label."
     ),
@@ -396,7 +475,7 @@ val defaultCommodityItems = listOf(
         lengthM = 0.065f, widthM = 0.065f, heightM = 0.210f,
         baseColor = Color(0xFFE0F2FE),
         secondaryColor = Color(0xFF0284C7),
-        roughness = 0.05f, metallic = 0.0f, opacity = 0.18f,
+        roughness = 0.05f, metallic = 0.0f, opacity = 1.0f,
         defaultLabel = "NATURAL SPRING WATER 500ML",
         description = "Clear ribbed plastic mineral water bottle with tamper-evident sky blue screw cap."
     ),
@@ -409,7 +488,7 @@ val defaultCommodityItems = listOf(
         lengthM = 0.088f, widthM = 0.088f, heightM = 0.135f,
         baseColor = Color(0xFFF0FDF4),
         secondaryColor = Color(0xFF16A34A),
-        roughness = 0.06f, metallic = 0.0f, opacity = 0.25f,
+        roughness = 0.06f, metallic = 0.0f, opacity = 1.0f,
         defaultLabel = "ORGANIC HONEY PRESERVE 500G",
         description = "Wide-mouth soda-lime glass jar with twist-off enameled tinplate lug cap."
     ),
@@ -533,5 +612,137 @@ val defaultCommodityItems = listOf(
         roughness = 0.45f, metallic = 0.0f,
         defaultLabel = "CHILLED BEEF PRIMAL VAC-PACK",
         description = "Heavy insulated wax-impregnated meat carton holding vacuum-sealed primal beef cuts."
+    ),
+
+    // 8. Building Materials (Structural Beams, Sand, Glass, Concrete, Drywall & Roofing)
+    CommodityItem(
+        id = 41,
+        name = "Wide-Flange Steel I-Beam 6m (HEA 240)",
+        category = CommodityCategoryType.BUILDING_MATERIALS,
+        nominalWeightKg = 362.0f,
+        volumeM3 = 0.331f,
+        lengthM = 6.00f, widthM = 0.24f, heightM = 0.23f,
+        baseColor = Color(0xFF475569),
+        secondaryColor = Color(0xFFEA580C),
+        roughness = 0.38f, metallic = 0.94f,
+        defaultLabel = "S355J2 STRUCTURAL HEA-240",
+        description = "Hot-rolled wide-flange structural steel H/I-beam with root fillets and mill-grade orange ID stencil."
+    ),
+    CommodityItem(
+        id = 42,
+        name = "Laminated Glulam Roof Beam 4.8m",
+        category = CommodityCategoryType.BUILDING_MATERIALS,
+        nominalWeightKg = 195.0f,
+        volumeM3 = 0.246f,
+        lengthM = 4.80f, widthM = 0.16f, heightM = 0.32f,
+        baseColor = Color(0xFFD6AD73),
+        secondaryColor = Color(0xFF6B4423),
+        roughness = 0.72f, metallic = 0.0f,
+        defaultLabel = "GL28H ENGINEERED GLULAM",
+        description = "Finger-jointed multi-lamella structural spruce glulam timber beam with slight upward camber."
+    ),
+    CommodityItem(
+        id = 43,
+        name = "Washed Silica Masonry Sand Heap",
+        category = CommodityCategoryType.BUILDING_MATERIALS,
+        nominalWeightKg = 2400.0f,
+        volumeM3 = 1.500f,
+        lengthM = 1.85f, widthM = 1.85f, heightM = 0.68f,
+        baseColor = Color(0xFFD6BC8B),
+        secondaryColor = Color(0xFFAE8E5E),
+        roughness = 0.93f, metallic = 0.04f,
+        defaultLabel = "WASHED SILICA SAND 0-4MM",
+        description = "Fine angle-of-repose bulk pile of washed concrete and mortar silica sand with wind ripples."
+    ),
+    CommodityItem(
+        id = 44,
+        name = "FIBC Builder's Sand Bulk Bag (1 Tonne)",
+        category = CommodityCategoryType.BUILDING_MATERIALS,
+        nominalWeightKg = 1000.0f,
+        volumeM3 = 0.891f,
+        lengthM = 0.90f, widthM = 0.90f, heightM = 1.10f,
+        baseColor = Color(0xFFECEFF4),
+        secondaryColor = Color(0xFF0284C7),
+        roughness = 0.68f, metallic = 0.0f,
+        defaultLabel = "SHARP SAND FIBC 1000KG",
+        description = "Superquadric heavy woven polypropylene FIBC dumpy tote with reinforced crane lift loops."
+    ),
+    CommodityItem(
+        id = 45,
+        name = "Tempered Architectural Float Glass Pack",
+        category = CommodityCategoryType.BUILDING_MATERIALS,
+        nominalWeightKg = 890.0f,
+        volumeM3 = 3.306f,
+        lengthM = 2.40f, widthM = 0.95f, heightM = 1.45f,
+        baseColor = Color(0xFF7DD3C8),
+        secondaryColor = Color(0xFF1E293B),
+        roughness = 0.06f, metallic = 0.12f, opacity = 1.0f, opacityBias = 0.0f,
+        defaultLabel = "10MM TEMPERED FLOAT GLASS",
+        description = "Steel A-frame stillage rack loaded with low-iron translucent architectural glass sheets."
+    ),
+    CommodityItem(
+        id = 46,
+        name = "Hollow Concrete Masonry Blocks (CMU)",
+        category = CommodityCategoryType.BUILDING_MATERIALS,
+        nominalWeightKg = 920.0f,
+        volumeM3 = 0.787f,
+        lengthM = 1.20f, widthM = 0.80f, heightM = 0.82f,
+        baseColor = Color(0xFF8C9298),
+        secondaryColor = Color(0xFF4B5563),
+        roughness = 0.92f, metallic = 0.0f,
+        defaultLabel = "CMU HOLLOW BLOCK 200MM",
+        description = "Palletized stack of twin-core hollow concrete masonry cinder blocks with aggregate grain."
+    ),
+    CommodityItem(
+        id = 47,
+        name = "Prestressed Hollow-Core Concrete Slab",
+        category = CommodityCategoryType.BUILDING_MATERIALS,
+        nominalWeightKg = 1180.0f,
+        volumeM3 = 0.950f,
+        lengthM = 3.60f, widthM = 1.20f, heightM = 0.22f,
+        baseColor = Color(0xFFA8ACB2),
+        secondaryColor = Color(0xFF334155),
+        roughness = 0.86f, metallic = 0.05f,
+        defaultLabel = "HOLLOW-CORE DECK SLAB 220",
+        description = "Precast prestressed concrete floor slab featuring longitudinal weight-relief voids and lifting eyes."
+    ),
+    CommodityItem(
+        id = 48,
+        name = "Moisture-Resistant Gypsum Drywall Stack",
+        category = CommodityCategoryType.BUILDING_MATERIALS,
+        nominalWeightKg = 640.0f,
+        volumeM3 = 0.922f,
+        lengthM = 2.40f, widthM = 1.20f, heightM = 0.32f,
+        baseColor = Color(0xFF2D9C8F),
+        secondaryColor = Color(0xFFF1F5F9),
+        roughness = 0.80f, metallic = 0.0f,
+        defaultLabel = "HYDRO-SHIELD GYPSUM 12.5MM",
+        description = "Layered stack of green moisture-resistant plasterboard drywall panels with white gypsum cores."
+    ),
+    CommodityItem(
+        id = 49,
+        name = "Galvanized Corrugated Roof Sheets",
+        category = CommodityCategoryType.BUILDING_MATERIALS,
+        nominalWeightKg = 310.0f,
+        volumeM3 = 0.368f,
+        lengthM = 2.50f, widthM = 0.92f, heightM = 0.16f,
+        baseColor = Color(0xFFAEB8C4),
+        secondaryColor = Color(0xFF1E293B),
+        roughness = 0.28f, metallic = 0.90f,
+        defaultLabel = "Z275 GALV ROOFING 0.5MM",
+        description = "Nested pack of sinusoidal corrugated zinc-coated steel roofing panels secured with steel bands."
+    ),
+    CommodityItem(
+        id = 50,
+        name = "Terracotta Barrel Clay Roof Tiles",
+        category = CommodityCategoryType.BUILDING_MATERIALS,
+        nominalWeightKg = 780.0f,
+        volumeM3 = 0.673f,
+        lengthM = 1.10f, widthM = 0.85f, heightM = 0.72f,
+        baseColor = Color(0xFFC25432),
+        secondaryColor = Color(0xFF782C18),
+        roughness = 0.78f, metallic = 0.0f,
+        defaultLabel = "FIRED TERRACOTTA TILE PACK",
+        description = "Bundled interlocking S-curve terracotta clay roof tiles palletized for residential roofing."
     )
 )

@@ -1,0 +1,14 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#include "include/chassis_parts_common.glsl"
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+layout(std430, binding = 0) buffer VertexBuffer { vec4 vertices[]; };
+layout(push_constant) uniform Push { ChassisPartPushConstants pc; };
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= 64u) return;
+    float t = float(idx) / 63.0;
+    vertices[idx] = vec4((t - 0.5) * pc.wheelbase, pc.clearance, 0.42, 1.0);
+}

@@ -1,0 +1,15 @@
+#version 450 core
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(binding = 0, rgba8) uniform writeonly image2D outOrmImage;
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= 1024 || coord.y >= 1024) return;
+    vec2 uv = (vec2(coord) + 0.5) / 1024.0;
+    float isRim = step(0.5, uv.y);
+    float ao = 0.88;
+    float roughness = mix(0.86, 0.22, isRim);
+    float metallic = mix(0.02, 0.92, isRim);
+    imageStore(outOrmImage, coord, vec4(ao, roughness, metallic, 1.0));
+}

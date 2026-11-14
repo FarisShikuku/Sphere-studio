@@ -1,0 +1,19 @@
+#version 450 core
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+struct Vertex { vec4 position; vec4 normal; vec4 uv_tangent; };
+layout(std430, binding = 0) buffer OutVertexBuffer { Vertex vertices[]; };
+layout(push_constant) uniform PushConstants { float length; float radY; float radZ; uint compartments; } pc;
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= 2048u) return;
+    float u = float(idx % 64u) / 63.0;
+    float v = float(idx / 64u) / 31.0;
+    float theta = v * 6.2831853;
+    float edge = max(0.0, abs(u - 0.5) * 2.0 - 0.96) / 0.04;
+    float cap = sqrt(max(0.0, 1.0 - edge * edge));
+    vec3 n = normalize(vec3(0.0, sin(theta), cos(theta)));
+    vec3 p = vec3((u - 0.5) * pc.length, 2.1 + pc.radY * cap * sin(theta), pc.radZ * cap * cos(theta));
+    vertices[idx].position = vec4(p, 1.0);
+    vertices[idx].normal = vec4(n, 0.0);
+    vertices[idx].uv_tangent = vec4(u, v, 1.0, 0.0);
+}

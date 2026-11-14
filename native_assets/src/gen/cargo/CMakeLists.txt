@@ -9,6 +9,7 @@ file(GLOB_RECURSE CARGO_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/containers_bottles/src/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/specialty_industrial/src/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/perishable_goods/src/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/building_materials/src/*.cpp"
 )
 
 add_library(cargo STATIC ${CARGO_SOURCES})
@@ -22,6 +23,7 @@ target_include_directories(cargo PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/containers_bottles/include
     ${CMAKE_CURRENT_SOURCE_DIR}/specialty_industrial/include
     ${CMAKE_CURRENT_SOURCE_DIR}/perishable_goods/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/building_materials/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../scene
     ${CMAKE_CURRENT_SOURCE_DIR}/../../shared
     ${CMAKE_CURRENT_SOURCE_DIR}/../../vulkan

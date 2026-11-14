@@ -14,6 +14,7 @@ import androidx.compose.material.icons.outlined.Texture
 import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.outlined.LocalShipping
+import androidx.compose.material.icons.outlined.RvHookup
 import androidx.compose.material.icons.outlined.Water
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material.icons.outlined.Widgets
@@ -33,6 +34,7 @@ data class AssetCategory(
 val availableAssetCategories = listOf(
     AssetCategory("test", "Test Screen", "Calibration Cube & Scene Viewport", Icons.Default.ViewInAr, "Interactive 3D geometry, dimensional controls & surface PBR patterns"),
     AssetCategory("commodities", "Commodities & Cargo", "Procedural Goods & Freight", Icons.Outlined.LocalShipping, "Procedural bags, crates, drums, timber, bottles, industrial pallets & perishable goods"),
+    AssetCategory("trailers", "Trailers & Haulage", "Semi, Tanker, Heavy & Dollies", Icons.Outlined.RvHookup, "Procedural flatbeds, tankers, box vans, container chassis, logging, curtainsiders, hoppers & running gear"),
     AssetCategory("lighting", "Lighting Studio", "PlainRenderer Vulkan Lights", Icons.Default.Lightbulb, "Physically based lights: flashlight spot cones, filament bulbs, area softboxes & Kelvin blackbody spectrum"),
     AssetCategory("water", "Water Bodies", "FFT Ocean, Lakes & Rivers", Icons.Outlined.Water, "Tessendorf FFT ocean spectrum, river splines & shore foam"),
     AssetCategory("roads", "Roads & Pathways", "Splines, Markings & States", Icons.Outlined.Agriculture, "Procedural camber, asphalt PBR, sign SDFs & 10 surface states"),
@@ -42,7 +44,7 @@ val availableAssetCategories = listOf(
     AssetCategory("buildings", "Buildings & Architecture", "Modular Facades & Kits", Icons.Outlined.Apartment, "Grammar-based building generator, socket attachment & floorplans"),
     AssetCategory("weather", "Weather Systems", "Rain, Snow & Clouds", Icons.Outlined.Cloud, "Volumetric froxel fog, raymarched clouds & lightning paths"),
     AssetCategory("terrain", "Terrain & Landscapes", "Erosion, Cliffs & Caves", Icons.Outlined.Landscape, "Hydraulic erosion, marching-cubes voxel caves & splatmaps"),
-    AssetCategory("vehicles", "Vehicles & Transports", "Cars, Trucks & Parts", Icons.Outlined.DirectionsCar, "Silhouette extrusion, wheel assemblies & emergency lightbars"),
+    AssetCategory("vehicles", "Lorries & Buses", "Rigid, Tractors, Coaches & Matatu", Icons.Outlined.DirectionsCar, "Procedural heavy lorries, 5th-wheel articulated tractors, city buses, coaches & 14-seater matatus"),
     AssetCategory("props", "World Props & Utility", "Power, Solar & Street Furniture", Icons.Outlined.Widgets, "Wind turbines, solar PV trackers, catenary wires & transformers"),
     AssetCategory("sky", "Atmosphere & Sky", "Preetham / Hosek-Wilkie", Icons.Outlined.WbSunny, "Atmospheric scattering LUT, star catalogs & solar disk"),
     AssetCategory("particles", "GPU Particle Systems", "VFX & Compute Simulations", Icons.Outlined.Layers, "Sort compute, smoke curl noise, spark physics & flame sheets"),
