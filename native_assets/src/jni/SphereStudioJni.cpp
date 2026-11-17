@@ -809,6 +809,7 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderVehicleBitma
     jfloat wheelbaseM,
     jfloat fifthWheelOffsetM,
     jfloat actionRatio,
+    jfloat doorOpenRatio,
     jfloat steerAngleDeg,
     jboolean headlightsOn,
     jboolean hasRoofRack,
@@ -864,6 +865,7 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderVehicleBitma
         float effRough = std::clamp(roughness, 0.04f, 1.0f);
         float effMetal = std::clamp(metallic, 0.0f, 1.0f);
         float effAction = std::clamp(actionRatio, 0.0f, 1.0f);
+        float effDoorOpen = std::clamp(doorOpenRatio, 0.0f, 1.0f);
         float effSteer = std::clamp(steerAngleDeg, -30.0f, 30.0f);
         bool effHeadlights = (headlightsOn == JNI_TRUE);
         bool effRoofRack = (hasRoofRack == JNI_TRUE);
@@ -879,6 +881,7 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderVehicleBitma
             !FloatNear(nextDef.wheelbase_m, wheelbaseM) ||
             !FloatNear(nextDef.fifth_wheel_offset_m, fifthWheelOffsetM) ||
             !FloatNear(nextDef.action_ratio, effAction) ||
+            !FloatNear(nextDef.door_open_ratio, effDoorOpen) ||
             !FloatNear(nextDef.steer_angle_deg, effSteer) ||
             nextDef.headlights_on != effHeadlights ||
             nextDef.has_roof_rack != effRoofRack ||
@@ -894,6 +897,7 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderVehicleBitma
             nextDef.wheelbase_m = wheelbaseM;
             nextDef.fifth_wheel_offset_m = fifthWheelOffsetM;
             nextDef.action_ratio = effAction;
+            nextDef.door_open_ratio = effDoorOpen;
             nextDef.steer_angle_deg = effSteer;
             nextDef.headlights_on = effHeadlights;
             nextDef.has_roof_rack = effRoofRack;

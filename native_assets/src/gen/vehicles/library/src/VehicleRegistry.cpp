@@ -60,6 +60,39 @@ void VehicleRegistry::RegisterAll() {
     add(std::make_shared<Minibus>(VehicleID::SPRINTER_VAN));
     add(std::make_shared<Minibus>(VehicleID::SHUTTLE_BUS));
     add(std::make_shared<Minibus>(VehicleID::SCHOOL_VAN));
+
+    // 6. Extended >12m Reference Coaches & Double-Deckers (10)
+    add(std::make_shared<CoachBus>(VehicleID::COACH_VOLVO_9700_DD));
+    add(std::make_shared<CoachBus>(VehicleID::COACH_VOLVO_9800_DD));
+    add(std::make_shared<CoachBus>(VehicleID::COACH_VOLVO_9700_TEAL));
+    add(std::make_shared<CoachBus>(VehicleID::COACH_VOLVO_9800_AERO));
+    add(std::make_shared<CoachBus>(VehicleID::COACH_YUTONG_TOURING));
+    add(std::make_shared<CoachBus>(VehicleID::COACH_AERO_BLADE_VIP));
+    add(std::make_shared<CoachBus>(VehicleID::COACH_CHAMPAGNE_SR2));
+    add(std::make_shared<CoachBus>(VehicleID::COACH_NEOPLAN_TOURLINER));
+    add(std::make_shared<CoachBus>(VehicleID::COACH_TWIN_GLASS_DOME));
+    add(std::make_shared<CoachBus>(VehicleID::COACH_OBSIDIAN_VIP_6X2));
+    add(std::make_shared<CoachBus>(VehicleID::COACH_EXECUTIVE_I6));
+    add(std::make_shared<CoachBus>(VehicleID::COACH_LUXURY_VIP_4X2));
+
+    // 7. Real-World Rigid Lorries
+    add(std::make_shared<RigidLorry>(VehicleID::LORRY_UD_QUESTER_TIPPER));
+    add(std::make_shared<RigidLorry>(VehicleID::LORRY_MAN_TGX_BOX));
+    add(std::make_shared<RigidLorry>(VehicleID::LORRY_SCANIA_P320_CURTAINSIDER));
+
+    // 8. Real-World Articulated Tractors
+    add(std::make_shared<ArticulatedTractor>(VehicleID::TRACTOR_VOLVO_FH_ELECTRIC));
+    add(std::make_shared<ArticulatedTractor>(VehicleID::TRACTOR_MERCEDES_EACTROS_600));
+    add(std::make_shared<ArticulatedTractor>(VehicleID::TRACTOR_MERCEDES_GENH2));
+    add(std::make_shared<ArticulatedTractor>(VehicleID::TRACTOR_SCANIA_45R_ELECTRIC));
+    add(std::make_shared<ArticulatedTractor>(VehicleID::TRACTOR_SCANIA_R560_SUPER));
+    add(std::make_shared<ArticulatedTractor>(VehicleID::TRACTOR_SCANIA_S770_LONGLINE));
+    add(std::make_shared<ArticulatedTractor>(VehicleID::TRACTOR_SCANIA_40R_XT_ELECTRIC));
+    add(std::make_shared<ArticulatedTractor>(VehicleID::TRACTOR_FORD_FMAX_500));
+    add(std::make_shared<ArticulatedTractor>(VehicleID::TRACTOR_IVECO_SEWAY_ELECTRIC));
+    add(std::make_shared<ArticulatedTractor>(VehicleID::TRACTOR_VW_CONSTELLATION_25390));
+    add(std::make_shared<ArticulatedTractor>(VehicleID::TRACTOR_VW_METEOR_28460));
+    add(std::make_shared<ArticulatedTractor>(VehicleID::TRACTOR_MAN_TGX_18510));
 }
 
 std::shared_ptr<IVehicle> VehicleRegistry::GetVehicle(VehicleID id) {

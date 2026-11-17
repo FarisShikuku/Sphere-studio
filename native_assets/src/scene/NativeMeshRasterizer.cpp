@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <unordered_map>
 #include <vector>
@@ -46,26 +47,41 @@ struct PreparedMesh {
     const Mesh* sourcePtr = nullptr;
     size_t vertexCount = 0;
     size_t indexCount = 0;
+    uint64_t fingerprint = 0;
     uint32_t triCount = 0;
     std::vector<Vec3> cornerNormals; // 3 * triCount smooth crease-aware normals
     AABB bounds;
 };
 
-struct QuantKey {
+struct QuantCornerEntry {
     int64_t x, y, z;
-    bool operator==(const QuantKey& o) const { return x == o.x && y == o.y && z == o.z; }
+    uint32_t tri;
 };
 
-struct QuantKeyHash {
-    size_t operator()(const QuantKey& k) const {
-        uint64_t h = static_cast<uint64_t>(k.x) * 73856093ull ^
-                     static_cast<uint64_t>(k.y) * 19349663ull ^
-                     static_cast<uint64_t>(k.z) * 83492791ull;
-        return static_cast<size_t>(h);
+inline uint64_t ComputeMeshFingerprint(const Mesh* mesh) {
+    if (!mesh) return 0;
+    uint64_t h = static_cast<uint64_t>(mesh->vertices.size()) * 11400714819323198485ull ^
+                 static_cast<uint64_t>(mesh->indices.size()) * 14029467366897019727ull;
+    const size_t nV = mesh->vertices.size();
+    const size_t step = std::max<size_t>(1, nV / 16);
+    for (size_t i = 0; i < nV; i += step) {
+        const auto& v = mesh->vertices[i];
+        int64_t px = static_cast<int64_t>(std::llround(v.position.x * 1000.0f));
+        int64_t py = static_cast<int64_t>(std::llround(v.position.y * 1000.0f));
+        int64_t pz = static_cast<int64_t>(std::llround(v.position.z * 1000.0f));
+        int64_t cr = static_cast<int64_t>(std::llround(v.color.x * 255.0f));
+        int64_t cg = static_cast<int64_t>(std::llround(v.color.y * 255.0f));
+        int64_t cb = static_cast<int64_t>(std::llround(v.color.z * 255.0f));
+        h ^= static_cast<uint64_t>(px) * 73856093ull ^
+             static_cast<uint64_t>(py) * 19349663ull ^
+             static_cast<uint64_t>(pz) * 83492791ull ^
+             static_cast<uint64_t>((cr << 16) | (cg << 8) | cb);
+        h = (h << 13) | (h >> 51);
     }
-};
+    return h;
+}
 
-PreparedMesh BuildPreparedMesh(const Mesh* mesh) {
+PreparedMesh BuildPreparedMesh(const Mesh* mesh, uint64_t fingerprint = 0) {
     PreparedMesh pm;
     if (!mesh || mesh->vertices.empty() || mesh->indices.size() < 3) {
         return pm;
@@ -73,19 +89,18 @@ PreparedMesh BuildPreparedMesh(const Mesh* mesh) {
     pm.sourcePtr = mesh;
     pm.vertexCount = mesh->vertices.size();
     pm.indexCount = mesh->indices.size();
+    pm.fingerprint = fingerprint;
     pm.triCount = static_cast<uint32_t>(mesh->indices.size() / 3);
     pm.bounds = mesh->bounds;
 
     std::vector<Vec3> faceNormals(pm.triCount, Vec3(0.0f, 1.0f, 0.0f));
-    std::unordered_map<QuantKey, std::vector<uint32_t>, QuantKeyHash> posBuckets;
-    posBuckets.reserve(mesh->vertices.size());
+    std::vector<QuantCornerEntry> entries;
+    entries.reserve(static_cast<size_t>(pm.triCount) * 3);
 
-    auto makeKey = [](const Vec3& p) -> QuantKey {
-        return QuantKey{
-            static_cast<int64_t>(std::llround(p.x * 2000.0f)),
-            static_cast<int64_t>(std::llround(p.y * 2000.0f)),
-            static_cast<int64_t>(std::llround(p.z * 2000.0f))
-        };
+    auto quantize = [](const Vec3& p, int64_t& qx, int64_t& qy, int64_t& qz) {
+        qx = static_cast<int64_t>(std::llround(p.x * 2000.0f));
+        qy = static_cast<int64_t>(std::llround(p.y * 2000.0f));
+        qz = static_cast<int64_t>(std::llround(p.z * 2000.0f));
     };
 
     for (uint32_t t = 0; t < pm.triCount; ++t) {
@@ -101,10 +116,22 @@ PreparedMesh BuildPreparedMesh(const Mesh* mesh) {
         float len = crossN.Length();
         faceNormals[t] = (len > 1e-7f) ? (crossN * (1.0f / len)) : Vec3(0.0f, 1.0f, 0.0f);
 
-        posBuckets[makeKey(p0)].push_back(t);
-        posBuckets[makeKey(p1)].push_back(t);
-        posBuckets[makeKey(p2)].push_back(t);
+        int64_t qx, qy, qz;
+        quantize(p0, qx, qy, qz);
+        entries.push_back({qx, qy, qz, t});
+        quantize(p1, qx, qy, qz);
+        entries.push_back({qx, qy, qz, t});
+        quantize(p2, qx, qy, qz);
+        entries.push_back({qx, qy, qz, t});
     }
+
+    auto cmpEntry = [](const QuantCornerEntry& a, const QuantCornerEntry& b) {
+        if (a.x != b.x) return a.x < b.x;
+        if (a.y != b.y) return a.y < b.y;
+        if (a.z != b.z) return a.z < b.z;
+        return a.tri < b.tri;
+    };
+    std::sort(entries.begin(), entries.end(), cmpEntry);
 
     pm.cornerNormals.resize(static_cast<size_t>(pm.triCount) * 3, Vec3(0.0f, 1.0f, 0.0f));
     for (uint32_t t = 0; t < pm.triCount; ++t) {
@@ -112,13 +139,22 @@ PreparedMesh BuildPreparedMesh(const Mesh* mesh) {
         for (int c = 0; c < 3; ++c) {
             uint32_t vi = mesh->indices[t * 3 + c];
             if (vi >= pm.vertexCount) continue;
-            const auto& neighbors = posBuckets[makeKey(mesh->vertices[vi].position)];
+            int64_t qx, qy, qz;
+            quantize(mesh->vertices[vi].position, qx, qy, qz);
+            QuantCornerEntry target{qx, qy, qz, 0};
+            auto it = std::lower_bound(entries.begin(), entries.end(), target, cmpEntry);
             Vec3 accum(0.0f, 0.0f, 0.0f);
-            for (uint32_t nt : neighbors) {
-                const Vec3& nfn = faceNormals[nt];
-                if (Vec3::Dot(fn, nfn) > kCreaseCosThreshold) {
-                    accum += nfn;
+            uint32_t prevTri = UINT32_MAX;
+            while (it != entries.end() && it->x == qx && it->y == qy && it->z == qz) {
+                uint32_t nt = it->tri;
+                if (nt != prevTri) {
+                    prevTri = nt;
+                    const Vec3& nfn = faceNormals[nt];
+                    if (Vec3::Dot(fn, nfn) > kCreaseCosThreshold) {
+                        accum += nfn;
+                    }
                 }
+                ++it;
             }
             float alen = accum.Length();
             pm.cornerNormals[t * 3 + c] = (alen > 1e-6f) ? (accum * (1.0f / alen)) : fn;
@@ -127,21 +163,28 @@ PreparedMesh BuildPreparedMesh(const Mesh* mesh) {
     return pm;
 }
 
-PreparedMesh GetPreparedMeshCopy(const Mesh* mesh) {
+std::shared_ptr<const PreparedMesh> GetPreparedMesh(const Mesh* mesh) {
     static std::mutex sCacheMutex;
-    static std::unordered_map<const Mesh*, PreparedMesh> sCache;
-    std::lock_guard<std::mutex> lock(sCacheMutex);
-    auto it = sCache.find(mesh);
-    if (it != sCache.end() &&
-        it->second.vertexCount == mesh->vertices.size() &&
-        it->second.indexCount == mesh->indices.size()) {
-        return it->second;
+    static std::unordered_map<const Mesh*, std::shared_ptr<const PreparedMesh>> sCache;
+    uint64_t fp = ComputeMeshFingerprint(mesh);
+    {
+        std::lock_guard<std::mutex> lock(sCacheMutex);
+        auto it = sCache.find(mesh);
+        if (it != sCache.end() &&
+            it->second->vertexCount == mesh->vertices.size() &&
+            it->second->indexCount == mesh->indices.size() &&
+            it->second->fingerprint == fp) {
+            return it->second;
+        }
     }
-    if (sCache.size() > 160) {
-        sCache.clear();
+    auto built = std::make_shared<PreparedMesh>(BuildPreparedMesh(mesh, fp));
+    {
+        std::lock_guard<std::mutex> lock(sCacheMutex);
+        if (sCache.size() > 96) {
+            sCache.clear();
+        }
+        sCache[mesh] = built;
     }
-    PreparedMesh built = BuildPreparedMesh(mesh);
-    sCache[mesh] = built;
     return built;
 }
 
@@ -346,6 +389,11 @@ struct FrameBufferView {
             transformPoint(v2.position, sx2, sy2, iz2);
 
             if (iz0 <= 0.0f || iz1 <= 0.0f || iz2 <= 0.0f) continue;
+            if (!std::isfinite(sx0) || !std::isfinite(sy0) ||
+                !std::isfinite(sx1) || !std::isfinite(sy1) ||
+                !std::isfinite(sx2) || !std::isfinite(sy2)) {
+                continue;
+            }
 
             // Outward CCW in 3D projects to det2d < 0 because sy is Y-down
             float det2d = (sx1 - sx0) * (sy2 - sy0) - (sy1 - sy0) * (sx2 - sx0);
@@ -422,7 +470,8 @@ void NativeMeshRasterizer::RenderCargoBitmap(
 ) {
     if (!pixelsRGBA8888 || width <= 0 || height <= 0 || !cargoMesh) return;
 
-    const PreparedMesh pmCargo = GetPreparedMeshCopy(cargoMesh);
+    const auto pmCargoPtr = GetPreparedMesh(cargoMesh);
+    const PreparedMesh& pmCargo = *pmCargoPtr;
     float radX = params.rotXDeg * (kPi / 180.0f);
     float radY = params.rotYDeg * (kPi / 180.0f);
 
@@ -470,7 +519,8 @@ void NativeMeshRasterizer::RenderCargoBitmap(
 
     float cargoFloorY = floorY;
     if (hasPallet) {
-        const PreparedMesh pmPallet = GetPreparedMeshCopy(palletMesh);
+        const auto pmPalletPtr = GetPreparedMesh(palletMesh);
+        const PreparedMesh& pmPallet = *pmPalletPtr;
         float pSpanX = std::max(0.2f, pmPallet.bounds.max.x - pmPallet.bounds.min.x);
         float pSpanZ = std::max(0.2f, pmPallet.bounds.max.z - pmPallet.bounds.min.z);
         float pSpanY = std::max(0.05f, pmPallet.bounds.max.y - pmPallet.bounds.min.y);
@@ -571,7 +621,8 @@ void NativeMeshRasterizer::RenderTrailerBitmap(
 ) {
     if (!pixelsRGBA8888 || width <= 0 || height <= 0 || !trailerMesh) return;
 
-    const PreparedMesh pmTrailer = GetPreparedMeshCopy(trailerMesh);
+    const auto pmTrailerPtr = GetPreparedMesh(trailerMesh);
+    const PreparedMesh& pmTrailer = *pmTrailerPtr;
     float radX = params.rotXDeg * (kPi / 180.0f);
     float radY = params.rotYDeg * (kPi / 180.0f);
 
@@ -611,7 +662,8 @@ void NativeMeshRasterizer::RenderTrailerBitmap(
 
     // Optional loaded CargoRegistry::Get() payload at true 1:1 real-world scale on trailer deck
     if (params.showLoadedCargo && loadedCargoMesh && params.cargoQuantity > 0) {
-        const PreparedMesh pmCargo = GetPreparedMeshCopy(loadedCargoMesh);
+        const auto pmCargoPtr = GetPreparedMesh(loadedCargoMesh);
+        const PreparedMesh& pmCargo = *pmCargoPtr;
         float cLen = std::clamp(pmCargo.bounds.max.x - pmCargo.bounds.min.x, 0.18f, 4.5f);
         float cWid = std::clamp(pmCargo.bounds.max.z - pmCargo.bounds.min.z, 0.18f, 2.2f);
         float cHgt = std::clamp(pmCargo.bounds.max.y - pmCargo.bounds.min.y, 0.12f, 2.0f);
@@ -652,9 +704,10 @@ void NativeMeshRasterizer::RenderVehicleBitmap(
 ) {
     if (!pixelsRGBA8888 || width <= 0 || height <= 0 || !vehicleMesh) return;
 
-    const PreparedMesh pmVehicle = GetPreparedMeshCopy(vehicleMesh);
+    const auto pmVehiclePtr = GetPreparedMesh(vehicleMesh);
+    const PreparedMesh& pmVehicle = *pmVehiclePtr;
     bool hasTrailer = (params.showHitchedTrailer && hitchedTrailerMesh != nullptr);
-    PreparedMesh pmTrailer;
+    std::shared_ptr<const PreparedMesh> pmTrailerPtr;
     float trailerOffsetX = 0.0f;
 
     float minX = pmVehicle.bounds.min.x;
@@ -665,15 +718,15 @@ void NativeMeshRasterizer::RenderVehicleBitmap(
     float maxZ = pmVehicle.bounds.max.z;
 
     if (hasTrailer) {
-        pmTrailer = GetPreparedMeshCopy(hitchedTrailerMesh);
+        pmTrailerPtr = GetPreparedMesh(hitchedTrailerMesh);
         float trailerKingpinLocalX = -params.trailerLengthM * 0.5f + params.trailerKingpinOffsetM;
         trailerOffsetX = params.fifthWheelOffsetM - trailerKingpinLocalX;
-        minX = std::min(minX, pmTrailer.bounds.min.x + trailerOffsetX);
-        maxX = std::max(maxX, pmTrailer.bounds.max.x + trailerOffsetX);
-        minY = std::min(minY, pmTrailer.bounds.min.y);
-        maxY = std::max(maxY, pmTrailer.bounds.max.y);
-        minZ = std::min(minZ, pmTrailer.bounds.min.z);
-        maxZ = std::max(maxZ, pmTrailer.bounds.max.z);
+        minX = std::min(minX, pmTrailerPtr->bounds.min.x + trailerOffsetX);
+        maxX = std::max(maxX, pmTrailerPtr->bounds.max.x + trailerOffsetX);
+        minY = std::min(minY, pmTrailerPtr->bounds.min.y);
+        maxY = std::max(maxY, pmTrailerPtr->bounds.max.y);
+        minZ = std::min(minZ, pmTrailerPtr->bounds.min.z);
+        maxZ = std::max(maxZ, pmTrailerPtr->bounds.max.z);
     }
 
     float centerShiftX = -(minX + maxX) * 0.5f;
@@ -714,12 +767,13 @@ void NativeMeshRasterizer::RenderVehicleBitmap(
     // Render Vehicle at true 1:1 metric scale centered on combined rig bounds
     fb.RasterizeMesh(pmVehicle, cam, 1.0f, centerShiftX, 0.0f, 0.0f, params.roughness, params.metallic);
 
-    if (hasTrailer) {
+    if (hasTrailer && pmTrailerPtr) {
         float trShiftX = trailerOffsetX + centerShiftX;
-        fb.RasterizeMesh(pmTrailer, cam, 1.0f, trShiftX, 0.0f, 0.0f, 0.48f, 0.52f);
+        fb.RasterizeMesh(*pmTrailerPtr, cam, 1.0f, trShiftX, 0.0f, 0.0f, 0.48f, 0.52f);
 
         if (params.showLoadedCargo && loadedCargoMesh && params.cargoQuantity > 0) {
-            const PreparedMesh pmCargo = GetPreparedMeshCopy(loadedCargoMesh);
+            const auto pmCargoPtr = GetPreparedMesh(loadedCargoMesh);
+            const PreparedMesh& pmCargo = *pmCargoPtr;
             float cLen = std::clamp(pmCargo.bounds.max.x - pmCargo.bounds.min.x, 0.18f, 4.5f);
             float cWid = std::clamp(pmCargo.bounds.max.z - pmCargo.bounds.min.z, 0.18f, 2.2f);
             float cHgt = std::clamp(pmCargo.bounds.max.y - pmCargo.bounds.min.y, 0.12f, 2.0f);

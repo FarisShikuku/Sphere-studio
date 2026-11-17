@@ -72,12 +72,16 @@ class MeshRenderingVerificationTest {
     @Test
     fun allVehiclesCatalogHasValidMetricsAndOpaqueLiveries() {
         val vehicles = createDefaultVehiclesCatalog()
-        assertEquals("Expected 21 procedural C++ lorries and buses", 21, vehicles.size)
+        assertEquals("Expected 48 procedural C++ lorries and buses", 48, vehicles.size)
         assertEquals("Expected 5 vehicle categories", 5, VehicleCategoryType.entries.size)
 
         for ((idx, item) in vehicles.withIndex()) {
             assertEquals("Vehicle index must match ID", idx, item.id)
             assertTrue("Vehicle ${item.name} length must be positive", item.lengthM in 4.0f..20.0f)
+            if (item.id in 21..32) {
+                assertEquals("Extended coach ${item.name} must belong to BUS_COACH", VehicleCategoryType.BUS_COACH, item.category)
+                assertTrue("Extended coach ${item.name} must be at least 12m length", item.lengthM >= 12.0f)
+            }
             assertTrue("Vehicle ${item.name} width must be road-legal", item.widthM in 1.7f..2.65f)
             assertTrue("Vehicle ${item.name} height must be positive", item.heightM in 2.0f..4.6f)
             assertTrue("Vehicle ${item.name} wheelbase must be shorter than length", item.wheelbaseM < item.lengthM)
@@ -85,6 +89,7 @@ class MeshRenderingVerificationTest {
             assertTrue("Vehicle ${item.name} torque & HP must be positive", item.engineTorqueNm > 0f && item.enginePowerHp > 0f)
             assertEquals("Vehicle base color must be opaque", 1.0f, item.baseColor.alpha, 0.001f)
             assertEquals("Vehicle accent color must be opaque", 1.0f, item.accentColor.alpha, 0.001f)
+            assertEquals("Vehicle ${item.name} doorOpenRatio must default to 0.0f", 0.0f, item.doorOpenRatio, 0.001f)
 
             if (item.category == VehicleCategoryType.LORRY_ARTICULATED) {
                 assertTrue("Articulated tractor ${item.name} must expose positive fifth-wheel offset", item.fifthWheelOffsetM > 0.5f)

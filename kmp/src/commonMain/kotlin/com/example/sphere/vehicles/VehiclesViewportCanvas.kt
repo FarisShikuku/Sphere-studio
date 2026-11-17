@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.MeetingRoom
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,6 +28,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -38,6 +40,11 @@ import com.example.sphere.model.CommodityItem
 import com.example.sphere.model.TrailerItem
 import com.example.sphere.model.VehicleItem
 import com.example.sphere.nativebridge.SphereNativeEngine
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.withContext
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -57,6 +64,7 @@ private data class VehicleRenderKey(
     val wheelbaseM: Float,
     val fifthWheelOffsetM: Float,
     val actionRatio: Float,
+    val doorOpenRatio: Float,
     val steerAngleDeg: Float,
     val headlightsOn: Boolean,
     val hasRoofRack: Boolean,
@@ -68,11 +76,10 @@ private data class VehicleRenderKey(
     val cargoQty: Int
 )
 
-private class NativeVehicleRasterBuffer {
-    var bitmap: Bitmap? = null
-    var imageBitmap: ImageBitmap? = null
-    var lastKey: VehicleRenderKey? = null
-    var stats: IntArray = intArrayOf(0, 0, 0, 0)
+private class DoubleBufferedVehicleRaster {
+    var bufferA: Bitmap? = null
+    var bufferB: Bitmap? = null
+    var writeToA: Boolean = true
 }
 
 @Composable
@@ -84,6 +91,7 @@ fun VehiclesViewportCanvas(
     onDrag: (Float, Float) -> Unit,
     onZoomChange: (Float) -> Unit,
     onResetView: () -> Unit,
+    onToggleDoor: () -> Unit,
     hitchTrailerEnabled: Boolean,
     hitchedTrailer: TrailerItem?,
     showLoadedCargo: Boolean,
@@ -93,7 +101,10 @@ fun VehiclesViewportCanvas(
 ) {
     var showTelemetryInfo by remember { mutableStateOf(false) }
     var meshStats by remember { mutableStateOf(intArrayOf(0, 0, 0, 0)) }
-    val rasterBuffer = remember { NativeVehicleRasterBuffer() }
+    var canvasSizePx by remember { mutableStateOf(IntSize.Zero) }
+    var displayImageBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+    var isRendering by remember { mutableStateOf(false) }
+    val rasterBuffers = remember { DoubleBufferedVehicleRaster() }
 
     val effectiveHitch = item.canHitchTrailer && hitchTrailerEnabled && hitchedTrailer != null
     val passengerMass = if (item.passengerCapacity > 2) item.passengerCapacity * 72f else 0f
@@ -103,30 +114,26 @@ fun VehiclesViewportCanvas(
     } else 0f
     val combinedGvw = item.kerbWeightKg + passengerMass + trailerMass + cargoMass
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color(0xFF070A10))
-            .pointerInput(Unit) {
-                detectTransformGestures { _, pan, zoom, _ ->
-                    onDrag(pan.x, pan.y)
-                    if (zoom != 1.0f) {
-                        onZoomChange((zoomFactor * zoom).coerceIn(0.55f, 2.8f))
-                    }
-                }
-            }
-            .testTag("vehicles_3d_viewport")
+    val currentRenderKey = remember(
+        canvasSizePx,
+        item,
+        rotX,
+        rotY,
+        zoomFactor,
+        effectiveHitch,
+        hitchedTrailer?.id,
+        showLoadedCargo,
+        loadedCargo?.id,
+        cargoQuantity
     ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val wPx = size.width.roundToInt().coerceAtLeast(1)
-            val hPx = size.height.roundToInt().coerceAtLeast(1)
-
-            val maxDim = max(wPx, hPx)
+        if (canvasSizePx.width <= 0 || canvasSizePx.height <= 0) {
+            null
+        } else {
+            val maxDim = max(canvasSizePx.width, canvasSizePx.height)
             val resScale = if (maxDim > 720) 720f / maxDim.toFloat() else 1f
-            val bmpW = (wPx * resScale).roundToInt().coerceAtLeast(64)
-            val bmpH = (hPx * resScale).roundToInt().coerceAtLeast(64)
-
-            val key = VehicleRenderKey(
+            val bmpW = (canvasSizePx.width * resScale).roundToInt().coerceAtLeast(64)
+            val bmpH = (canvasSizePx.height * resScale).roundToInt().coerceAtLeast(64)
+            VehicleRenderKey(
                 bmpW = bmpW,
                 bmpH = bmpH,
                 vehicleId = item.id,
@@ -142,6 +149,7 @@ fun VehiclesViewportCanvas(
                 wheelbaseM = item.wheelbaseM,
                 fifthWheelOffsetM = item.fifthWheelOffsetM,
                 actionRatio = item.actionRatio,
+                doorOpenRatio = item.doorOpenRatio,
                 steerAngleDeg = item.steerAngleDeg,
                 headlightsOn = item.headlightsOn,
                 hasRoofRack = item.hasRoofRack,
@@ -152,49 +160,90 @@ fun VehiclesViewportCanvas(
                 cargoId = loadedCargo?.id ?: 0,
                 cargoQty = cargoQuantity
             )
+        }
+    }
 
-            var bmp = rasterBuffer.bitmap
-            if (bmp == null || bmp.width != bmpW || bmp.height != bmpH) {
-                bmp = Bitmap.createBitmap(bmpW, bmpH, Bitmap.Config.ARGB_8888)
-                rasterBuffer.bitmap = bmp
-                rasterBuffer.lastKey = null
-            }
+    val latestKeyState = rememberUpdatedState(currentRenderKey)
 
-            if (rasterBuffer.lastKey != key) {
-                val stats = SphereNativeEngine.renderVehicleBitmap(
-                    bitmap = bmp,
-                    vehicleId = key.vehicleId,
-                    rotX = key.rotX,
-                    rotY = key.rotY,
-                    zoom = key.zoom,
-                    liveryOrdinal = key.liveryOrdinal,
-                    randomSeed = key.randomSeed,
-                    baseArgb = key.baseArgb,
-                    accentArgb = key.accentArgb,
-                    roughness = key.roughness,
-                    metallic = key.metallic,
-                    wheelbaseM = key.wheelbaseM,
-                    fifthWheelOffsetM = key.fifthWheelOffsetM,
-                    actionRatio = key.actionRatio,
-                    steerAngleDeg = key.steerAngleDeg,
-                    headlightsOn = key.headlightsOn,
-                    hasRoofRack = key.hasRoofRack,
-                    hasExhaustStacks = key.hasExhaustStacks,
-                    hitchTrailer = key.hitchTrailer,
-                    trailerId = key.trailerId,
-                    showLoadedCargo = key.showLoadedCargo,
-                    cargoId = key.cargoId,
-                    cargoQty = key.cargoQty
-                )
-                rasterBuffer.lastKey = key
-                rasterBuffer.stats = stats
-                rasterBuffer.imageBitmap = bmp.asImageBitmap()
+    LaunchedEffect(Unit) {
+        snapshotFlow { latestKeyState.value }
+            .filterNotNull()
+            .distinctUntilChanged()
+            .conflate()
+            .collect { key ->
+                isRendering = true
+                val writeA = rasterBuffers.writeToA
+                var targetBmp = if (writeA) rasterBuffers.bufferA else rasterBuffers.bufferB
+                if (targetBmp == null || targetBmp.width != key.bmpW || targetBmp.height != key.bmpH) {
+                    targetBmp = Bitmap.createBitmap(key.bmpW, key.bmpH, Bitmap.Config.ARGB_8888)
+                    if (writeA) {
+                        rasterBuffers.bufferA = targetBmp
+                    } else {
+                        rasterBuffers.bufferB = targetBmp
+                    }
+                }
+
+                val stats = withContext(Dispatchers.Default) {
+                    SphereNativeEngine.renderVehicleBitmap(
+                        bitmap = targetBmp,
+                        vehicleId = key.vehicleId,
+                        rotX = key.rotX,
+                        rotY = key.rotY,
+                        zoom = key.zoom,
+                        liveryOrdinal = key.liveryOrdinal,
+                        randomSeed = key.randomSeed,
+                        baseArgb = key.baseArgb,
+                        accentArgb = key.accentArgb,
+                        roughness = key.roughness,
+                        metallic = key.metallic,
+                        wheelbaseM = key.wheelbaseM,
+                        fifthWheelOffsetM = key.fifthWheelOffsetM,
+                        actionRatio = key.actionRatio,
+                        doorOpenRatio = key.doorOpenRatio,
+                        steerAngleDeg = key.steerAngleDeg,
+                        headlightsOn = key.headlightsOn,
+                        hasRoofRack = key.hasRoofRack,
+                        hasExhaustStacks = key.hasExhaustStacks,
+                        hitchTrailer = key.hitchTrailer,
+                        trailerId = key.trailerId,
+                        showLoadedCargo = key.showLoadedCargo,
+                        cargoId = key.cargoId,
+                        cargoQty = key.cargoQty
+                    )
+                }
+
+                displayImageBitmap = targetBmp.asImageBitmap()
+                rasterBuffers.writeToA = !writeA
                 if (stats.size >= 4 && (stats[2] != meshStats[2] || stats[3] != meshStats[3])) {
                     meshStats = stats
                 }
+                isRendering = false
             }
+    }
 
-            val img = rasterBuffer.imageBitmap
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color(0xFF070A10))
+            .onSizeChanged { size ->
+                if (size.width > 0 && size.height > 0 && size != canvasSizePx) {
+                    canvasSizePx = size
+                }
+            }
+            .pointerInput(Unit) {
+                detectTransformGestures { _, pan, zoom, _ ->
+                    onDrag(pan.x, pan.y)
+                    if (zoom != 1.0f) {
+                        onZoomChange((zoomFactor * zoom).coerceIn(0.55f, 2.8f))
+                    }
+                }
+            }
+            .testTag("vehicles_3d_viewport")
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val wPx = size.width.roundToInt().coerceAtLeast(1)
+            val hPx = size.height.roundToInt().coerceAtLeast(1)
+            val img = displayImageBitmap
             if (img != null) {
                 drawImage(
                     image = img,
@@ -205,6 +254,16 @@ fun VehiclesViewportCanvas(
             }
         }
 
+        if (isRendering && displayImageBitmap == null) {
+            CircularProgressIndicator(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(28.dp),
+                strokeWidth = 2.5.dp,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
         // Top Floating Action Bar: Telemetry Toggle + Zoom & Reset
         Row(
             modifier = Modifier
@@ -213,21 +272,41 @@ fun VehiclesViewportCanvas(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            FilledTonalButton(
-                onClick = { showTelemetryInfo = !showTelemetryInfo },
-                shape = RoundedCornerShape(20.dp),
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = if (showTelemetryInfo) MaterialTheme.colorScheme.primaryContainer else Color(0xCC0F172A),
-                    contentColor = if (showTelemetryInfo) MaterialTheme.colorScheme.onPrimaryContainer else Color(0xFFE2E8F0)
-                ),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                modifier = Modifier
-                    .defaultMinSize(minHeight = 36.dp)
-                    .testTag("vehicle_toggle_specs_button")
-            ) {
-                Icon(Icons.Default.Info, contentDescription = "Toggle Vehicle Telemetry", modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(if (showTelemetryInfo) "Hide Specs" else "Show Specs", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                FilledTonalButton(
+                    onClick = { showTelemetryInfo = !showTelemetryInfo },
+                    shape = RoundedCornerShape(20.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = if (showTelemetryInfo) MaterialTheme.colorScheme.primaryContainer else Color(0xCC0F172A),
+                        contentColor = if (showTelemetryInfo) MaterialTheme.colorScheme.onPrimaryContainer else Color(0xFFE2E8F0)
+                    ),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier
+                        .defaultMinSize(minHeight = 36.dp)
+                        .testTag("vehicle_toggle_specs_button")
+                ) {
+                    Icon(Icons.Default.Info, contentDescription = "Toggle Vehicle Telemetry", modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text(if (showTelemetryInfo) "Hide Specs" else "Specs", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                }
+
+                val isDoorOpen = item.doorOpenRatio > 0.05f
+                FilledTonalButton(
+                    onClick = onToggleDoor,
+                    shape = RoundedCornerShape(20.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = if (isDoorOpen) MaterialTheme.colorScheme.primary else Color(0xCC0F172A),
+                        contentColor = if (isDoorOpen) MaterialTheme.colorScheme.onPrimary else Color(0xFFE2E8F0)
+                    ),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier
+                        .defaultMinSize(minHeight = 36.dp)
+                        .testTag("vehicle_toggle_door_button")
+                ) {
+                    Icon(Icons.Outlined.MeetingRoom, contentDescription = "Toggle Vehicle Door", modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text(if (isDoorOpen) "Close Door" else "Open Door", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
 
             Surface(

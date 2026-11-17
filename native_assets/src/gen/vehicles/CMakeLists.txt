@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-file(GLOB_RECURSE VEHICLE_SOURCES
+file(GLOB_RECURSE VEHICLE_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/library/src/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/lorry_rigid/src/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/lorry_articulated/src/*.cpp"

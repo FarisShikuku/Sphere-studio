@@ -454,6 +454,7 @@ object SphereNativeEngine {
         wheelbaseM: Float,
         fifthWheelOffsetM: Float,
         actionRatio: Float,
+        doorOpenRatio: Float,
         steerAngleDeg: Float,
         headlightsOn: Boolean,
         hasRoofRack: Boolean,
@@ -469,7 +470,7 @@ object SphereNativeEngine {
                 bitmap, vehicleId, rotX, rotY, zoom,
                 liveryOrdinal, randomSeed, baseArgb, accentArgb,
                 roughness, metallic, wheelbaseM, fifthWheelOffsetM,
-                actionRatio, steerAngleDeg, headlightsOn, hasRoofRack, hasExhaustStacks,
+                actionRatio, doorOpenRatio, steerAngleDeg, headlightsOn, hasRoofRack, hasExhaustStacks,
                 hitchTrailer, trailerId, showLoadedCargo, cargoId, cargoQty
             ) ?: intArrayOf(0, 0, 0, 0)
         } else {
@@ -497,6 +498,7 @@ object SphereNativeEngine {
         wheelbaseM: Float,
         fifthWheelOffsetM: Float,
         actionRatio: Float,
+        doorOpenRatio: Float,
         steerAngleDeg: Float,
         headlightsOn: Boolean,
         hasRoofRack: Boolean,

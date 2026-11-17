@@ -82,6 +82,61 @@ VehicleDef CreateRigidLorryDefaultDef(VehicleID id) {
             def.metallic = 0.38f;
             break;
 
+        case VehicleID::LORRY_UD_QUESTER_TIPPER:
+            def.drive_config = VehicleDriveConfig::DRIVE_8X4;
+            def.livery = LiveryID::INDUSTRIAL_WORKHORSE;
+            def.kerb_weight_kg = 14200.0f;
+            def.max_gvw_kg = 35000.0f;
+            def.wheelbase_m = 5.05f;
+            def.cab_height_m = 2.98f;
+            def.engine_torque_nm = 2000.0f;
+            def.engine_power_hp = 420.0f;
+            def.dimensions = Vec3(9.10f, 2.55f, 3.38f);
+            def.ground_clearance_m = 0.38f;
+            def.wheel_radius_m = 0.54f;
+            def.base_color = Vec4(0.11f, 0.37f, 0.41f, 1.0f);
+            def.accent_color = Vec4(0.14f, 0.16f, 0.19f, 1.0f);
+            def.roughness = 0.40f;
+            def.metallic = 0.45f;
+            def.has_exhaust_stacks = true;
+            break;
+
+        case VehicleID::LORRY_MAN_TGX_BOX:
+            def.drive_config = VehicleDriveConfig::DRIVE_6X2_TAG;
+            def.livery = LiveryID::HIGHWAY_HAULAGE;
+            def.kerb_weight_kg = 10800.0f;
+            def.max_gvw_kg = 26000.0f;
+            def.wheelbase_m = 5.45f;
+            def.cab_height_m = 3.22f;
+            def.engine_torque_nm = 2200.0f;
+            def.engine_power_hp = 440.0f;
+            def.dimensions = Vec3(9.60f, 2.55f, 3.88f);
+            def.ground_clearance_m = 0.30f;
+            def.wheel_radius_m = 0.50f;
+            def.base_color = Vec4(0.93f, 0.42f, 0.07f, 1.0f);
+            def.accent_color = Vec4(0.94f, 0.95f, 0.97f, 1.0f);
+            def.roughness = 0.24f;
+            def.metallic = 0.34f;
+            break;
+
+        case VehicleID::LORRY_SCANIA_P320_CURTAINSIDER:
+            def.drive_config = VehicleDriveConfig::DRIVE_6X2_TAG;
+            def.livery = LiveryID::FLEET_CORPORATE;
+            def.kerb_weight_kg = 10450.0f;
+            def.max_gvw_kg = 26000.0f;
+            def.wheelbase_m = 5.35f;
+            def.cab_height_m = 3.05f;
+            def.engine_torque_nm = 1600.0f;
+            def.engine_power_hp = 320.0f;
+            def.dimensions = Vec3(9.45f, 2.55f, 3.78f);
+            def.ground_clearance_m = 0.30f;
+            def.wheel_radius_m = 0.50f;
+            def.base_color = Vec4(0.94f, 0.95f, 0.97f, 1.0f);
+            def.accent_color = Vec4(0.91f, 0.36f, 0.11f, 1.0f);
+            def.roughness = 0.22f;
+            def.metallic = 0.28f;
+            break;
+
         case VehicleID::LORRY_RIGID_TANKER:
         default:
             def.drive_config = VehicleDriveConfig::DRIVE_6X4;

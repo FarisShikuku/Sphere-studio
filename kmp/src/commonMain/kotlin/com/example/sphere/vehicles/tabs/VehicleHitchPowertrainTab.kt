@@ -2,6 +2,8 @@ package com.example.sphere.vehicles.tabs
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -22,6 +24,7 @@ import com.example.sphere.model.TrailerItem
 import com.example.sphere.model.VehicleItem
 import kotlin.math.roundToInt
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VehicleHitchPowertrainTab(
     vehicle: VehicleItem,
@@ -41,6 +44,11 @@ fun VehicleHitchPowertrainTab(
 ) {
     var isTrailerDropdownOpen by remember { mutableStateOf(false) }
     var isCargoDropdownOpen by remember { mutableStateOf(false) }
+
+    val compatibleTrailers = remember(trailerCatalog) {
+        trailerCatalog.filter { it.hitchType.name.contains("FIFTH") || it.hitchType.name.contains("GOOSENECK") }
+    }
+    val cargoOptions = remember(cargoCatalog) { cargoCatalog.take(24) }
 
     val passengerLoad = if (vehicle.passengerCapacity > 2) vehicle.passengerCapacity * 72f else 0f
     val trailerMass = if (vehicle.canHitchTrailer && hitchTrailerEnabled) selectedTrailer.emptyWeightKg else 0f
@@ -95,52 +103,27 @@ fun VehicleHitchPowertrainTab(
                 }
 
                 if (vehicle.canHitchTrailer && hitchTrailerEnabled) {
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        Surface(
-                            onClick = { isTrailerDropdownOpen = !isTrailerDropdownOpen },
-                            shape = RoundedCornerShape(10.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainer,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .defaultMinSize(minHeight = 48.dp)
-                                .testTag("dropdown_hitched_trailer")
+                    Surface(
+                        onClick = { isTrailerDropdownOpen = true },
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                            .testTag("dropdown_hitched_trailer")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Outlined.RvHookup, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                Spacer(Modifier.width(10.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text("Coupled Semi-Trailer (${trailerCatalog.size} available)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(selectedTrailer.name, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                }
-                                Icon(Icons.Filled.ArrowDropDown, contentDescription = "Select trailer", modifier = Modifier.rotate(if (isTrailerDropdownOpen) 180f else 0f))
+                            Icon(Icons.Outlined.RvHookup, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Coupled Semi-Trailer (${compatibleTrailers.size} compatible)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(selectedTrailer.name, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
-                        }
-
-                        DropdownMenu(
-                            expanded = isTrailerDropdownOpen,
-                            onDismissRequest = { isTrailerDropdownOpen = false },
-                            modifier = Modifier.widthIn(min = 260.dp, max = 360.dp).heightIn(max = 320.dp)
-                        ) {
-                            trailerCatalog.filter { it.hitchType.name.contains("FIFTH") || it.hitchType.name.contains("GOOSENECK") }
-                                .forEach { tr ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Column {
-                                                Text(tr.name, fontWeight = FontWeight.SemiBold)
-                                                Text("${tr.lengthM}m • Tare ${tr.emptyWeightKg.roundToInt()} kg", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                            }
-                                        },
-                                        onClick = {
-                                            onSelectTrailer(tr)
-                                            isTrailerDropdownOpen = false
-                                        },
-                                        modifier = Modifier.testTag("hitch_trailer_option_${tr.id}")
-                                    )
-                                }
+                            Icon(Icons.Filled.ArrowDropDown, contentDescription = "Select trailer", modifier = Modifier.rotate(if (isTrailerDropdownOpen) 180f else 0f))
                         }
                     }
 
@@ -161,44 +144,27 @@ fun VehicleHitchPowertrainTab(
                     }
 
                     if (showLoadedCargo) {
-                        Box(modifier = Modifier.fillMaxWidth()) {
-                            Surface(
-                                onClick = { isCargoDropdownOpen = !isCargoDropdownOpen },
-                                shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.surfaceContainer,
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .defaultMinSize(minHeight = 48.dp)
-                                    .testTag("dropdown_vehicle_cargo")
+                        Surface(
+                            onClick = { isCargoDropdownOpen = true },
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainer,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .defaultMinSize(minHeight = 48.dp)
+                                .testTag("dropdown_vehicle_cargo")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(Icons.Outlined.Inventory2, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
-                                    Spacer(Modifier.width(10.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text("Cargo Commodity", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Text("${selectedCargo.name} (${selectedCargo.nominalWeightKg.roundToInt()} kg)", fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    }
-                                    Icon(Icons.Filled.ArrowDropDown, contentDescription = "Select cargo")
+                                Icon(Icons.Outlined.Inventory2, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+                                Spacer(Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Cargo Commodity", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("${selectedCargo.name} (${selectedCargo.nominalWeightKg.roundToInt()} kg)", fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
-                            }
-                            DropdownMenu(
-                                expanded = isCargoDropdownOpen,
-                                onDismissRequest = { isCargoDropdownOpen = false },
-                                modifier = Modifier.widthIn(min = 260.dp, max = 360.dp).heightIn(max = 300.dp)
-                            ) {
-                                cargoCatalog.take(24).forEach { cg ->
-                                    DropdownMenuItem(
-                                        text = { Text("${cg.name} (${cg.nominalWeightKg.roundToInt()} kg)") },
-                                        onClick = {
-                                            onSelectCargo(cg)
-                                            isCargoDropdownOpen = false
-                                        }
-                                    )
-                                }
+                                Icon(Icons.Filled.ArrowDropDown, contentDescription = "Select cargo", modifier = Modifier.rotate(if (isCargoDropdownOpen) 180f else 0f))
                             }
                         }
 
@@ -250,6 +216,32 @@ fun VehicleHitchPowertrainTab(
         ) {
             Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Chassis Kinematics & Body Action", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Passenger / Cab Door", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text("Opens door to reveal cabin, seats, steps & cockpit", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(
+                        checked = vehicle.doorOpenRatio > 0.05f,
+                        onCheckedChange = { open -> onVehicleChange(vehicle.copy(doorOpenRatio = if (open) 1f else 0f)) },
+                        modifier = Modifier.testTag("switch_vehicle_door_open")
+                    )
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Door Open Position", style = MaterialTheme.typography.bodySmall)
+                    Text("${(vehicle.doorOpenRatio * 100f).roundToInt()}%", fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                }
+                Slider(
+                    value = vehicle.doorOpenRatio,
+                    onValueChange = { onVehicleChange(vehicle.copy(doorOpenRatio = it)) },
+                    valueRange = 0f..1f,
+                    modifier = Modifier.testTag("slider_vehicle_door_open")
+                )
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(vehicle.actionLabel, style = MaterialTheme.typography.bodySmall)
@@ -324,6 +316,152 @@ fun VehicleHitchPowertrainTab(
                             onCheckedChange = { onVehicleChange(vehicle.copy(hasExhaustStacks = it)) },
                             modifier = Modifier.testTag("switch_vehicle_exhaust_stacks")
                         )
+                    }
+                }
+            }
+        }
+    }
+
+    if (isTrailerDropdownOpen) {
+        val trailerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { isTrailerDropdownOpen = false },
+            sheetState = trailerSheetState,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Select Coupled Semi-Trailer", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("${compatibleTrailers.size} fifth-wheel & gooseneck variants", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    IconButton(onClick = { isTrailerDropdownOpen = false }) {
+                        Icon(Icons.Outlined.Close, contentDescription = "Close trailer selector")
+                    }
+                }
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(bottom = 24.dp)
+                ) {
+                    items(compatibleTrailers, key = { it.id }) { tr ->
+                        val isCurrent = tr.id == selectedTrailer.id
+                        Surface(
+                            onClick = {
+                                onSelectTrailer(tr)
+                                isTrailerDropdownOpen = false
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isCurrent) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surfaceContainer,
+                            border = BorderStroke(
+                                width = if (isCurrent) 1.5.dp else 1.dp,
+                                color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .defaultMinSize(minHeight = 52.dp)
+                                .testTag("hitch_trailer_option_${tr.id}")
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        tr.name,
+                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.SemiBold,
+                                        color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        "${tr.lengthM}m • Tare ${tr.emptyWeightKg.roundToInt()} kg",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                if (isCurrent) {
+                                    Icon(Icons.Outlined.Check, contentDescription = "Selected", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (isCargoDropdownOpen) {
+        val cargoSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { isCargoDropdownOpen = false },
+            sheetState = cargoSheetState,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Select Cargo Commodity", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("CargoRegistry::Get() freight items", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    IconButton(onClick = { isCargoDropdownOpen = false }) {
+                        Icon(Icons.Outlined.Close, contentDescription = "Close cargo selector")
+                    }
+                }
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(bottom = 24.dp)
+                ) {
+                    items(cargoOptions, key = { it.id }) { cg ->
+                        val isCurrent = cg.id == selectedCargo.id
+                        Surface(
+                            onClick = {
+                                onSelectCargo(cg)
+                                isCargoDropdownOpen = false
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isCurrent) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surfaceContainer,
+                            border = BorderStroke(
+                                width = if (isCurrent) 1.5.dp else 1.dp,
+                                color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .defaultMinSize(minHeight = 48.dp)
+                                .testTag("hitch_cargo_option_${cg.id}")
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "${cg.name} (${cg.nominalWeightKg.roundToInt()} kg)",
+                                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (isCurrent) {
+                                    Icon(Icons.Outlined.Check, contentDescription = "Selected", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        }
                     }
                 }
             }

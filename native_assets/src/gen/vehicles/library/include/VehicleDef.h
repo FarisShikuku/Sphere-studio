@@ -65,7 +65,8 @@ struct VehicleDef {
     float wear_and_tear = 0.08f;
 
     // Runtime Interactive Mechanics
-    float action_ratio = 0.0f;      // Tipper lift / mixer drum spin / bus door slide / bendy flex
+    float action_ratio = 0.0f;      // Tipper lift / mixer drum spin / luggage bays / bendy flex
+    float door_open_ratio = 0.0f;   // Passenger / cab door open ratio [0.0..1.0]
     float steer_angle_deg = 0.0f;   // Front steer axle turn angle [-28..+28 deg]
     bool headlights_on = true;
     bool has_roof_rack = false;

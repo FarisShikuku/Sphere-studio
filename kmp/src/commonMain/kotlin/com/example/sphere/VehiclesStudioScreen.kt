@@ -3,6 +3,8 @@ package com.example.sphere
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -146,14 +148,14 @@ fun VehiclesStudioScreen(
                     }
                 }
 
-                // Vehicle Variant Selector Dropdown
+                // Vehicle Variant Selector (triggers smooth ModalBottomSheet instead of nested-scroll Popup DropdownMenu)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 4.dp)
                 ) {
                     Surface(
-                        onClick = { isDropdownExpanded = !isDropdownExpanded },
+                        onClick = { isDropdownExpanded = true },
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surfaceContainerLow,
                         border = BorderStroke(
@@ -199,48 +201,113 @@ fun VehiclesStudioScreen(
                             )
                         }
                     }
+                }
 
-                    DropdownMenu(
-                        expanded = isDropdownExpanded,
+                if (isDropdownExpanded) {
+                    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+                    ModalBottomSheet(
                         onDismissRequest = { isDropdownExpanded = false },
-                        modifier = Modifier
-                            .widthIn(min = 280.dp, max = 380.dp)
-                            .heightIn(max = 360.dp)
+                        sheetState = sheetState,
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                     ) {
-                        filteredItems.forEach { item ->
-                            key(item.id) {
-                                val isCurrent = item.id == currentVehicle.id
-                                DropdownMenuItem(
-                                    text = {
-                                        Column {
-                                            Text(
-                                                item.name,
-                                                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.SemiBold,
-                                                color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Text(
-                                                "${item.kerbWeightKg.roundToInt()} kg • ${item.enginePowerHp.roundToInt()} HP • ${item.driveConfigLabel}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .navigationBarsPadding()
+                                .padding(horizontal = 16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = selectedCategory.displayName,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Select procedural C++ model (${filteredItems.size} variants)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { isDropdownExpanded = false },
+                                    modifier = Modifier.testTag("vehicle_sheet_close_button")
+                                ) {
+                                    Icon(Icons.Outlined.Close, contentDescription = "Close vehicle list")
+                                }
+                            }
+
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 420.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                contentPadding = PaddingValues(bottom = 24.dp)
+                            ) {
+                                items(filteredItems, key = { it.id }) { item ->
+                                    val isCurrent = item.id == currentVehicle.id
+                                    Surface(
+                                        onClick = {
+                                            selectedVehicleId = item.id
+                                            isDropdownExpanded = false
+                                        },
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = if (isCurrent) {
+                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+                                        } else {
+                                            MaterialTheme.colorScheme.surfaceContainer
+                                        },
+                                        border = BorderStroke(
+                                            width = if (isCurrent) 1.5.dp else 1.dp,
+                                            color = if (isCurrent) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.outlineVariant
+                                            }
+                                        ),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .defaultMinSize(minHeight = 56.dp)
+                                            .testTag("vehicle_menu_item_${item.id}")
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = item.name,
+                                                    style = MaterialTheme.typography.bodyLarge,
+                                                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.SemiBold,
+                                                    color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Spacer(modifier = Modifier.height(2.dp))
+                                                Text(
+                                                    text = "${item.kerbWeightKg.roundToInt()} kg • ${item.enginePowerHp.roundToInt()} HP • ${item.driveConfigLabel}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            if (isCurrent) {
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Icon(
+                                                    imageVector = Icons.Outlined.Check,
+                                                    contentDescription = "Selected",
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
                                         }
-                                    },
-                                    trailingIcon = if (isCurrent) {
-                                        {
-                                            Icon(
-                                                imageVector = Icons.Outlined.Check,
-                                                contentDescription = "Selected",
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                    } else null,
-                                    onClick = {
-                                        selectedVehicleId = item.id
-                                        isDropdownExpanded = false
-                                    },
-                                    modifier = Modifier.testTag("vehicle_menu_item_${item.id}")
-                                )
+                                    }
+                                }
                             }
                         }
                     }
@@ -271,6 +338,12 @@ fun VehiclesStudioScreen(
                             rotX = 15f
                             rotY = 35f
                             zoomFactor = 1.0f
+                        },
+                        onToggleDoor = {
+                            val nextRatio = if (currentVehicle.doorOpenRatio > 0.05f) 0f else 1f
+                            catalog = catalog.map {
+                                if (it.id == currentVehicle.id) it.copy(doorOpenRatio = nextRatio) else it
+                            }
                         },
                         hitchTrailerEnabled = hitchTrailerEnabled,
                         hitchedTrailer = selectedTrailer,
