@@ -1003,43 +1003,96 @@ void CabComponents::AppendTruckCabInterior(
     bool hasSleeperBunk,
     const Vec4& dashColor,
     const Vec4& seatColor,
-    const Vec4& accentColor
+    const Vec4& accentColor,
+    bool isRhd,
+    float windBotY,
+    float steerAngleDeg
 ) {
     if (!mesh || xCabRear <= xDashFront + 0.8f) return;
+    const float dSign = isRhd ? -1.0f : 1.0f; // +Z = LHD left driver, -Z = RHD right driver
     float inHW = cabHW - 0.06f;
+    float dashTopY = (windBotY > floorY + 0.42f) ? (windBotY - 0.025f) : (floorY + 0.86f);
+    float effFloorY = (windBotY > floorY + 0.90f) ? (windBotY - 0.80f) : floorY;
+    float ceilY = std::max(dashTopY + 0.72f, ceilingY);
+    float uDriver = inHW * 0.50f;
+
+    auto MZ = [&](float u) -> float { return dSign * u; };
+    auto MBox = [&](float x0, float y0, float u0, float x1, float y1, float u1, const Vec4& col) {
+        float xMin = std::min(x0, x1), xMax = std::max(x0, x1);
+        float yMin = std::min(y0, y1), yMax = std::max(y0, y1);
+        float zMin = std::min(MZ(u0), MZ(u1)), zMax = std::max(MZ(u0), MZ(u1));
+        if (xMax - xMin < 1e-4f || yMax - yMin < 1e-4f || zMax - zMin < 1e-4f) return;
+        RunningGear::AppendBox(mesh, Vec3(xMin, yMin, zMin), Vec3(xMax, yMax, zMax), col);
+    };
+
     Vec4 ceilingCol(0.78f, 0.80f, 0.84f, 1.0f);
     Vec4 trimCol(0.14f, 0.15f, 0.18f, 1.0f);
+    Vec4 slateCol(0.22f, 0.24f, 0.28f, 1.0f);
+    Vec4 silverCol(0.72f, 0.75f, 0.80f, 1.0f);
     Vec4 screenCyan(0.18f, 0.72f, 0.96f, 1.0f);
 
-    // Cab floor + center engine doghouse / console
-    RunningGear::AppendBox(mesh, Vec3(xDashFront, floorY - 0.04f, -inHW), Vec3(xCabRear, floorY, inHW), trimCol);
-    RunningGear::AppendBox(mesh, Vec3(xDashFront + 0.3f, floorY, -0.18f), Vec3(xDashFront + 1.05f, floorY + 0.22f, 0.18f), dashColor);
+    // Cab floor + center engine doghouse / console + stainless foot pedals
+    MBox(xDashFront - 0.08f, effFloorY - 0.04f, -inHW, xCabRear, effFloorY, inHW, trimCol);
+    MBox(xDashFront + 0.20f, effFloorY, -0.20f, xDashFront + 1.05f, effFloorY + 0.14f, 0.20f, dashColor);
+    MBox(xDashFront + 0.30f, effFloorY + 0.08f, uDriver - 0.14f, xDashFront + 0.36f, effFloorY + 0.22f, uDriver + 0.10f, silverCol);
 
-    // Full-width sculpted truck dashboard
-    RunningGear::AppendBox(mesh, Vec3(xDashFront, floorY, -inHW), Vec3(xDashFront + 0.38f, floorY + 0.68f, inHW), dashColor);
-    RunningGear::AppendBox(mesh, Vec3(xDashFront + 0.37f, floorY + 0.50f, -inHW * 0.56f - 0.14f), Vec3(xDashFront + 0.40f, floorY + 0.64f, -inHW * 0.56f + 0.14f), screenCyan);
+    // Full-width sculpted dashboard extending smoothly under windshield sill
+    float xDashBack = xDashFront + 0.42f;
+    MBox(xDashFront - 0.12f, effFloorY + 0.20f, -inHW, xDashBack, dashTopY, inHW, dashColor);
+    MBox(xDashFront - 0.12f, dashTopY - 0.07f, -inHW, xDashBack + 0.02f, dashTopY, inHW, slateCol);
+    // Instrument hood + glowing digital cluster on driver side
+    MBox(xDashBack - 0.04f, dashTopY - 0.02f, uDriver - 0.24f, xDashBack + 0.08f, dashTopY + 0.045f, uDriver + 0.24f, slateCol);
+    MBox(xDashBack - 0.01f, dashTopY - 0.20f, uDriver - 0.19f, xDashBack + 0.025f, dashTopY - 0.02f, uDriver + 0.19f, screenCyan);
 
-    // Steering column & steering wheel on driver (-Z) side
-    float colX = xDashFront + 0.48f;
-    float colY = floorY + 0.72f;
-    RunningGear::AppendBox(mesh, Vec3(xDashFront + 0.32f, floorY + 0.48f, -inHW * 0.56f - 0.03f), Vec3(colX, colY, -inHW * 0.56f + 0.03f), trimCol);
-    RunningGear::AppendBox(mesh, Vec3(colX - 0.025f, colY - 0.17f, -inHW * 0.56f - 0.17f), Vec3(colX + 0.025f, colY + 0.17f, -inHW * 0.56f + 0.17f), trimCol);
+    // Angled center stack infotainment + tray
+    MBox(xDashBack - 0.02f, effFloorY + 0.28f, -0.20f, xDashBack + 0.06f, dashTopY - 0.02f, 0.20f, slateCol);
+    MBox(xDashBack + 0.04f, dashTopY - 0.24f, -0.10f, xDashBack + 0.07f, dashTopY - 0.06f, 0.10f, screenCyan);
+    MBox(xDashBack + 0.02f, effFloorY + 0.22f, -0.26f, xDashBack + 0.22f, effFloorY + 0.30f, 0.14f, dashColor);
 
-    // Twin air-ride high-back seats
-    float seatX = xDashFront + 0.92f;
-    AppendSeat(mesh, Vec3(seatX, floorY, -inHW * 0.54f), -1.0f, 0.52f, 1.04f, seatColor, accentColor, trimCol);
-    AppendSeat(mesh, Vec3(seatX, floorY,  inHW * 0.54f), -1.0f, 0.52f, 1.04f, seatColor, accentColor, trimCol);
+    // Steering column & circular steering wheel ring on driver side (peeks realistically above lower cowl)
+    float colX = xDashBack + 0.18f;
+    float colY = dashTopY - 0.07f;
+    MBox(xDashBack - 0.02f, colY - 0.06f, uDriver - 0.04f, colX, colY + 0.03f, uDriver + 0.04f, trimCol);
+    float wheelR = 0.205f;
+    float rollRad = dSign * (steerAngleDeg * 3.5f * kPi / 180.0f);
+    const int wSegs = 16;
+    for (int i = 0; i < wSegs; ++i) {
+        float a = rollRad + (static_cast<float>(i) / static_cast<float>(wSegs)) * 2.0f * kPi;
+        float wy = colY + wheelR * std::sin(a);
+        float wu = uDriver + wheelR * std::cos(a);
+        MBox(colX - 0.020f, wy - 0.022f, wu - 0.022f, colX + 0.020f, wy + 0.022f, wu + 0.022f, trimCol);
+    }
+    MBox(colX - 0.025f, colY - 0.02f, uDriver - wheelR, colX + 0.015f, colY + 0.02f, uDriver + wheelR, silverCol);
+    MBox(colX - 0.022f, colY - 0.06f, uDriver - 0.06f, colX + 0.026f, colY + 0.06f, uDriver + 0.06f, accentColor);
+
+    // A-pillar grab handles + overhead shelf
+    for (int side : {-1, 1}) {
+        ChassisComponents::AppendClosedCylinderY(
+            mesh, xDashFront + 0.20f, MZ(static_cast<float>(side) * (inHW - 0.10f)),
+            dashTopY + 0.08f, dashTopY + 0.45f, 0.017f, 8, slateCol
+        );
+    }
+    MBox(xDashFront + 0.06f, ceilY - 0.20f, -inHW + 0.08f, xDashFront + 0.48f, ceilY, inHW - 0.08f, slateCol);
+
+    // Twin air-ride high-back seats (headrest top clearly visible in windshield)
+    float seatX = std::clamp(xDashFront + 1.20f, xDashFront + 1.02f, xCabRear - 0.34f);
+    float seatH = 1.08f;
+    AppendSeat(mesh, Vec3(seatX, effFloorY, MZ(uDriver)),  -1.0f, 0.52f, seatH, seatColor, accentColor, trimCol);
+    AppendSeat(mesh, Vec3(seatX, effFloorY, MZ(-uDriver)), -1.0f, 0.52f, seatH, seatColor, accentColor, trimCol);
 
     // Sleeper berth mattress behind seats if long sleeper cab
-    if (hasSleeperBunk && (xCabRear - seatX) > 0.70f) {
-        RunningGear::AppendBox(mesh, Vec3(seatX + 0.36f, floorY, -inHW), Vec3(xCabRear - 0.05f, floorY + 0.34f, inHW), dashColor);
-        RunningGear::AppendBox(mesh, Vec3(seatX + 0.38f, floorY + 0.34f, -inHW + 0.04f), Vec3(xCabRear - 0.06f, floorY + 0.48f, inHW - 0.04f), Vec4(0.84f, 0.86f, 0.90f, 1.0f));
-        RunningGear::AppendBox(mesh, Vec3(seatX + 0.44f, floorY + 0.48f, -inHW + 0.10f), Vec3(seatX + 0.78f, floorY + 0.56f, -inHW + 0.55f), accentColor);
+    if (hasSleeperBunk && (xCabRear - seatX) > 0.55f) {
+        MBox(seatX + 0.32f, effFloorY, -inHW, xCabRear - 0.05f, effFloorY + 0.34f, inHW, dashColor);
+        MBox(seatX + 0.34f, effFloorY + 0.34f, -inHW + 0.04f, xCabRear - 0.06f, effFloorY + 0.48f, inHW - 0.04f, Vec4(0.84f, 0.86f, 0.90f, 1.0f));
+        MBox(seatX + 0.40f, effFloorY + 0.48f, uDriver - 0.25f, seatX + 0.74f, effFloorY + 0.56f, uDriver + 0.25f, accentColor);
     }
 
     // Interior cab ceiling & rear bulkhead
-    RunningGear::AppendBox(mesh, Vec3(xDashFront + 0.1f, ceilingY, -inHW), Vec3(xCabRear, ceilingY + 0.04f, inHW), ceilingCol);
-    RunningGear::AppendBox(mesh, Vec3(xCabRear - 0.05f, floorY, -inHW), Vec3(xCabRear, ceilingY, inHW), ceilingCol);
+    MBox(xDashFront + 0.06f, ceilY, -inHW, xCabRear, ceilY + 0.04f, inHW, ceilingCol);
+    MBox(xCabRear - 0.05f, effFloorY, -inHW, xCabRear, ceilY, inHW, ceilingCol);
+
+    mesh->hasInteriorEye = true;
+    mesh->interiorEyePos = Vec3(xDashFront + 0.96f, dashTopY + 0.34f, MZ(uDriver * 0.70f));
 }
 
 void CabComponents::AppendDoor(

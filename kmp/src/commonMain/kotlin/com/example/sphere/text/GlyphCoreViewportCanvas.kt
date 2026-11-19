@@ -244,6 +244,13 @@ fun GlyphCoreViewportCanvas(
                 )
             }
         }
+
+        com.example.sphere.viewport.SceneFpsBadge(
+            tag = "glyphcore_scene_fps_badge",
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 42.dp, end = 12.dp)
+        )
     }
 }
 

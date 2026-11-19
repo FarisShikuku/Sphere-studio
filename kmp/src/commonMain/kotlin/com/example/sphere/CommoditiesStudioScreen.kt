@@ -47,6 +47,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -55,6 +56,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -72,6 +74,7 @@ import com.example.sphere.commodities.tabs.CommodityVulkanComputeTab
 import com.example.sphere.model.CommodityCategoryType
 import com.example.sphere.model.CommodityItem
 import com.example.sphere.model.createDefaultCommoditiesCatalog
+import kotlinx.coroutines.isActive
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -90,6 +93,21 @@ fun CommoditiesStudioScreen(
     var showStraps by remember { mutableStateOf(true) }
     var showShrinkwrap by remember { mutableStateOf(false) }
     var showPalletBase by remember { mutableStateOf(true) }
+    var isAutoRotating by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isAutoRotating) {
+        if (!isAutoRotating) return@LaunchedEffect
+        var prevFrameNs = 0L
+        while (isActive) {
+            withFrameNanos { frameNs ->
+                if (prevFrameNs != 0L) {
+                    val dtSec = ((frameNs - prevFrameNs) / 1_000_000_000f).coerceIn(0f, 0.05f)
+                    rotY = (rotY + dtSec * 42f) % 360f
+                }
+                prevFrameNs = frameNs
+            }
+        }
+    }
 
     val filteredItems by remember(catalog, selectedCategory) {
         derivedStateOf {
@@ -313,6 +331,8 @@ fun CommoditiesStudioScreen(
                     showStraps = showStraps,
                     showShrinkwrap = showShrinkwrap,
                     showPalletBase = showPalletBase,
+                    isAutoRotating = isAutoRotating,
+                    onToggleAutoRotate = { isAutoRotating = !isAutoRotating },
                     modifier = Modifier.fillMaxSize()
                 )
             }

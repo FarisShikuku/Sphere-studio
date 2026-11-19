@@ -1,0 +1,34 @@
+#version 450
+#extension GL_GOOGLE_include_directive : enable
+
+#include "include/weather_audio_common.glsl"
+
+layout(local_size_x = 128, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform WindThunderPush {
+    float wind_speed_kmh;
+    float fog_density;
+    float thunder_decay_sec;
+    float sample_rate;
+    uint sample_offset;
+} pc;
+
+layout(std430, binding = 0) writeonly buffer WindThunderBuffer {
+    float out_wind_pcm[];
+};
+
+void main() {
+    uint gid = gl_GlobalInvocationID.x;
+    uint idx = pc.sample_offset + gid;
+    float t = float(idx) / max(1.0, pc.sample_rate);
+    float windNorm = clamp(pc.wind_speed_kmh / 90.0, 0.0, 1.0);
+    float gustLfo = 0.55 + 0.45 * sin(TWO_PI * t * 0.28) * cos(TWO_PI * t * 0.11);
+    float n = weatherAudioHash(idx + 991u);
+    float howlFreq = 160.0 + windNorm * 420.0 + gustLfo * 220.0;
+    float howl = sin(TWO_PI * howlFreq * t) * (0.12 + 0.18 * windNorm) * gustLfo;
+    float mist = n * (0.10 + pc.fog_density * 0.22);
+    float thunder = (pc.thunder_decay_sec > 0.0)
+        ? n * exp(-pc.thunder_decay_sec * 1.8) * 0.75
+        : 0.0;
+    out_wind_pcm[gid] = clamp(howl + mist + thunder, -1.0, 1.0);
+}

@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.sphere.model.CabDriveSide
 import com.example.sphere.model.CommodityItem
 import com.example.sphere.model.TrailerItem
 import com.example.sphere.model.VehicleItem
@@ -29,6 +30,8 @@ import kotlin.math.roundToInt
 fun VehicleHitchPowertrainTab(
     vehicle: VehicleItem,
     onVehicleChange: (VehicleItem) -> Unit,
+    insideCabinView: Boolean = false,
+    onToggleInsideCabinView: (Boolean) -> Unit = {},
     trailerCatalog: List<TrailerItem>,
     selectedTrailer: TrailerItem,
     onSelectTrailer: (TrailerItem) -> Unit,
@@ -64,6 +67,75 @@ fun VehicleHitchPowertrainTab(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // 0. Truck Cabin Interior Camera & LHD / RHD Steering Layout
+        if (vehicle.isTruck) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = when {
+                                    vehicle.isScania -> "Scania Next-Gen Cockpit & Cabin View"
+                                    vehicle.isVolvo -> "Volvo Globetrotter Cockpit & Cabin View"
+                                    else -> "Truck Cabin Interior & Steering Layout"
+                                },
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = when {
+                                    vehicle.isScania -> "Full LHD / RHD cockpit (RWD / FWD / AWD driveline compatible): Griffin wheel, hooded gauges, infotainment, cab computer tablet & travel mug."
+                                    vehicle.isVolvo -> "Full LHD / RHD cockpit (RWD / FWD / AWD driveline compatible): 3-spoke Volvo wheel, 12-inch digital cluster, quilted bucket seats & ambient ceiling halo."
+                                    else -> "First-person driver cockpit view with mirrored LHD / RHD wheel, binnacle gauges & seats (RWD / FWD / AWD chassis compatible)."
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = insideCabinView,
+                            onCheckedChange = onToggleInsideCabinView,
+                            modifier = Modifier.testTag("switch_vehicle_inside_cabin")
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CabDriveSide.entries.forEach { side ->
+                            val selected = vehicle.cabDriveSide == side
+                            FilterChip(
+                                selected = selected,
+                                onClick = { onVehicleChange(vehicle.copy(cabDriveSide = side)) },
+                                label = {
+                                    Text(
+                                        "${side.shortLabel} (${side.displayName})",
+                                        fontSize = 12.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("cab_side_${side.name.lowercase()}")
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // 1. Fifth-Wheel Hitching (only active for Articulated Tractor Units, clear explanation otherwise)
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),

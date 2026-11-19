@@ -70,7 +70,8 @@ std::shared_ptr<Mesh> GenerateVwMeteor28460Mesh(const VehicleDef& def) {
     // 2. Interior
     CabComponents::AppendTruckCabInterior(
         mesh.get(), xFront + 0.32f, cabBackX - 0.08f,
-        cabClearY + 0.06f, cabTopY - 0.16f, cabHW, true, dashDark, interiorSeat, chromeCol
+        cabClearY + 0.06f, cabTopY - 0.16f, cabHW, true, dashDark, interiorSeat, chromeCol,
+        def.is_rhd, windBotY, def.steer_angle_deg
     );
 
     // 3. Smoothly Carved Lower Cab Nose & Corners

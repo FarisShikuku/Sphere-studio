@@ -18,5 +18,8 @@ std::shared_ptr<Mesh> GenerateIvecoSEwayElectricMesh(const VehicleDef& def);
 std::shared_ptr<Mesh> GenerateVwConstellation25390Mesh(const VehicleDef& def);
 std::shared_ptr<Mesh> GenerateVwMeteor28460Mesh(const VehicleDef& def);
 std::shared_ptr<Mesh> GenerateManTgx18510Mesh(const VehicleDef& def);
+std::shared_ptr<Mesh> GenerateVolvoFh16800Mesh(const VehicleDef& def);
+std::shared_ptr<Mesh> GenerateVolvoFh16780Mesh(const VehicleDef& def);
+std::shared_ptr<Mesh> GenerateVolvoFh16750XxlMesh(const VehicleDef& def);
 
 } // namespace sphere::vehicles::trucks

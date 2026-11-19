@@ -40,6 +40,8 @@ public:
     std::vector<uint32_t> indices;
     std::vector<SubMesh> subMeshes;
     AABB bounds;
+    bool hasInteriorEye = false;
+    Vec3 interiorEyePos{0.0f, 0.0f, 0.0f};
     Mesh() = default;
     void CalculateBounds();
     void CalculateSmoothNormals();

@@ -1,0 +1,149 @@
+#version 460
+// Vulkan 1.3 Compute Shader: SPH Pressure, Near-Pressure, Viscosity & Surface Tension
+// Ported from talvinckb/OpenGL-Water-Simulation
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+struct SpatialEntry {
+    uint particleIndex;
+    uint hash;
+    uint cellKey;
+    uint pad;
+};
+
+layout(std430, set = 0, binding = 1) readonly buffer PredictedPositionsBuffer {
+    vec4 predictedPositions[];
+};
+
+layout(std430, set = 0, binding = 2) buffer VelocitiesBuffer {
+    vec4 velocities[];
+};
+
+layout(std430, set = 0, binding = 3) readonly buffer DensitiesBuffer {
+    vec2 densities[];
+};
+
+layout(std430, set = 0, binding = 4) readonly buffer SpatialIndicesBuffer {
+    SpatialEntry spatialIndices[];
+};
+
+layout(std430, set = 0, binding = 5) readonly buffer SpatialOffsetsBuffer {
+    uint spatialOffsets[];
+};
+
+layout(push_constant) uniform ForcesPush {
+    float smoothingRadius;
+    float targetDensity;
+    float pressureMultiplier;
+    float nearPressureMultiplier;
+    float viscosityStrength;
+    float surfaceTension;
+    float dt;
+    uint particleCount;
+    uint hashTableSize;
+} pc;
+
+const float PI = 3.14159265359;
+const uint PRIME_1 = 15823u;
+const uint PRIME_2 = 9737333u;
+const uint PRIME_3 = 440817757u;
+
+float DerivativeSpikyPow2(float dst, float radius) {
+    if (dst < radius) {
+        float scale = 15.0 / (pow(radius, 5.0) * PI);
+        float v = radius - dst;
+        return -v * scale;
+    }
+    return 0.0;
+}
+
+float DerivativeSpikyPow3(float dst, float radius) {
+    if (dst < radius) {
+        float scale = 45.0 / (pow(radius, 6.0) * PI);
+        float v = radius - dst;
+        return -v * v * scale;
+    }
+    return 0.0;
+}
+
+float Poly6SmoothingKernel(float dst, float radius) {
+    if (dst < radius) {
+        float scale = 315.0 / (64.0 * PI * pow(abs(radius), 9.0));
+        float v = radius * radius - dst * dst;
+        return v * v * v * scale;
+    }
+    return 0.0;
+}
+
+uint HashCell3D(ivec3 cell) {
+    return uint(cell.x) * PRIME_1 + uint(cell.y) * PRIME_2 + uint(cell.z) * PRIME_3;
+}
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= pc.particleCount) return;
+
+    float h = pc.smoothingRadius;
+    float hSq = h * h;
+    vec3 pos = predictedPositions[idx].xyz;
+    vec3 vel = velocities[idx].xyz;
+    float density = max(densities[idx].x, 0.001);
+    float nearDensity = max(densities[idx].y, 0.001);
+
+    float pressure = (density - pc.targetDensity) * pc.pressureMultiplier;
+    float nearPressure = nearDensity * pc.nearPressureMultiplier;
+
+    vec3 pressureForce = vec3(0.0);
+    vec3 viscosityForce = vec3(0.0);
+    vec3 cohesionForce = vec3(0.0);
+
+    ivec3 originCell = ivec3(floor(pos / h));
+
+    for (int ox = -1; ox <= 1; ++ox) {
+        for (int oy = -1; oy <= 1; ++oy) {
+            for (int oz = -1; oz <= 1; ++oz) {
+                ivec3 neighborCell = originCell + ivec3(ox, oy, oz);
+                uint hash = HashCell3D(neighborCell);
+                uint key = hash % pc.hashTableSize;
+                uint currIndex = spatialOffsets[key];
+
+                while (currIndex < pc.particleCount) {
+                    SpatialEntry entry = spatialIndices[currIndex];
+                    currIndex++;
+                    if (entry.cellKey != key) break;
+                    if (entry.hash != hash) continue;
+
+                    uint neighborIdx = entry.particleIndex;
+                    if (neighborIdx == idx) continue;
+
+                    vec3 offsetToNeighbor = predictedPositions[neighborIdx].xyz - pos;
+                    float sqDst = dot(offsetToNeighbor, offsetToNeighbor);
+
+                    if (sqDst < hSq) {
+                        float dst = sqrt(sqDst);
+                        vec3 dirToNeighbor = dst > 1e-5 ? offsetToNeighbor / dst : vec3(0.0, 1.0, 0.0);
+
+                        float neighborDensity = max(densities[neighborIdx].x, 0.001);
+                        float neighborNearDensity = max(densities[neighborIdx].y, 0.001);
+
+                        float neighborPressure = (neighborDensity - pc.targetDensity) * pc.pressureMultiplier;
+                        float neighborNearPressure = neighborNearDensity * pc.nearPressureMultiplier;
+
+                        float sharedPressure = (pressure + neighborPressure) * 0.5;
+                        float sharedNearPressure = (nearPressure + neighborNearPressure) * 0.5;
+
+                        pressureForce += dirToNeighbor * DerivativeSpikyPow2(dst, h) * sharedPressure / neighborDensity;
+                        pressureForce += dirToNeighbor * DerivativeSpikyPow3(dst, h) * sharedNearPressure / neighborNearDensity;
+
+                        float w = Poly6SmoothingKernel(dst, h);
+                        viscosityForce += (velocities[neighborIdx].xyz - vel) * w;
+                        cohesionForce += dirToNeighbor * w * (dst / h);
+                    }
+                }
+            }
+        }
+    }
+
+    vec3 totalAccel = pressureForce / density + viscosityForce * pc.viscosityStrength + cohesionForce * pc.surfaceTension;
+    velocities[idx].xyz = vel + totalAccel * pc.dt;
+}

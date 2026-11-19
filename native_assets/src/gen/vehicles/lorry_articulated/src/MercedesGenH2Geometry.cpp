@@ -68,7 +68,8 @@ std::shared_ptr<Mesh> GenerateMercedesGenH2Mesh(const VehicleDef& def) {
 
     CabComponents::AppendTruckCabInterior(
         mesh.get(), xFront + 0.32f, cabBackX - 0.08f,
-        cabClearY + 0.06f, cabTopY - 0.16f, cabHW, true, dashDark, interiorSeat, h2Cyan
+        cabClearY + 0.06f, cabTopY - 0.16f, cabHW, true, dashDark, interiorSeat, h2Cyan,
+        def.is_rhd, windBotY, def.steer_angle_deg
     );
 
     // 2. Smoothly Carved Actros L GenH2 Silver Nose & Corners

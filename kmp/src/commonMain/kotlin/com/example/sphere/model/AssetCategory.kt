@@ -36,7 +36,7 @@ val availableAssetCategories = listOf(
     AssetCategory("commodities", "Commodities & Cargo", "Procedural Goods & Freight", Icons.Outlined.LocalShipping, "Procedural bags, crates, drums, timber, bottles, industrial pallets & perishable goods"),
     AssetCategory("trailers", "Trailers & Haulage", "Semi, Tanker, Heavy & Dollies", Icons.Outlined.RvHookup, "Procedural flatbeds, tankers, box vans, container chassis, logging, curtainsiders, hoppers & running gear"),
     AssetCategory("lighting", "Lighting Studio", "PlainRenderer Vulkan Lights", Icons.Default.Lightbulb, "Physically based lights: flashlight spot cones, filament bulbs, area softboxes & Kelvin blackbody spectrum"),
-    AssetCategory("water", "Water Bodies", "FFT Ocean, Lakes & Rivers", Icons.Outlined.Water, "Tessendorf FFT ocean spectrum, river splines & shore foam"),
+    AssetCategory("water", "Water Simulation", "Vulkan Compute SPH & SSFR", Icons.Outlined.Water, "3D Smoothed Particle Hydrodynamics, spatial hash bitonic sort, bilateral depth blur, Beer-Lambert absorption & Fresnel refraction"),
     AssetCategory("roads", "Roads & Pathways", "Splines, Markings & States", Icons.Outlined.Agriculture, "Procedural camber, asphalt PBR, sign SDFs & 10 surface states"),
     AssetCategory("vegetation", "Vegetation & Foliage", "L-System Trees, Grass & Biomes", Icons.Outlined.Forest, "L-system branching, blade compute simulation & species rules"),
     AssetCategory("surfaces", "PBR Surfaces", "Materials, Decals & Detail", Icons.Outlined.Texture, "Multi-layer PBR textures, micro-detail noise & Voronoi"),

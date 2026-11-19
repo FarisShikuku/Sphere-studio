@@ -200,6 +200,13 @@ fun SphereStudioApp() {
                     }
                 )
             }
+            "water" -> {
+                WaterStudioScreen(
+                    onNavigateBack = {
+                        selectedCategoryIndex = 0
+                    }
+                )
+            }
             "test" -> {
                 // Primary 3D Viewport with Sascha Willems Cascaded Shadows & Stages
                 Scaffold(
@@ -282,6 +289,8 @@ fun SphereStudioApp() {
                                 SurfaceSceneMode.BROKEN_SLAB -> 3
                                 SurfaceSceneMode.NONE -> 4
                             }
+                            var vulkanFps by remember { mutableIntStateOf(60) }
+                            var vulkanDrawMs by remember { mutableFloatStateOf(0f) }
                             com.example.sphere.viewport.NativeVulkanSurfaceHost(
                                 modifier = Modifier.fillMaxSize(),
                                 lightPosX = 0.0f,
@@ -296,7 +305,19 @@ fun SphereStudioApp() {
                                 objectWidth = width * scale,
                                 objectHeight = height * scale,
                                 objectDepth = depth * scale,
-                                stageMode = stageModeId
+                                stageMode = stageModeId,
+                                onFpsUpdated = { fps, drawMs ->
+                                    vulkanFps = fps
+                                    vulkanDrawMs = drawMs
+                                }
+                            )
+                            com.example.sphere.viewport.SceneFpsBadge(
+                                overrideFps = vulkanFps,
+                                renderTimeMs = vulkanDrawMs,
+                                tag = "vulkan_scene_fps_badge",
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(12.dp)
                             )
                         }
 

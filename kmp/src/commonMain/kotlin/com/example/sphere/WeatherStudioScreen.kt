@@ -10,6 +10,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.VolumeOff
+import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
@@ -23,6 +25,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.sphere.weather.rememberWeatherAudioController
 import kotlinx.coroutines.isActive
 import kotlin.random.Random
 
@@ -88,6 +91,15 @@ fun WeatherStudioScreen(
     var isSimulating by remember { mutableStateOf(true) }
     var timeSeconds by remember { mutableFloatStateOf(0f) }
 
+    val weatherAudio = rememberWeatherAudioController(
+        rainIntensity = rainIntensity,
+        snowIntensity = snowIntensity,
+        windSpeedKmh = windSpeed,
+        windAzimuthDeg = windAzimuth,
+        fogDensity = fogDensity,
+        stormActive = isStormActive
+    )
+
     // Pre-allocated particle buffers
     val rainParticles = remember {
         List(140) {
@@ -152,6 +164,7 @@ fun WeatherStudioScreen(
                 } else if (isStormActive && Random.nextFloat() < (lightningFrequency * dt * 0.45f)) {
                     lightningFlash = 1.0f
                     lightningSeed = Random.nextInt(10000)
+                    weatherAudio.triggerThunder(closeStrike = true)
                 }
             }
         }
@@ -204,6 +217,24 @@ fun WeatherStudioScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = { weatherAudio.toggleAudio() },
+                        modifier = Modifier.testTag("weather_audio_toggle_button")
+                    ) {
+                        Icon(
+                            imageVector = if (weatherAudio.isEnabled && !weatherAudio.isMuted) {
+                                Icons.AutoMirrored.Outlined.VolumeUp
+                            } else {
+                                Icons.AutoMirrored.Outlined.VolumeOff
+                            },
+                            contentDescription = if (weatherAudio.isEnabled) "Mute Weather Audio" else "Enable Weather Audio",
+                            tint = if (weatherAudio.isEnabled && !weatherAudio.isMuted) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
                     IconButton(onClick = { isSimulating = !isSimulating }) {
                         Icon(
                             if (isSimulating) Icons.Default.Pause else Icons.Default.PlayArrow,
@@ -410,6 +441,50 @@ fun WeatherStudioScreen(
                         )
                     }
                 }
+
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp),
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    com.example.sphere.viewport.SceneFpsBadge(
+                        tag = "weather_scene_fps_badge"
+                    )
+                    Surface(
+                        onClick = { weatherAudio.toggleAudio() },
+                        color = if (weatherAudio.isEnabled) Color(0xCC064E3B) else Color(0xCC0F172A),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .testTag("weather_audio_hud_chip")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (weatherAudio.isEnabled) {
+                                    Icons.AutoMirrored.Outlined.VolumeUp
+                                } else {
+                                    Icons.AutoMirrored.Outlined.VolumeOff
+                                },
+                                contentDescription = "Toggle Weather Audio",
+                                tint = if (weatherAudio.isEnabled) Color(0xFF4ADE80) else Color(0xFF94A3B8),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = if (weatherAudio.isEnabled) "AUDIO LIVE" else "AUDIO OFF",
+                                color = if (weatherAudio.isEnabled) Color(0xFF4ADE80) else Color(0xFFE2E8F0),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+                }
             }
 
             // Tab Navigation Row
@@ -486,6 +561,7 @@ fun WeatherStudioScreen(
                         onTriggerStrike = {
                             lightningFlash = 1.0f
                             lightningSeed = Random.nextInt(10000)
+                            weatherAudio.triggerThunder(closeStrike = true, autoEnableIfRequested = true)
                         }
                     )
                     4 -> NativeEngineTab()

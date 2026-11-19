@@ -517,6 +517,13 @@ fun SkyStudioScreen(
                 }
             }
 
+            com.example.sphere.viewport.SceneFpsBadge(
+                tag = "sky_scene_fps_badge",
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 50.dp, end = 10.dp)
+            )
+
             // Quick Cloud Species Selector Strip (pinned right above presets bar)
             Row(
                 modifier = Modifier

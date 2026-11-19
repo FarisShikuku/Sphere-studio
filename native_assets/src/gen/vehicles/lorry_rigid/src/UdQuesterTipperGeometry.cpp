@@ -89,7 +89,8 @@ std::shared_ptr<Mesh> GenerateUdQuesterTipperMesh(const VehicleDef& def) {
     CabComponents::AppendTruckCabInterior(
         mesh.get(), xFront + 0.30f, cabBackX - 0.06f,
         cabClearY + 0.05f, cabTopY - 0.14f,
-        cabHW, false, dashDark, interiorSeat, chromeCol
+        cabHW, false, dashDark, interiorSeat, chromeCol,
+        def.is_rhd, winBotY, def.steer_angle_deg
     );
 
     // Smoothly carved lower nose & rounded front corners
@@ -161,8 +162,8 @@ std::shared_ptr<Mesh> GenerateUdQuesterTipperMesh(const VehicleDef& def) {
     ChassisComponents::AppendClosedCylinderY(mesh.get(), cabBackX + 0.10f, -cabHW + 0.16f, frameTopY, cabTopY + 0.18f, 0.075f, 14, chromeCol);
     RunningGear::AppendBox(mesh.get(), Vec3(cabBackX + 0.04f, frameTopY, cabHW - 0.24f), Vec3(cabBackX + 0.20f, cabTopY + 0.06f, cabHW - 0.06f), steelBlack);
 
-    AppendSteppedCabDoor(mesh.get(), doorX0, doorX1, cabClearY + 0.02f, doorTopY, -cabHW, false, def.door_open_ratio, 0.08f, false, false, tealPaint, glossBlack, sideGlass, doorBeltY);
-    AppendSteppedCabDoor(mesh.get(), doorX0, doorX1, cabClearY + 0.02f, doorTopY,  cabHW, true,  def.door_open_ratio, 0.08f, false, false, tealPaint, glossBlack, sideGlass, doorBeltY);
+    AppendSteppedCabDoor(mesh.get(), doorX0, doorX1, cabClearY + 0.02f, doorTopY, -cabHW, false, def.door_open_ratio, 0.08f, false, false, tealPaint, glossBlack, sideGlass, doorBeltY, def.is_rhd, true);
+    AppendSteppedCabDoor(mesh.get(), doorX0, doorX1, cabClearY + 0.02f, doorTopY,  cabHW, true,  def.door_open_ratio, 0.08f, false, false, tealPaint, glossBlack, sideGlass, doorBeltY, !def.is_rhd, true);
     CabComponents::AppendWingMirrors(mesh.get(), xFront + 0.46f, cabTopY - 0.44f, cabHW, tealPaint);
     AppendFrontKerbMirror(mesh.get(), xFront + 0.34f, cabTopY - 0.20f, cabHW, glossBlack);
     CabComponents::AppendAmberRoofMarkers(mesh.get(), xFront + 0.44f, cabTopY - 0.08f, cabHW * 0.85f, def.headlights_on);

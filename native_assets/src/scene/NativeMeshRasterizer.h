@@ -48,6 +48,8 @@ struct VehicleRasterParams {
     float trailerDeckY = 1.35f;
     bool showLoadedCargo = false;
     int32_t cargoQuantity = 0;
+    bool insideCabinView = false;
+    bool isRhd = false;
 };
 
 struct PbrStageRasterParams {

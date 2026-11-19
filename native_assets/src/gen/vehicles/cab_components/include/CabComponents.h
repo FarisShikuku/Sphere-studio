@@ -247,7 +247,42 @@ public:
         bool hasSleeperBunk,
         const Vec4& dashColor,
         const Vec4& seatColor,
+        const Vec4& accentColor,
+        bool isRhd = false,
+        float windBotY = -1.0f,
+        float steerAngleDeg = 0.0f
+    );
+
+    // High-detail Scania Next-Gen cockpit (LHD/RHD wrap-around dash, flat-bottom Griffin wheel,
+    // hooded dual gauges, Opticruise/park brake, infotainment, 21C AC, cupholder mug, cab tablet & door pods)
+    static void AppendScaniaCabInterior(
+        Mesh* mesh,
+        float xDashFront, float xCabRear,
+        float floorY, float windBotY, float ceilingY,
+        float cabHW,
+        bool hasSleeperBunk,
+        bool isRhd,
+        float steerAngleDeg,
+        const Vec4& dashColor,
+        const Vec4& seatColor,
         const Vec4& accentColor
+    );
+
+    // High-detail Volvo FH / FH16 Globetrotter cockpit (LHD/RHD mirrored dash, digital cluster,
+    // 3-spoke Volvo wheel w/ Iron Mark, quilted bucket seats w/ headrest logos & ambient halo)
+    static void AppendVolvoCabInterior(
+        Mesh* mesh,
+        float xDashFront, float xCabRear,
+        float floorY, float windBotY, float ceilingY,
+        float cabHW,
+        bool hasSleeperBunk,
+        bool isRhd,
+        float steerAngleDeg,
+        bool ambientGlowOn,
+        const Vec4& dashColor,
+        const Vec4& seatColor,
+        const Vec4& accentColor,
+        const Vec4& ambientColor
     );
 
     static void AppendDoor(

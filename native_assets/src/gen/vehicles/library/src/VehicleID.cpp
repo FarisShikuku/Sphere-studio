@@ -52,6 +52,9 @@ const char* GetVehicleName(VehicleID id) {
         case VehicleID::TRACTOR_VW_CONSTELLATION_25390: return "VW Constellation 25.390 6x2";
         case VehicleID::TRACTOR_VW_METEOR_28460: return "VW Meteor 28.460 6x4";
         case VehicleID::TRACTOR_MAN_TGX_18510: return "MAN TGX 18.510 4x2";
+        case VehicleID::TRACTOR_VOLVO_FH16_800: return "Volvo FH16 800 Aero 4x2";
+        case VehicleID::TRACTOR_VOLVO_FH16_780: return "Volvo FH16 780 Aero 4x2";
+        case VehicleID::TRACTOR_VOLVO_FH16_750_XXL: return "Volvo FH16 750 XXL 6x4";
         default: return "Unknown Vehicle";
     }
 }
@@ -84,6 +87,9 @@ const char* GetVehicleCategory(VehicleID id) {
         case VehicleID::TRACTOR_VW_CONSTELLATION_25390:
         case VehicleID::TRACTOR_VW_METEOR_28460:
         case VehicleID::TRACTOR_MAN_TGX_18510:
+        case VehicleID::TRACTOR_VOLVO_FH16_800:
+        case VehicleID::TRACTOR_VOLVO_FH16_780:
+        case VehicleID::TRACTOR_VOLVO_FH16_750_XXL:
             return "Articulated Tractors";
 
         case VehicleID::BUS_CITY_STANDARD:

@@ -599,7 +599,9 @@ inline void AppendSteppedCabDoor(
     const Vec4& paintColor,
     const Vec4& trimColor,
     const Vec4& glassColor,
-    float explicitMainBeltY = -1.0f
+    float explicitMainBeltY = -1.0f,
+    bool isDriverDoor = false,
+    bool addInteriorTrim = true
 ) {
     if (!mesh || doorBackX <= doorFrontX + 0.20f) return;
     float clampOpen = std::clamp(openRatio, 0.0f, 1.0f);
@@ -669,6 +671,53 @@ inline void AppendSteppedCabDoor(
         if (hasQuarterPost) {
             float postX = doorBackX - (doorBackX - doorFrontX) * 0.28f;
             emitBoxRot(Vec3(postX - 0.022f, winBotMain, zMin - 0.003f), Vec3(postX + 0.022f, winTop, zMax + 0.003f), trimColor);
+        }
+
+        // Interior door card, armrest bolster, grab handle, lower speaker grille & optional driver switch pod
+        if (addInteriorTrim) {
+            Vec4 cardDark(0.14f, 0.15f, 0.18f, 1.0f);
+            Vec4 bolsterMid(0.20f, 0.22f, 0.26f, 1.0f);
+            Vec4 satinSilver(0.74f, 0.77f, 0.82f, 1.0f);
+            Vec4 speakerCol(0.08f, 0.09f, 0.11f, 1.0f);
+            Vec4 ledGreen(0.42f, 0.86f, 0.54f, 1.0f);
+
+            float zInnerFace = sideZ - sign * 0.032f;
+            float zInnerDeep = sideZ - sign * 0.064f;
+            float zIn0 = std::min(zInnerFace, zInnerDeep);
+            float zIn1 = std::max(zInnerFace, zInnerDeep);
+
+            // Inner upper door card & lower door pocket/speaker
+            emitSlopedPanel(doorFrontX + 0.04f, xKnee, botY + 0.04f, winBotFront - 0.02f, botY + 0.04f, winBotMain - 0.02f, zIn0, std::max(zIn0 + 0.012f, zIn1 - 0.006f), cardDark);
+            emitBoxRot(Vec3(xKnee, botY + 0.04f, zIn0), Vec3(doorBackX - 0.04f, winBotMain - 0.02f, zIn1), cardDark);
+            emitBoxRot(Vec3(doorFrontX + 0.10f, botY + 0.12f, std::min(zInnerFace, zInnerDeep - sign * 0.016f)),
+                       Vec3(doorFrontX + 0.34f, botY + 0.36f, std::max(zInnerFace, zInnerDeep - sign * 0.016f)), speakerCol);
+
+            // Sculpted horizontal padded armrest ledge
+            float armY0 = winBotMain - 0.25f;
+            float armY1 = winBotMain - 0.15f;
+            float zArmEdge = sideZ - sign * 0.110f;
+            emitBoxRot(Vec3(doorFrontX + 0.18f, armY0, std::min(zInnerFace, zArmEdge)),
+                       Vec3(doorBackX - 0.10f, armY1, std::max(zInnerFace, zArmEdge)), bolsterMid);
+
+            // Diagonal inner pull handle & silver door latch lever
+            emitBoxRot(Vec3(doorFrontX + 0.24f, armY0 - 0.12f, std::min(zInnerDeep, zArmEdge)),
+                       Vec3(doorFrontX + 0.42f, armY0 + 0.01f, std::max(zInnerDeep, zArmEdge)), cardDark);
+            emitBoxRot(Vec3(doorFrontX + 0.16f, armY1 + 0.02f, std::min(zInnerDeep, zInnerDeep - sign * 0.032f)),
+                       Vec3(doorFrontX + 0.28f, armY1 + 0.06f, std::max(zInnerDeep, zInnerDeep - sign * 0.032f)), satinSilver);
+
+            // Driver door multi-switch console pod (mirror joystick, locks & dual window toggles)
+            if (isDriverDoor) {
+                float podZ = sideZ - sign * 0.102f;
+                emitBoxRot(Vec3(doorFrontX + 0.30f, armY1, std::min(zInnerDeep, podZ)),
+                           Vec3(doorFrontX + 0.72f, armY1 + 0.025f, std::max(zInnerDeep, podZ)), speakerCol);
+                float zKnob = sideZ - sign * 0.086f;
+                for (int b = 0; b < 5; ++b) {
+                    float bx = doorFrontX + 0.34f + static_cast<float>(b) * 0.072f;
+                    emitBoxRot(Vec3(bx, armY1 + 0.022f, std::min(zInnerDeep, zKnob)),
+                               Vec3(bx + 0.042f, armY1 + 0.038f, std::max(zInnerDeep, zKnob)),
+                               (b == 0) ? satinSilver : ledGreen);
+                }
+            }
         }
 
         float hZ0 = isRightSide ? zMax : zMin - 0.022f;

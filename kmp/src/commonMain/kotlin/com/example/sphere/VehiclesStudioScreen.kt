@@ -22,17 +22,25 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.sphere.model.CabDriveSide
 import com.example.sphere.model.VehicleCategoryType
 import com.example.sphere.model.VehicleItem
 import com.example.sphere.model.createDefaultCommoditiesCatalog
 import com.example.sphere.model.createDefaultTrailersCatalog
 import com.example.sphere.model.createDefaultVehiclesCatalog
+import com.example.sphere.nativebridge.SphereNativeEngine
+import com.example.sphere.vehicles.VehicleDriveConsole
+import com.example.sphere.vehicles.VehicleStreamingStats
 import com.example.sphere.vehicles.VehiclesViewportCanvas
+import com.example.sphere.vehicles.computeFallbackGridCellX
+import com.example.sphere.vehicles.rememberVehicleAudioController
 import com.example.sphere.vehicles.tabs.VehicleComponentsTab
 import com.example.sphere.vehicles.tabs.VehicleHitchPowertrainTab
 import com.example.sphere.vehicles.tabs.VehicleLiveryOpticsTab
 import com.example.sphere.vehicles.tabs.VehicleRegistryCppTab
 import com.example.sphere.vehicles.tabs.VehicleVulkanComputeTab
+import kotlinx.coroutines.isActive
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,12 +66,63 @@ fun VehiclesStudioScreen(
     var rotY by remember { mutableFloatStateOf(35f) }
     var zoomFactor by remember { mutableFloatStateOf(1.0f) }
 
+    var insideCabinView by remember { mutableStateOf(false) }
+    var cabinRotX by remember { mutableFloatStateOf(14f) }
+    var cabinRotY by remember { mutableFloatStateOf(14f) }
+    var cabinZoom by remember { mutableFloatStateOf(1.0f) }
+    var isAutoRotating by remember { mutableStateOf(false) }
+
     val filteredItems by remember(catalog, selectedCategory) {
         derivedStateOf { catalog.filter { it.category == selectedCategory } }
     }
     val currentVehicle = catalog.firstOrNull { it.id == selectedVehicleId }
         ?: filteredItems.firstOrNull()
         ?: catalog.first()
+
+    val effectiveHitchForStats = currentVehicle.canHitchTrailer && hitchTrailerEnabled
+    val combinedLoadKg = remember(currentVehicle, effectiveHitchForStats, selectedTrailer, showLoadedCargo, selectedCargo, cargoQuantity) {
+        val paxMass = if (currentVehicle.passengerCapacity > 2) currentVehicle.passengerCapacity * 72f else 0f
+        val trMass = if (effectiveHitchForStats) selectedTrailer.emptyWeightKg else 0f
+        val cgMass = if (effectiveHitchForStats && showLoadedCargo) selectedCargo.nominalWeightKg * cargoQuantity else 0f
+        currentVehicle.kerbWeightKg + paxMass + trMass + cgMass
+    }
+    val audioController = rememberVehicleAudioController(
+        vehicle = currentVehicle,
+        combinedLoadKg = combinedLoadKg
+    )
+    val currentGridCellX = computeFallbackGridCellX(audioController.distanceM)
+    val streamingStats = remember(
+        currentVehicle.id,
+        effectiveHitchForStats,
+        selectedTrailer.id,
+        showLoadedCargo,
+        selectedCargo.id,
+        cargoQuantity,
+        currentGridCellX
+    ) {
+        val raw = SphereNativeEngine.getVehicleStreamingStats(
+            vehicleId = currentVehicle.id,
+            hitchTrailer = effectiveHitchForStats,
+            trailerId = selectedTrailer.id,
+            showLoadedCargo = effectiveHitchForStats && showLoadedCargo,
+            cargoId = selectedCargo.id,
+            cargoQty = cargoQuantity,
+            distanceDrivenM = audioController.distanceM
+        )
+        if (raw.size >= 7) {
+            VehicleStreamingStats(
+                gridCellX = raw[0],
+                gridCellZ = raw[1],
+                loadedRingCells = raw[2],
+                heroMeshletCount = raw[3],
+                maxTrisPerMeshlet = raw[4],
+                hlodProxyBatches = raw[5],
+                hlodCulledTris = raw[6]
+            )
+        } else {
+            VehicleStreamingStats()
+        }
+    }
 
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     var isDropdownExpanded by remember { mutableStateOf(false) }
@@ -140,6 +199,9 @@ fun VehiclesStudioScreen(
                                 val firstInCat = catalog.firstOrNull { it.category == category }
                                 if (firstInCat != null) {
                                     selectedVehicleId = firstInCat.id
+                                    if (!firstInCat.isTruck) {
+                                        insideCabinView = false
+                                    }
                                 }
                             },
                             label = { Text(category.displayName, style = MaterialTheme.typography.bodySmall) },
@@ -316,6 +378,46 @@ fun VehiclesStudioScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // 3D Native C++ Procedural Vehicle Viewport Canvas
+                val activeCabinMode = insideCabinView && currentVehicle.isTruck
+                LaunchedEffect(isAutoRotating, activeCabinMode) {
+                    if (!isAutoRotating) return@LaunchedEffect
+                    var prevFrameNs = 0L
+                    while (isActive) {
+                        withFrameNanos { frameNs ->
+                            if (prevFrameNs != 0L) {
+                                val dtSec = ((frameNs - prevFrameNs) / 1_000_000_000f).coerceIn(0f, 0.05f)
+                                if (activeCabinMode) {
+                                    var nextYaw = (cabinRotY - dtSec * 36f) % 360f
+                                    if (nextYaw >= 180f) nextYaw -= 360f
+                                    if (nextYaw < -180f) nextYaw += 360f
+                                    cabinRotY = nextYaw
+                                } else {
+                                    rotY = (rotY + dtSec * 42f) % 360f
+                                }
+                            }
+                            prevFrameNs = frameNs
+                        }
+                    }
+                }
+                val toggleCabinMode: (Boolean) -> Unit = { enable ->
+                    if (enable && currentVehicle.isTruck) {
+                        insideCabinView = true
+                        cabinRotX = 16f
+                        cabinRotY = if (currentVehicle.cabDriveSide == CabDriveSide.RHD) -16f else 16f
+                        cabinZoom = 1.0f
+                    } else {
+                        insideCabinView = false
+                    }
+                }
+                val toggleCabSide: (CabDriveSide) -> Unit = { side ->
+                    catalog = catalog.map {
+                        if (it.id == currentVehicle.id) it.copy(cabDriveSide = side) else it
+                    }
+                    if (abs(cabinRotY) < 35f) {
+                        cabinRotY = if (side == CabDriveSide.RHD) -16f else 16f
+                    }
+                }
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -326,35 +428,73 @@ fun VehiclesStudioScreen(
                 ) {
                     VehiclesViewportCanvas(
                         item = currentVehicle,
-                        rotX = rotX,
-                        rotY = rotY,
-                        zoomFactor = zoomFactor,
+                        rotX = if (activeCabinMode) cabinRotX else rotX,
+                        rotY = if (activeCabinMode) cabinRotY else rotY,
+                        zoomFactor = if (activeCabinMode) cabinZoom else zoomFactor,
                         onDrag = { dx, dy ->
-                            rotY = (rotY + dx * 0.45f) % 360f
-                            rotX = (rotX + dy * 0.45f).coerceIn(-85f, 85f)
+                            if (activeCabinMode) {
+                                // Unrestricted 360-degree human head turn (wrapped to [-180, 180)) + full vertical tilt
+                                var nextYaw = (cabinRotY - dx * 0.40f) % 360f
+                                if (nextYaw >= 180f) nextYaw -= 360f
+                                if (nextYaw < -180f) nextYaw += 360f
+                                cabinRotY = nextYaw
+                                cabinRotX = (cabinRotX - dy * 0.32f).coerceIn(-75f, 75f)
+                            } else {
+                                rotY = (rotY + dx * 0.45f) % 360f
+                                rotX = (rotX + dy * 0.45f).coerceIn(-85f, 85f)
+                            }
                         },
-                        onZoomChange = { zoomFactor = it },
+                        onZoomChange = { nextZoom ->
+                            if (activeCabinMode) {
+                                cabinZoom = nextZoom
+                            } else {
+                                zoomFactor = nextZoom
+                            }
+                        },
                         onResetView = {
-                            rotX = 15f
-                            rotY = 35f
-                            zoomFactor = 1.0f
+                            if (activeCabinMode) {
+                                cabinRotX = 16f
+                                cabinRotY = if (currentVehicle.cabDriveSide == CabDriveSide.RHD) -16f else 16f
+                                cabinZoom = 1.0f
+                            } else {
+                                rotX = 15f
+                                rotY = 35f
+                                zoomFactor = 1.0f
+                            }
                         },
                         onToggleDoor = {
                             val nextRatio = if (currentVehicle.doorOpenRatio > 0.05f) 0f else 1f
                             catalog = catalog.map {
                                 if (it.id == currentVehicle.id) it.copy(doorOpenRatio = nextRatio) else it
                             }
+                            audioController.triggerDoorPneumatic()
                         },
                         hitchTrailerEnabled = hitchTrailerEnabled,
                         hitchedTrailer = selectedTrailer,
                         showLoadedCargo = showLoadedCargo,
                         loadedCargo = selectedCargo,
                         cargoQuantity = cargoQuantity,
+                        insideCabinView = activeCabinMode,
+                        onToggleCabinView = { toggleCabinMode(!activeCabinMode) },
+                        onToggleCabDriveSide = {
+                            val nextSide = if (currentVehicle.cabDriveSide == CabDriveSide.LHD) CabDriveSide.RHD else CabDriveSide.LHD
+                            toggleCabSide(nextSide)
+                        },
+                        isAutoRotating = isAutoRotating,
+                        onToggleAutoRotate = { isAutoRotating = !isAutoRotating },
                         modifier = Modifier.fillMaxSize()
                     )
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(10.dp))
+
+                VehicleDriveConsole(
+                    vehicle = currentVehicle,
+                    audioController = audioController,
+                    streamingStats = streamingStats
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Sub-Studio Navigation Tabs
                 ScrollableTabRow(
@@ -374,6 +514,11 @@ fun VehiclesStudioScreen(
                 }
 
                 val onVehicleUpdate: (VehicleItem) -> Unit = { updated ->
+                    val prevDoorOpen = currentVehicle.doorOpenRatio > 0.05f
+                    val nextDoorOpen = updated.doorOpenRatio > 0.05f
+                    if (prevDoorOpen != nextDoorOpen) {
+                        audioController.triggerDoorPneumatic()
+                    }
                     catalog = catalog.map { if (it.id == updated.id) updated else it }
                 }
 
@@ -381,6 +526,8 @@ fun VehiclesStudioScreen(
                     0 -> VehicleHitchPowertrainTab(
                         vehicle = currentVehicle,
                         onVehicleChange = onVehicleUpdate,
+                        insideCabinView = activeCabinMode,
+                        onToggleInsideCabinView = toggleCabinMode,
                         trailerCatalog = trailerCatalog,
                         selectedTrailer = selectedTrailer,
                         onSelectTrailer = { selectedTrailer = it },
@@ -402,7 +549,8 @@ fun VehiclesStudioScreen(
                         vehicle = currentVehicle
                     )
                     3 -> VehicleVulkanComputeTab(
-                        vehicle = currentVehicle
+                        vehicle = currentVehicle,
+                        streamingStats = streamingStats
                     )
                     4 -> VehicleRegistryCppTab(
                         vehicle = currentVehicle,

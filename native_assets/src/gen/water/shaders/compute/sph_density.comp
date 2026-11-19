@@ -1,0 +1,105 @@
+#version 460
+// Vulkan 1.3 Compute Shader: Double-Density Estimation (Spiky Pow2 & Pow3 Kernels)
+// Ported from talvinckb/OpenGL-Water-Simulation
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+struct SpatialEntry {
+    uint particleIndex;
+    uint hash;
+    uint cellKey;
+    uint pad;
+};
+
+layout(std430, set = 0, binding = 1) readonly buffer PredictedPositionsBuffer {
+    vec4 predictedPositions[];
+};
+
+layout(std430, set = 0, binding = 3) writeonly buffer DensitiesBuffer {
+    vec2 densities[]; // x = density, y = nearDensity
+};
+
+layout(std430, set = 0, binding = 4) readonly buffer SpatialIndicesBuffer {
+    SpatialEntry spatialIndices[];
+};
+
+layout(std430, set = 0, binding = 5) readonly buffer SpatialOffsetsBuffer {
+    uint spatialOffsets[];
+};
+
+layout(push_constant) uniform DensityPush {
+    float smoothingRadius;
+    uint particleCount;
+    uint hashTableSize;
+    float pad;
+} pc;
+
+const float PI = 3.14159265359;
+const uint PRIME_1 = 15823u;
+const uint PRIME_2 = 9737333u;
+const uint PRIME_3 = 440817757u;
+
+float SpikyKernelPow2(float dst, float radius) {
+    if (dst < radius) {
+        float scale = 15.0 / (2.0 * PI * pow(radius, 5.0));
+        float v = radius - dst;
+        return v * v * scale;
+    }
+    return 0.0;
+}
+
+float SpikyKernelPow3(float dst, float radius) {
+    if (dst < radius) {
+        float scale = 15.0 / (PI * pow(radius, 6.0));
+        float v = radius - dst;
+        return v * v * v * scale;
+    }
+    return 0.0;
+}
+
+uint HashCell3D(ivec3 cell) {
+    return uint(cell.x) * PRIME_1 + uint(cell.y) * PRIME_2 + uint(cell.z) * PRIME_3;
+}
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= pc.particleCount) return;
+
+    float h = pc.smoothingRadius;
+    float hSq = h * h;
+    vec3 pos = predictedPositions[idx].xyz;
+    ivec3 originCell = ivec3(floor(pos / h));
+
+    float density = 0.0;
+    float nearDensity = 0.0;
+
+    for (int ox = -1; ox <= 1; ++ox) {
+        for (int oy = -1; oy <= 1; ++oy) {
+            for (int oz = -1; oz <= 1; ++oz) {
+                ivec3 neighborCell = originCell + ivec3(ox, oy, oz);
+                uint hash = HashCell3D(neighborCell);
+                uint key = hash % pc.hashTableSize;
+                uint currIndex = spatialOffsets[key];
+
+                while (currIndex < pc.particleCount) {
+                    SpatialEntry entry = spatialIndices[currIndex];
+                    currIndex++;
+                    if (entry.cellKey != key) break;
+                    if (entry.hash != hash) continue;
+
+                    uint neighborIdx = entry.particleIndex;
+                    vec3 offset = predictedPositions[neighborIdx].xyz - pos;
+                    float sqDst = dot(offset, offset);
+
+                    if (sqDst < hSq) {
+                        float dst = sqrt(sqDst);
+                        density += SpikyKernelPow2(dst, h);
+                        nearDensity += SpikyKernelPow3(dst, h);
+                    }
+                }
+            }
+        }
+    }
+
+    densities[idx] = vec2(density, nearDensity);
+}

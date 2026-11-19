@@ -1,0 +1,31 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "audio_common.glsl"
+
+layout(local_size_x = 128, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, binding = 0) writeonly buffer GranularOutBuffer {
+    float outNoise[];
+};
+
+layout(push_constant) uniform GranularPush {
+    float sampleRate;
+    float speedKmh;
+    float tireSlip;
+    float brakePressure;
+    uint seed;
+    uint sampleCount;
+} push;
+
+void main() {
+    uint gid = gl_GlobalInvocationID.x;
+    if (gid >= push.sampleCount) return;
+
+    float t = float(gid) / push.sampleRate;
+    float grain = 0.5 * whiteNoise(gid, push.seed) + 0.5 * whiteNoise(gid >> 1u, push.seed ^ 0xA511u);
+    float rollGain = clamp(push.speedKmh / 95.0, 0.0, 1.0) * 0.24;
+    float screech = sin(AUDIO_TWO_PI * 1420.0 * t) * clamp(push.tireSlip * 0.45, 0.0, 0.45);
+    float hiss = grain * clamp(push.brakePressure * 0.35, 0.0, 0.35);
+
+    outNoise[gid] = softClipAudio(grain * rollGain + screech + hiss);
+}

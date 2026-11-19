@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <mutex>
 #include <unordered_map>
@@ -32,13 +33,16 @@ inline void AlphaBlendPixel(uint32_t& dst, float srcR, float srcG, float srcB, f
     float a = std::clamp(alpha, 0.0f, 1.0f);
     if (a <= 0.004f) return;
     float invA = 1.0f - a;
+    float sR = std::clamp(srcR, 0.0f, 1.0f);
+    float sG = std::clamp(srcG, 0.0f, 1.0f);
+    float sB = std::clamp(srcB, 0.0f, 1.0f);
     float dR = static_cast<float>(dst & 0xFFu) * (1.0f / 255.0f);
     float dG = static_cast<float>((dst >> 8) & 0xFFu) * (1.0f / 255.0f);
     float dB = static_cast<float>((dst >> 16) & 0xFFu) * (1.0f / 255.0f);
     dst = PackRGBA8888(
-        ClampU8(srcR * a + dR * invA),
-        ClampU8(srcG * a + dG * invA),
-        ClampU8(srcB * a + dB * invA),
+        ClampU8(sR * a + dR * invA),
+        ClampU8(sG * a + dG * invA),
+        ClampU8(sB * a + dB * invA),
         255
     );
 }
@@ -216,7 +220,53 @@ struct CameraXform {
         float rz = n.x * sinY + n.z * cosY;
         float ry = n.y * cosX - rz * sinX;
         float fz = n.y * sinX + rz * cosX;
-        return Vec3(rx, ry, fz).Normalized();
+        return Vec3(rx, ry, fz);
+    }
+};
+
+struct InsideCameraXform {
+    float cx = 0.0f, cy = 0.0f;
+    float focalPx = 420.0f;
+    Vec3 eye{0.0f, 0.0f, 0.0f};
+    Vec3 camForward{-1.0f, 0.0f, 0.0f};
+    Vec3 camRight{0.0f, 0.0f, -1.0f};
+    Vec3 camUp{0.0f, 1.0f, 0.0f};
+
+    void Init(const Vec3& eyePos, float yawDeg, float pitchDeg, float centerX, float centerY, float focal) {
+        cx = centerX;
+        cy = centerY;
+        focalPx = focal;
+        float yawRad = yawDeg * (kPi / 180.0f);
+        float pitchRad = std::clamp(pitchDeg, -78.0f, 78.0f) * (kPi / 180.0f);
+        Vec3 fwdHoriz(-std::cos(yawRad), 0.0f, -std::sin(yawRad));
+        // Human neck-to-eye pivot (~6.5 cm forward of neck axis) shifts view naturally when leaning/turning head
+        eye = Vec3(
+            eyePos.x + fwdHoriz.x * 0.065f,
+            eyePos.y,
+            eyePos.z + fwdHoriz.z * 0.065f
+        );
+        camRight = Vec3::Cross(fwdHoriz, Vec3(0.0f, 1.0f, 0.0f)).Normalized();
+        float cosP = std::cos(pitchRad);
+        float sinP = std::sin(pitchRad);
+        camForward = Vec3(fwdHoriz.x * cosP, -sinP, fwdHoriz.z * cosP).Normalized();
+        camUp = Vec3::Cross(camRight, camForward).Normalized();
+    }
+
+    Vec3 WorldToView(const Vec3& p) const {
+        Vec3 d = p - eye;
+        return Vec3(
+            Vec3::Dot(d, camRight),
+            Vec3::Dot(d, camUp),
+            Vec3::Dot(d, camForward)
+        );
+    }
+
+    Vec3 NormalToView(const Vec3& n) const {
+        return Vec3(
+            Vec3::Dot(n, camRight),
+            Vec3::Dot(n, camUp),
+            Vec3::Dot(n, camForward)
+        );
     }
 };
 
@@ -227,55 +277,105 @@ struct FrameBufferView {
     int32_t height = 0;
     std::vector<float> zBuffer;
 
+    int32_t bgCacheW = 0;
+    int32_t bgCacheH = 0;
+    float bgCacheCx = -1.0f;
+    float bgCacheCy = -1.0f;
+    float bgCacheMaxR = -1.0f;
+    std::vector<uint32_t> bgCachePixels;
+
     void Begin(uint32_t* px, int32_t stride, int32_t w, int32_t h) {
         pixels = px;
         stridePixels = stride;
         width = w;
         height = h;
-        zBuffer.assign(static_cast<size_t>(w) * static_cast<size_t>(h), 0.0f);
+        size_t total = static_cast<size_t>(w) * static_cast<size_t>(h);
+        if (zBuffer.size() != total) {
+            zBuffer.resize(total);
+        }
+        std::fill_n(zBuffer.data(), total, 0.0f);
     }
 
     void FillStudioBackground(float centerX, float centerY, float maxRadius,
                               float shadowCx, float shadowCy, float shadowRx, float shadowRy) {
-        float invMaxR = 1.0f / std::max(1.0f, maxRadius);
-        float invSRx2 = 1.0f / std::max(4.0f, shadowRx * shadowRx);
-        float invSRy2 = 1.0f / std::max(4.0f, shadowRy * shadowRy);
+        const size_t total = static_cast<size_t>(width) * static_cast<size_t>(height);
+        if (bgCacheW != width || bgCacheH != height ||
+            std::abs(bgCacheCx - centerX) > 0.25f ||
+            std::abs(bgCacheCy - centerY) > 0.25f ||
+            std::abs(bgCacheMaxR - maxRadius) > 0.25f ||
+            bgCachePixels.size() != total) {
+            bgCacheW = width;
+            bgCacheH = height;
+            bgCacheCx = centerX;
+            bgCacheCy = centerY;
+            bgCacheMaxR = maxRadius;
+            bgCachePixels.resize(total);
 
-        for (int32_t y = 0; y < height; ++y) {
-            float dy = static_cast<float>(y) - centerY;
+            const float invMaxR = 1.0f / std::max(1.0f, maxRadius);
+            for (int32_t y = 0; y < height; ++y) {
+                float dy = static_cast<float>(y) - centerY;
+                float dy2 = dy * dy;
+                uint32_t* row = bgCachePixels.data() + static_cast<size_t>(y) * width;
+                for (int32_t x = 0; x < width; ++x) {
+                    float dx = static_cast<float>(x) - centerX;
+                    float distT = std::min(1.0f, std::sqrt(dx * dx + dy2) * invMaxR);
+                    float r, g, b;
+                    if (distT < 0.55f) {
+                        float k = distT * (1.0f / 0.55f);
+                        r = (30.0f + (13.0f - 30.0f) * k) * (1.0f / 255.0f);
+                        g = (41.0f + (19.0f - 41.0f) * k) * (1.0f / 255.0f);
+                        b = (59.0f + (31.0f - 59.0f) * k) * (1.0f / 255.0f);
+                    } else {
+                        float k = (distT - 0.55f) * (1.0f / 0.45f);
+                        r = (13.0f + (3.0f - 13.0f) * k) * (1.0f / 255.0f);
+                        g = (19.0f + (5.0f - 19.0f) * k) * (1.0f / 255.0f);
+                        b = (31.0f + (8.0f - 31.0f) * k) * (1.0f / 255.0f);
+                    }
+                    row[x] = PackRGBA8888(ClampU8(r), ClampU8(g), ClampU8(b), 255);
+                }
+            }
+        }
+
+        if (stridePixels == width) {
+            std::memcpy(pixels, bgCachePixels.data(), total * sizeof(uint32_t));
+        } else {
+            for (int32_t y = 0; y < height; ++y) {
+                std::memcpy(
+                    pixels + static_cast<size_t>(y) * stridePixels,
+                    bgCachePixels.data() + static_cast<size_t>(y) * width,
+                    static_cast<size_t>(width) * sizeof(uint32_t)
+                );
+            }
+        }
+
+        // Soft elliptical contact floor shadow over tight screen-space bounding box only
+        const float safeRx = std::max(2.0f, shadowRx);
+        const float safeRy = std::max(2.0f, shadowRy);
+        const float invSRx2 = 1.0f / (safeRx * safeRx);
+        const float invSRy2 = 1.0f / (safeRy * safeRy);
+        const int32_t sMinY = std::max<int32_t>(0, static_cast<int32_t>(std::floor(shadowCy - safeRy)));
+        const int32_t sMaxY = std::min<int32_t>(height - 1, static_cast<int32_t>(std::ceil(shadowCy + safeRy)));
+        const int32_t sMinX = std::max<int32_t>(0, static_cast<int32_t>(std::floor(shadowCx - safeRx)));
+        const int32_t sMaxX = std::min<int32_t>(width - 1, static_cast<int32_t>(std::ceil(shadowCx + safeRx)));
+
+        for (int32_t y = sMinY; y <= sMaxY; ++y) {
             float sdy = static_cast<float>(y) - shadowCy;
             float sdy2 = sdy * sdy * invSRy2;
+            if (sdy2 >= 1.0f) continue;
             uint32_t* row = pixels + static_cast<size_t>(y) * stridePixels;
-
-            for (int32_t x = 0; x < width; ++x) {
-                float dx = static_cast<float>(x) - centerX;
-                float distT = std::min(1.0f, std::sqrt(dx * dx + dy * dy) * invMaxR);
-                float r, g, b;
-                if (distT < 0.55f) {
-                    float k = distT / 0.55f;
-                    r = (30.0f + (13.0f - 30.0f) * k) / 255.0f;
-                    g = (41.0f + (19.0f - 41.0f) * k) / 255.0f;
-                    b = (59.0f + (31.0f - 59.0f) * k) / 255.0f;
-                } else {
-                    float k = (distT - 0.55f) / 0.45f;
-                    r = (13.0f + (3.0f - 13.0f) * k) / 255.0f;
-                    g = (19.0f + (5.0f - 19.0f) * k) / 255.0f;
-                    b = (31.0f + (8.0f - 31.0f) * k) / 255.0f;
+            for (int32_t x = sMinX; x <= sMaxX; ++x) {
+                float sdx = static_cast<float>(x) - shadowCx;
+                float e2 = sdx * sdx * invSRx2 + sdy2;
+                if (e2 < 1.0f) {
+                    float falloff = 1.0f - e2;
+                    float dark = 1.0f - 0.82f * falloff * falloff;
+                    uint32_t dScale = static_cast<uint32_t>(dark * 256.0f + 0.5f);
+                    uint32_t p = row[x];
+                    uint32_t pr = ((p & 0xFFu) * dScale) >> 8;
+                    uint32_t pg = (((p >> 8) & 0xFFu) * dScale) >> 8;
+                    uint32_t pb = (((p >> 16) & 0xFFu) * dScale) >> 8;
+                    row[x] = 0xFF000000u | (pb << 16) | (pg << 8) | pr;
                 }
-
-                // Soft elliptical contact floor shadow
-                if (sdy2 < 1.0f) {
-                    float sdx = static_cast<float>(x) - shadowCx;
-                    float e2 = sdx * sdx * invSRx2 + sdy2;
-                    if (e2 < 1.0f) {
-                        float falloff = 1.0f - std::sqrt(e2);
-                        float dark = 1.0f - 0.82f * falloff * falloff;
-                        r *= dark;
-                        g *= dark;
-                        b *= dark;
-                    }
-                }
-                row[x] = PackRGBA8888(ClampU8(r), ClampU8(g), ClampU8(b), 255);
             }
         }
     }
@@ -298,11 +398,16 @@ struct FrameBufferView {
         float hemi = 0.20f + 0.14f * std::clamp(viewNormal.y, -1.0f, 1.0f);
 
         float nDotH = std::max(0.0f, Vec3::Dot(viewNormal, kHalfVec));
-        float shininess = std::max(4.0f, 96.0f * (1.0f - roughness) * (1.0f - roughness));
-        float spec = std::pow(nDotH, shininess) * (0.20f + 0.68f * (1.0f - roughness));
+        float oneMinusRough = 1.0f - roughness;
+        float spec = 0.0f;
+        if (nDotH > 1e-4f) {
+            float shininess = std::max(4.0f, 96.0f * oneMinusRough * oneMinusRough);
+            spec = std::pow(nDotH, shininess) * (0.20f + 0.68f * oneMinusRough);
+        }
 
         // Rim grazing highlight
-        float fresnel = std::pow(std::clamp(1.0f - std::abs(viewNormal.z), 0.0f, 1.0f), 3.0f);
+        float fresnelBase = std::clamp(1.0f - std::abs(viewNormal.z), 0.0f, 1.0f);
+        float fresnel = fresnelBase * fresnelBase * fresnelBase;
         float rim = fresnel * (0.10f + 0.16f * metallic);
 
         float diffuseWeight = 1.0f - metallic * 0.35f;
@@ -315,6 +420,71 @@ struct FrameBufferView {
         outR = std::clamp(albedo.x * lit + specR * spec + rim * 0.65f, 0.0f, 1.0f);
         outG = std::clamp(albedo.y * lit + specG * spec + rim * 0.75f, 0.0f, 1.0f);
         outB = std::clamp(albedo.z * lit + specB * spec + rim * 0.95f, 0.0f, 1.0f);
+    }
+
+    void FillCabinHorizonBackground(const InsideCameraXform& cam) {
+        float invFocal = 1.0f / std::max(1.0f, cam.focalPx);
+        for (int32_t y = 0; y < height; ++y) {
+            float ry = (cam.cy - (static_cast<float>(y) + 0.5f)) * invFocal;
+            float wy = ry * cam.camUp.y + cam.camForward.y;
+            float sinElev = wy / std::sqrt(ry * ry + 1.0f);
+            float r, g, b;
+            if (sinElev >= 0.0f) {
+                float t = std::clamp(sinElev * 1.45f, 0.0f, 1.0f);
+                r = 0.72f + (0.34f - 0.72f) * t;
+                g = 0.81f + (0.56f - 0.81f) * t;
+                b = 0.90f + (0.82f - 0.90f) * t;
+            } else {
+                float t = std::clamp(-sinElev * 2.4f, 0.0f, 1.0f);
+                r = 0.24f + (0.10f - 0.24f) * t;
+                g = 0.26f + (0.12f - 0.26f) * t;
+                b = 0.30f + (0.15f - 0.30f) * t;
+            }
+            if (std::abs(sinElev) < 0.025f) {
+                float haze = 1.0f - (std::abs(sinElev) / 0.025f);
+                r += (0.84f - r) * haze * 0.45f;
+                g += (0.88f - g) * haze * 0.45f;
+                b += (0.94f - b) * haze * 0.45f;
+            }
+            uint32_t packed = PackRGBA8888(ClampU8(r), ClampU8(g), ClampU8(b), 255);
+            uint32_t* row = pixels + static_cast<size_t>(y) * stridePixels;
+            std::fill_n(row, width, packed);
+        }
+    }
+
+    inline void ShadeInteriorCornerPBR(
+        const Vec3& albedo,
+        const Vec3& viewNormal,
+        float roughness,
+        float metallic,
+        float& outR, float& outG, float& outB
+    ) const {
+        // Cabin key light pouring down through panoramic windshield + soft dome/fill bounce
+        static const Vec3 kWinKeyDir = Vec3(0.22f, 0.68f, 0.70f).Normalized();
+        static const Vec3 kCabinDome = Vec3(-0.35f, 0.75f, 0.56f).Normalized();
+        static const Vec3 kViewDir = Vec3(0.0f, 0.0f, 1.0f);
+        static const Vec3 kHalfVec = (kWinKeyDir + kViewDir).Normalized();
+
+        float nDotL = std::max(0.0f, Vec3::Dot(viewNormal, kWinKeyDir));
+        float domeDiff = std::max(0.0f, Vec3::Dot(viewNormal, kCabinDome)) * 0.32f;
+        float hemi = 0.38f + 0.16f * std::clamp(viewNormal.y, -1.0f, 1.0f);
+
+        float nDotH = std::max(0.0f, Vec3::Dot(viewNormal, kHalfVec));
+        float oneMinusRough = 1.0f - roughness;
+        float spec = 0.0f;
+        if (nDotH > 1e-4f) {
+            float shininess = std::max(6.0f, 72.0f * oneMinusRough * oneMinusRough);
+            spec = std::pow(nDotH, shininess) * (0.16f + 0.52f * oneMinusRough);
+        }
+
+        float lit = hemi + nDotL * 0.68f * (1.0f - metallic * 0.25f) + domeDiff;
+        float specR = (1.0f - metallic) * 0.94f + metallic * albedo.x;
+        float specG = (1.0f - metallic) * 0.94f + metallic * albedo.y;
+        float specB = (1.0f - metallic) * 0.94f + metallic * albedo.z;
+
+        outR = std::clamp(albedo.x * lit + specR * spec, 0.0f, 1.0f);
+        outG = std::clamp(albedo.y * lit + specG * spec, 0.0f, 1.0f);
+        outB = std::clamp(albedo.z * lit + specB * spec, 0.0f, 1.0f);
     }
 
     void DrawLine(float x0, float y0, float x1, float y1, uint32_t rgba, float thickness) {
@@ -418,38 +588,232 @@ struct FrameBufferView {
             float avgAlpha = std::clamp((v0.color.w + v1.color.w + v2.color.w) * (1.0f / 3.0f), 0.0f, 1.0f);
             bool isOpaque = (avgAlpha >= 0.99f);
 
+            const float de0dx = sy2 - sy1;
+            const float de1dx = sy0 - sy2;
+            const float de2dx = sy1 - sy0;
+
+            const float rz0 = iz0 * invArea;
+            const float rz1 = iz1 * invArea;
+            const float rz2 = iz2 * invArea;
+            const float dizdx = de0dx * rz0 + de1dx * rz1 + de2dx * rz2;
+
+            const float rr0 = r0 * invArea, rr1 = r1 * invArea, rr2 = r2 * invArea;
+            const float rg0 = g0 * invArea, rg1 = g1 * invArea, rg2 = g2 * invArea;
+            const float rb0 = b0 * invArea, rb1 = b1 * invArea, rb2 = b2 * invArea;
+
+            const float startPcfx = static_cast<float>(minPx) + 0.5f;
             for (int32_t py = minPy; py <= maxPy; ++py) {
-                float pcfy = static_cast<float>(py) + 0.5f;
+                const float pcfy = static_cast<float>(py) + 0.5f;
+                float e0 = de0dx * (startPcfx - sx1) - (sx2 - sx1) * (pcfy - sy1);
+                float e1 = de1dx * (startPcfx - sx2) - (sx0 - sx2) * (pcfy - sy2);
+                float e2 = de2dx * (startPcfx - sx0) - (sx1 - sx0) * (pcfy - sy0);
+                float iz = e0 * rz0 + e1 * rz1 + e2 * rz2;
+
                 size_t zRowOff = static_cast<size_t>(py) * width;
                 uint32_t* pRow = pixels + static_cast<size_t>(py) * stridePixels;
+                bool hitSpan = false;
 
                 for (int32_t px = minPx; px <= maxPx; ++px) {
-                    float pcfx = static_cast<float>(px) + 0.5f;
+                    if (e0 >= -0.001f && e1 >= -0.001f && e2 >= -0.001f) {
+                        hitSpan = true;
+                        size_t zIdx = zRowOff + static_cast<size_t>(px);
+                        if (iz > zBuffer[zIdx]) {
+                            float cr = e0 * rr0 + e1 * rr1 + e2 * rr2;
+                            float cg = e0 * rg0 + e1 * rg1 + e2 * rg2;
+                            float cb = e0 * rb0 + e1 * rb1 + e2 * rb2;
+                            if (isOpaque) {
+                                zBuffer[zIdx] = iz;
+                                pRow[px] = PackRGBA8888(ClampU8(cr), ClampU8(cg), ClampU8(cb), 255);
+                            } else {
+                                AlphaBlendPixel(pRow[px], cr, cg, cb, avgAlpha);
+                            }
+                        }
+                    } else if (hitSpan) {
+                        break;
+                    }
+                    e0 += de0dx;
+                    e1 += de1dx;
+                    e2 += de2dx;
+                    iz += dizdx;
+                }
+            }
+        }
+    }
 
-                    float e0 = -((sx2 - sx1) * (pcfy - sy1) - (sy2 - sy1) * (pcfx - sx1));
-                    if (e0 < -0.001f) continue;
-                    float e1 = -((sx0 - sx2) * (pcfy - sy2) - (sy0 - sy2) * (pcfx - sx2));
-                    if (e1 < -0.001f) continue;
-                    float e2 = -((sx1 - sx0) * (pcfy - sy0) - (sy1 - sy0) * (pcfx - sx0));
-                    if (e2 < -0.001f) continue;
+    void RasterizeMeshInterior(
+        const PreparedMesh& pm,
+        const InsideCameraXform& cam,
+        float offsetX,
+        float offsetY,
+        float offsetZ,
+        float roughness,
+        float metallic
+    ) {
+        if (!pm.sourcePtr || pm.triCount == 0) return;
+        const Mesh& mesh = *pm.sourcePtr;
+        constexpr float kNearZ = 0.05f;
 
-                    float w0 = e0 * invArea;
-                    float w1 = e1 * invArea;
-                    float w2 = e2 * invArea;
-                    float iz = w0 * iz0 + w1 * iz1 + w2 * iz2;
+        struct ClipVert {
+            Vec3 vp;
+            Vec3 vn;
+            Vec3 col;
+        };
 
-                    size_t zIdx = zRowOff + static_cast<size_t>(px);
-                    if (iz <= zBuffer[zIdx]) continue;
+        auto lerpVert = [](const ClipVert& a, const ClipVert& b, float t) -> ClipVert {
+            return ClipVert{
+                Vec3(a.vp.x + (b.vp.x - a.vp.x) * t,
+                     a.vp.y + (b.vp.y - a.vp.y) * t,
+                     a.vp.z + (b.vp.z - a.vp.z) * t),
+                Vec3(a.vn.x + (b.vn.x - a.vn.x) * t,
+                     a.vn.y + (b.vn.y - a.vn.y) * t,
+                     a.vn.z + (b.vn.z - a.vn.z) * t).Normalized(),
+                Vec3(a.col.x + (b.col.x - a.col.x) * t,
+                     a.col.y + (b.col.y - a.col.y) * t,
+                     a.col.z + (b.col.z - a.col.z) * t)
+            };
+        };
 
-                    float cr = std::clamp(w0 * r0 + w1 * r1 + w2 * r2, 0.0f, 1.0f);
-                    float cg = std::clamp(w0 * g0 + w1 * g1 + w2 * g2, 0.0f, 1.0f);
-                    float cb = std::clamp(w0 * b0 + w1 * b1 + w2 * b2, 0.0f, 1.0f);
+        for (uint32_t t = 0; t < pm.triCount; ++t) {
+            uint32_t i0 = mesh.indices[t * 3 + 0];
+            uint32_t i1 = mesh.indices[t * 3 + 1];
+            uint32_t i2 = mesh.indices[t * 3 + 2];
+            if (i0 >= pm.vertexCount || i1 >= pm.vertexCount || i2 >= pm.vertexCount) continue;
 
-                    if (isOpaque) {
-                        zBuffer[zIdx] = iz;
-                        pRow[px] = PackRGBA8888(ClampU8(cr), ClampU8(cg), ClampU8(cb), 255);
-                    } else {
-                        AlphaBlendPixel(pRow[px], cr, cg, cb, avgAlpha);
+            const Vertex& v0 = mesh.vertices[i0];
+            const Vertex& v1 = mesh.vertices[i1];
+            const Vertex& v2 = mesh.vertices[i2];
+
+            ClipVert inVerts[3] = {
+                {cam.WorldToView(Vec3(v0.position.x + offsetX, v0.position.y + offsetY, v0.position.z + offsetZ)),
+                 cam.NormalToView(pm.cornerNormals[t * 3 + 0]),
+                 Vec3(v0.color.x, v0.color.y, v0.color.z)},
+                {cam.WorldToView(Vec3(v1.position.x + offsetX, v1.position.y + offsetY, v1.position.z + offsetZ)),
+                 cam.NormalToView(pm.cornerNormals[t * 3 + 1]),
+                 Vec3(v1.color.x, v1.color.y, v1.color.z)},
+                {cam.WorldToView(Vec3(v2.position.x + offsetX, v2.position.y + offsetY, v2.position.z + offsetZ)),
+                 cam.NormalToView(pm.cornerNormals[t * 3 + 2]),
+                 Vec3(v2.color.x, v2.color.y, v2.color.z)}
+            };
+
+            if (inVerts[0].vp.z < kNearZ && inVerts[1].vp.z < kNearZ && inVerts[2].vp.z < kNearZ) {
+                continue;
+            }
+
+            ClipVert poly[4];
+            int polyCount = 0;
+            if (inVerts[0].vp.z >= kNearZ && inVerts[1].vp.z >= kNearZ && inVerts[2].vp.z >= kNearZ) {
+                poly[0] = inVerts[0];
+                poly[1] = inVerts[1];
+                poly[2] = inVerts[2];
+                polyCount = 3;
+            } else {
+                // Sutherland-Hodgman single-plane near clip (vp.z >= kNearZ)
+                for (int e = 0; e < 3; ++e) {
+                    const ClipVert& cur = inVerts[e];
+                    const ClipVert& nxt = inVerts[(e + 1) % 3];
+                    bool curIn = cur.vp.z >= kNearZ;
+                    bool nxtIn = nxt.vp.z >= kNearZ;
+                    if (curIn && nxtIn) {
+                        if (polyCount < 4) poly[polyCount++] = nxt;
+                    } else if (curIn && !nxtIn) {
+                        float alpha = (kNearZ - cur.vp.z) / (nxt.vp.z - cur.vp.z);
+                        if (polyCount < 4) poly[polyCount++] = lerpVert(cur, nxt, alpha);
+                    } else if (!curIn && nxtIn) {
+                        float alpha = (kNearZ - cur.vp.z) / (nxt.vp.z - cur.vp.z);
+                        if (polyCount < 4) poly[polyCount++] = lerpVert(cur, nxt, alpha);
+                        if (polyCount < 4) poly[polyCount++] = nxt;
+                    }
+                }
+            }
+            if (polyCount < 3) continue;
+
+            float avgAlpha = std::clamp((v0.color.w + v1.color.w + v2.color.w) * (1.0f / 3.0f), 0.0f, 1.0f);
+            bool isOpaque = (avgAlpha >= 0.99f);
+
+            for (int k = 1; k < polyCount - 1; ++k) {
+                const ClipVert& a = poly[0];
+                const ClipVert& b = poly[k];
+                const ClipVert& c = poly[k + 1];
+
+                float iz0 = 1.0f / std::max(kNearZ, a.vp.z);
+                float iz1 = 1.0f / std::max(kNearZ, b.vp.z);
+                float iz2 = 1.0f / std::max(kNearZ, c.vp.z);
+
+                float sx0 = cam.cx + a.vp.x * iz0 * cam.focalPx;
+                float sy0 = cam.cy - a.vp.y * iz0 * cam.focalPx;
+                float sx1 = cam.cx + b.vp.x * iz1 * cam.focalPx;
+                float sy1 = cam.cy - b.vp.y * iz1 * cam.focalPx;
+                float sx2 = cam.cx + c.vp.x * iz2 * cam.focalPx;
+                float sy2 = cam.cy - c.vp.y * iz2 * cam.focalPx;
+
+                if (!std::isfinite(sx0) || !std::isfinite(sy0) ||
+                    !std::isfinite(sx1) || !std::isfinite(sy1) ||
+                    !std::isfinite(sx2) || !std::isfinite(sy2)) {
+                    continue;
+                }
+
+                float det2d = (sx1 - sx0) * (sy2 - sy0) - (sy1 - sy0) * (sx2 - sx0);
+                if (det2d >= -1e-4f) continue;
+                float invArea = 1.0f / (-det2d);
+
+                int32_t minPx = std::max(0, static_cast<int32_t>(std::floor(std::min({sx0, sx1, sx2}))));
+                int32_t maxPx = std::min(width - 1, static_cast<int32_t>(std::ceil(std::max({sx0, sx1, sx2}))));
+                int32_t minPy = std::max(0, static_cast<int32_t>(std::floor(std::min({sy0, sy1, sy2}))));
+                int32_t maxPy = std::min(height - 1, static_cast<int32_t>(std::ceil(std::max({sy0, sy1, sy2}))));
+                if (minPx > maxPx || minPy > maxPy) continue;
+
+                float r0, g0, b0, r1, g1, b1, r2, g2, b2;
+                ShadeInteriorCornerPBR(a.col, a.vn, roughness, metallic, r0, g0, b0);
+                ShadeInteriorCornerPBR(b.col, b.vn, roughness, metallic, r1, g1, b1);
+                ShadeInteriorCornerPBR(c.col, c.vn, roughness, metallic, r2, g2, b2);
+
+                const float de0dx = sy2 - sy1;
+                const float de1dx = sy0 - sy2;
+                const float de2dx = sy1 - sy0;
+
+                const float rz0 = iz0 * invArea;
+                const float rz1 = iz1 * invArea;
+                const float rz2 = iz2 * invArea;
+                const float dizdx = de0dx * rz0 + de1dx * rz1 + de2dx * rz2;
+
+                const float rr0 = r0 * invArea, rr1 = r1 * invArea, rr2 = r2 * invArea;
+                const float rg0 = g0 * invArea, rg1 = g1 * invArea, rg2 = g2 * invArea;
+                const float rb0 = b0 * invArea, rb1 = b1 * invArea, rb2 = b2 * invArea;
+
+                const float startPcfx = static_cast<float>(minPx) + 0.5f;
+                for (int32_t py = minPy; py <= maxPy; ++py) {
+                    const float pcfy = static_cast<float>(py) + 0.5f;
+                    float e0 = de0dx * (startPcfx - sx1) - (sx2 - sx1) * (pcfy - sy1);
+                    float e1 = de1dx * (startPcfx - sx2) - (sx0 - sx2) * (pcfy - sy2);
+                    float e2 = de2dx * (startPcfx - sx0) - (sx1 - sx0) * (pcfy - sy0);
+                    float iz = e0 * rz0 + e1 * rz1 + e2 * rz2;
+
+                    size_t zRowOff = static_cast<size_t>(py) * width;
+                    uint32_t* pRow = pixels + static_cast<size_t>(py) * stridePixels;
+                    bool hitSpan = false;
+
+                    for (int32_t px = minPx; px <= maxPx; ++px) {
+                        if (e0 >= -0.001f && e1 >= -0.001f && e2 >= -0.001f) {
+                            hitSpan = true;
+                            size_t zIdx = zRowOff + static_cast<size_t>(px);
+                            if (iz > zBuffer[zIdx]) {
+                                float cr = e0 * rr0 + e1 * rr1 + e2 * rr2;
+                                float cg = e0 * rg0 + e1 * rg1 + e2 * rg2;
+                                float cb = e0 * rb0 + e1 * rb1 + e2 * rb2;
+                                if (isOpaque) {
+                                    zBuffer[zIdx] = iz;
+                                    pRow[px] = PackRGBA8888(ClampU8(cr), ClampU8(cg), ClampU8(cb), 255);
+                                } else {
+                                    AlphaBlendPixel(pRow[px], cr, cg, cb, avgAlpha * 0.65f);
+                                }
+                            }
+                        } else if (hitSpan) {
+                            break;
+                        }
+                        e0 += de0dx;
+                        e1 += de1dx;
+                        e2 += de2dx;
+                        iz += dizdx;
                     }
                 }
             }
@@ -758,6 +1122,33 @@ void NativeMeshRasterizer::RenderVehicleBitmap(
 
     thread_local FrameBufferView fb;
     fb.Begin(pixelsRGBA8888, stridePixels, width, height);
+
+    if (params.insideCabinView) {
+        Vec3 eyePos = vehicleMesh->hasInteriorEye
+            ? vehicleMesh->interiorEyePos
+            : Vec3(
+                pmVehicle.bounds.min.x + 1.15f,
+                pmVehicle.bounds.max.y - 0.72f,
+                (params.isRhd ? -1.0f : 1.0f) * 0.34f
+              );
+        InsideCameraXform insideCam;
+        float focalPx = static_cast<float>(std::min(width, height)) * 0.62f * std::clamp(params.zoom, 0.55f, 2.5f);
+        insideCam.Init(
+            eyePos,
+            params.rotYDeg,
+            params.rotXDeg,
+            static_cast<float>(width) * 0.5f,
+            static_cast<float>(height) * 0.5f,
+            focalPx
+        );
+        fb.FillCabinHorizonBackground(insideCam);
+        fb.RasterizeMeshInterior(pmVehicle, insideCam, 0.0f, 0.0f, 0.0f, params.roughness, params.metallic);
+        if (hasTrailer && pmTrailerPtr) {
+            fb.RasterizeMeshInterior(*pmTrailerPtr, insideCam, trailerOffsetX, 0.0f, 0.0f, 0.48f, 0.52f);
+        }
+        return;
+    }
+
     fb.FillStudioBackground(
         static_cast<float>(width) * 0.5f, static_cast<float>(height) * 0.55f,
         static_cast<float>(std::max(width, height)) * 0.90f,

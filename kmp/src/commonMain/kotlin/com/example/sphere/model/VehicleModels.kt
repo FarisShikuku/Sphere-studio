@@ -25,6 +25,11 @@ enum class VehicleLiveryPreset(
     LUXURY_METALLIC("VIP Executive", Color(0xFF262E3D), Color(0xFFD6B870), 0.18f, 0.78f)
 }
 
+enum class CabDriveSide(val shortLabel: String, val displayName: String) {
+    LHD("LHD", "Left-Hand Drive"),
+    RHD("RHD", "Right-Hand Drive")
+}
+
 data class VehicleItem(
     val id: Int,
     val cppEnumName: String,
@@ -57,9 +62,15 @@ data class VehicleItem(
     val steerAngleDeg: Float = 0f,
     val headlightsOn: Boolean = true,
     val hasRoofRack: Boolean = false,
-    val hasExhaustStacks: Boolean = false
+    val hasExhaustStacks: Boolean = false,
+    val cabDriveSide: CabDriveSide = CabDriveSide.LHD
 ) {
     val canHitchTrailer: Boolean get() = fifthWheelOffsetM > 0.1f
+    val isTruck: Boolean get() =
+        category == VehicleCategoryType.LORRY_RIGID ||
+        category == VehicleCategoryType.LORRY_ARTICULATED
+    val isScania: Boolean get() = cppEnumName.contains("SCANIA")
+    val isVolvo: Boolean get() = cppEnumName.contains("VOLVO")
 }
 
 fun createDefaultVehiclesCatalog(): List<VehicleItem> = listOf(
@@ -1331,5 +1342,83 @@ fun createDefaultVehiclesCatalog(): List<VehicleItem> = listOf(
         accentColor = Color(0xFF1A1F24),
         roughness = 0.22f,
         metallic = 0.36f
+    ),
+    VehicleItem(
+        id = 48,
+        cppEnumName = "TRACTOR_VOLVO_FH16_800",
+        name = "Volvo FH16 800 Aero 4x2",
+        category = VehicleCategoryType.LORRY_ARTICULATED,
+        driveConfigLabel = "4x2 D17 800HP Aero",
+        kerbWeightKg = 8350f,
+        maxGvwKg = 44000f,
+        wheelbaseM = 3.80f,
+        fifthWheelOffsetM = 1.56f,
+        cabHeightM = 3.92f,
+        engineTorqueNm = 3800f,
+        enginePowerHp = 800f,
+        passengerCapacity = 2,
+        lengthM = 6.08f,
+        widthM = 2.52f,
+        heightM = 3.96f,
+        groundClearanceM = 0.25f,
+        tireSpecLabel = "315/70 R22.5 Alcoa",
+        actionLabel = "Fifth-Wheel Lock",
+        defaultLivery = VehicleLiveryPreset.LUXURY_METALLIC,
+        baseColor = Color(0xFF546812),
+        accentColor = Color(0xFF14181E),
+        roughness = 0.16f,
+        metallic = 0.62f
+    ),
+    VehicleItem(
+        id = 49,
+        cppEnumName = "TRACTOR_VOLVO_FH16_780",
+        name = "Volvo FH16 780 Aero 4x2",
+        category = VehicleCategoryType.LORRY_ARTICULATED,
+        driveConfigLabel = "4x2 D17 780HP Aero",
+        kerbWeightKg = 8320f,
+        maxGvwKg = 44000f,
+        wheelbaseM = 3.80f,
+        fifthWheelOffsetM = 1.56f,
+        cabHeightM = 3.92f,
+        engineTorqueNm = 3800f,
+        enginePowerHp = 780f,
+        passengerCapacity = 2,
+        lengthM = 6.12f,
+        widthM = 2.52f,
+        heightM = 3.96f,
+        groundClearanceM = 0.24f,
+        tireSpecLabel = "315/70 R22.5 Alcoa Chrome",
+        actionLabel = "Fifth-Wheel Lock",
+        defaultLivery = VehicleLiveryPreset.LUXURY_METALLIC,
+        baseColor = Color(0xFF0E6130),
+        accentColor = Color(0xFFD6DEE8),
+        roughness = 0.16f,
+        metallic = 0.64f
+    ),
+    VehicleItem(
+        id = 50,
+        cppEnumName = "TRACTOR_VOLVO_FH16_750_XXL",
+        name = "Volvo FH16 750 XXL 6x4",
+        category = VehicleCategoryType.LORRY_ARTICULATED,
+        driveConfigLabel = "6x4 Globetrotter XXL 750HP",
+        kerbWeightKg = 9850f,
+        maxGvwKg = 50000f,
+        wheelbaseM = 4.25f,
+        fifthWheelOffsetM = 1.80f,
+        cabHeightM = 3.96f,
+        engineTorqueNm = 3550f,
+        enginePowerHp = 750f,
+        passengerCapacity = 2,
+        lengthM = 6.95f,
+        widthM = 2.54f,
+        heightM = 4.02f,
+        groundClearanceM = 0.24f,
+        tireSpecLabel = "315/70 R22.5 Black Alloy",
+        actionLabel = "Fifth-Wheel Slider",
+        defaultLivery = VehicleLiveryPreset.HIGHWAY_HAULAGE,
+        baseColor = Color(0xFF52575E),
+        accentColor = Color(0xFFFAD60F),
+        roughness = 0.18f,
+        metallic = 0.54f
     )
 )

@@ -285,6 +285,69 @@ VehicleDef CreateArticulatedTractorDefaultDef(VehicleID id) {
             def.metallic = 0.36f;
             break;
 
+        case VehicleID::TRACTOR_VOLVO_FH16_800:
+            def.drive_config = VehicleDriveConfig::DRIVE_4X2;
+            def.livery = LiveryID::LUXURY_METALLIC;
+            def.kerb_weight_kg = 8350.0f;
+            def.max_gvw_kg = 44000.0f;
+            def.wheelbase_m = 3.80f;
+            def.fifth_wheel_offset_m = 1.56f;
+            def.cab_height_m = 3.92f;
+            def.ground_clearance_m = 0.25f;
+            def.wheel_radius_m = 0.52f;
+            def.tire_width_m = 0.315f;
+            def.engine_torque_nm = 3800.0f;
+            def.engine_power_hp = 800.0f;
+            def.dimensions = Vec3(6.08f, 2.52f, 3.96f);
+            def.has_exhaust_stacks = false;
+            def.base_color = Vec4(0.33f, 0.41f, 0.08f, 1.0f);
+            def.accent_color = Vec4(0.07f, 0.08f, 0.10f, 1.0f);
+            def.roughness = 0.16f;
+            def.metallic = 0.62f;
+            break;
+
+        case VehicleID::TRACTOR_VOLVO_FH16_780:
+            def.drive_config = VehicleDriveConfig::DRIVE_4X2;
+            def.livery = LiveryID::LUXURY_METALLIC;
+            def.kerb_weight_kg = 8320.0f;
+            def.max_gvw_kg = 44000.0f;
+            def.wheelbase_m = 3.80f;
+            def.fifth_wheel_offset_m = 1.56f;
+            def.cab_height_m = 3.92f;
+            def.ground_clearance_m = 0.24f;
+            def.wheel_radius_m = 0.52f;
+            def.tire_width_m = 0.315f;
+            def.engine_torque_nm = 3800.0f;
+            def.engine_power_hp = 780.0f;
+            def.dimensions = Vec3(6.12f, 2.52f, 3.96f);
+            def.has_exhaust_stacks = false;
+            def.base_color = Vec4(0.055f, 0.380f, 0.188f, 1.0f);
+            def.accent_color = Vec4(0.839f, 0.871f, 0.910f, 1.0f);
+            def.roughness = 0.16f;
+            def.metallic = 0.64f;
+            break;
+
+        case VehicleID::TRACTOR_VOLVO_FH16_750_XXL:
+            def.drive_config = VehicleDriveConfig::DRIVE_6X4;
+            def.livery = LiveryID::HIGHWAY_HAULAGE;
+            def.kerb_weight_kg = 9850.0f;
+            def.max_gvw_kg = 50000.0f;
+            def.wheelbase_m = 4.25f;
+            def.fifth_wheel_offset_m = 1.80f;
+            def.cab_height_m = 3.96f;
+            def.ground_clearance_m = 0.24f;
+            def.wheel_radius_m = 0.52f;
+            def.tire_width_m = 0.315f;
+            def.engine_torque_nm = 3550.0f;
+            def.engine_power_hp = 750.0f;
+            def.dimensions = Vec3(6.95f, 2.54f, 4.02f);
+            def.has_exhaust_stacks = false;
+            def.base_color = Vec4(0.322f, 0.341f, 0.369f, 1.0f);
+            def.accent_color = Vec4(0.980f, 0.839f, 0.059f, 1.0f);
+            def.roughness = 0.18f;
+            def.metallic = 0.54f;
+            break;
+
         case VehicleID::TRACTOR_AMERICAN_CAB:
         default:
             def.drive_config = VehicleDriveConfig::DRIVE_6X4;

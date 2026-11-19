@@ -33,6 +33,7 @@ import com.example.sphere.model.CompositeSurface
 import com.example.sphere.model.MaterialChannelMode
 import com.example.sphere.model.PbrMaterial
 import com.example.sphere.model.SurfacePatternType
+import kotlinx.coroutines.isActive
 import kotlin.math.*
 
 enum class PreviewMeshShape(val id: String, val label: String, val description: String) {
@@ -79,6 +80,34 @@ fun MaterialPreviewViewport(
     var splitPosition by remember { mutableFloatStateOf(0.5f) }
     var internalWireframe by remember { mutableStateOf(showWireframe) }
     val isWireframeVisible = onToggleWireframe?.let { showWireframe } ?: internalWireframe
+
+    var isAutoRotating by remember { mutableStateOf(false) }
+    var lastDrawMs by remember { mutableFloatStateOf(0f) }
+    var measuredFps by remember { mutableIntStateOf(SceneFpsConfig.TARGET_FPS) }
+    val timingScratch = remember { LongArray(1) }
+
+    LaunchedEffect(isAutoRotating) {
+        if (!isAutoRotating) return@LaunchedEffect
+        var prevFrameNs = 0L
+        var emaDrawMs = (timingScratch[0] / 1_000_000f).coerceAtLeast(0f)
+        var emaFps = SceneFpsConfig.TARGET_FPS.toFloat()
+        while (isActive) {
+            withFrameNanos { frameNs ->
+                if (prevFrameNs != 0L) {
+                    val dtNs = (frameNs - prevFrameNs).coerceAtLeast(1_000_000L)
+                    val dtSec = (dtNs / 1_000_000_000f).coerceIn(0f, 0.05f)
+                    val instFps = (1_000_000_000f / dtNs.toFloat()).coerceIn(1f, SceneFpsConfig.TARGET_FPS.toFloat())
+                    emaFps = emaFps * 0.85f + instFps * 0.15f
+                    val sampleDrawMs = (timingScratch[0] / 1_000_000f).coerceAtLeast(0.1f)
+                    emaDrawMs = if (emaDrawMs <= 0f) sampleDrawMs else (emaDrawMs * 0.80f + sampleDrawMs * 0.20f)
+                    measuredFps = emaFps.roundToInt().coerceIn(1, SceneFpsConfig.TARGET_FPS)
+                    lastDrawMs = emaDrawMs
+                    rotY = (rotY + dtSec * 42f) % 360f
+                }
+                prevFrameNs = frameNs
+            }
+        }
+    }
 
     Box(
         modifier = modifier
@@ -134,6 +163,7 @@ fun MaterialPreviewViewport(
 
         // 2. 3D Object Geometry Renderer
         Canvas(modifier = Modifier.fillMaxSize()) {
+            val drawStartNs = System.nanoTime()
             val w = size.width
             val h = size.height
             val cx = w / 2f
@@ -650,6 +680,7 @@ fun MaterialPreviewViewport(
                     }
                 }
             }
+            timingScratch[0] = (System.nanoTime() - drawStartNs).coerceAtLeast(1L)
         }
 
         // Live Physical Metrics & PBR Constant Tiling Telemetry HUD (TopStart)
@@ -807,6 +838,25 @@ fun MaterialPreviewViewport(
                     )
                 )
             }
+        }
+
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 42.dp, end = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            ScenePlayRotateButton(
+                isPlaying = isAutoRotating,
+                onToggle = { isAutoRotating = !isAutoRotating },
+                tag = "surface_play_rotate_button"
+            )
+            SceneFpsBadge(
+                overrideFps = if (isAutoRotating) measuredFps else null,
+                renderTimeMs = lastDrawMs,
+                tag = "surface_scene_fps_badge"
+            )
         }
     }
 }

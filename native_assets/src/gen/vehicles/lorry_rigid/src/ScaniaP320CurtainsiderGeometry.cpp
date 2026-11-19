@@ -83,10 +83,10 @@ std::shared_ptr<Mesh> GenerateScaniaP320CurtainsiderMesh(const VehicleDef& def) 
     const float doorTopY  = winTopY + 0.05f;
     const float doorBeltY = winBotY - 0.02f;
 
-    CabComponents::AppendTruckCabInterior(
+    CabComponents::AppendScaniaCabInterior(
         mesh.get(), xFront + 0.28f, cabBackX - 0.06f,
-        cabClearY + 0.05f, cabTopY - 0.14f,
-        cabHW, false, dashDark, interiorSeat, chromeCol
+        cabClearY + 0.05f, winBotY, cabTopY - 0.14f,
+        cabHW, false, def.is_rhd, def.steer_angle_deg, dashDark, interiorSeat, orangeStripe
     );
 
     // Smoothly carved lower nose & rounded front corners
@@ -132,8 +132,8 @@ std::shared_ptr<Mesh> GenerateScaniaP320CurtainsiderMesh(const VehicleDef& def) 
 
     // Stepped Scania doors aligned with windshield beltline & top
     AppendCabEntrySteps(mesh.get(), xFront + 0.42f, frontAxleX - archHalfLen + 0.04f, frameBotY, cabClearY, cabHW, glossBlack, chromeCol);
-    AppendSteppedCabDoor(mesh.get(), doorX0, doorX1, cabClearY + 0.02f, doorTopY, -cabHW, false, def.door_open_ratio, 0.14f, false, false, cabWhite, glossBlack, sideGlass, doorBeltY);
-    AppendSteppedCabDoor(mesh.get(), doorX0, doorX1, cabClearY + 0.02f, doorTopY,  cabHW, true,  def.door_open_ratio, 0.14f, false, false, cabWhite, glossBlack, sideGlass, doorBeltY);
+    AppendSteppedCabDoor(mesh.get(), doorX0, doorX1, cabClearY + 0.02f, doorTopY, -cabHW, false, def.door_open_ratio, 0.14f, false, false, cabWhite, glossBlack, sideGlass, doorBeltY, def.is_rhd, true);
+    AppendSteppedCabDoor(mesh.get(), doorX0, doorX1, cabClearY + 0.02f, doorTopY,  cabHW, true,  def.door_open_ratio, 0.14f, false, false, cabWhite, glossBlack, sideGlass, doorBeltY, !def.is_rhd, true);
     CabComponents::AppendWingMirrors(mesh.get(), xFront + 0.44f, cabTopY - 0.42f, cabHW, glossBlack);
     AppendFrontKerbMirror(mesh.get(), xFront + 0.34f, cabTopY - 0.18f, cabHW, glossBlack);
 

@@ -30,9 +30,11 @@ fun NativeVulkanSurfaceHost(
     objectWidth: Float = 2.0f,
     objectHeight: Float = 2.0f,
     objectDepth: Float = 2.0f,
-    stageMode: Int = 0
+    stageMode: Int = 0,
+    onFpsUpdated: (Int, Float) -> Unit = { _, _ -> }
 ) {
     var isSurfaceReady by remember { mutableStateOf(false) }
+    val latestOnFps by rememberUpdatedState(onFpsUpdated)
 
     LaunchedEffect(
         isSurfaceReady,
@@ -43,16 +45,41 @@ fun NativeVulkanSurfaceHost(
         stageMode
     ) {
         if (!isSurfaceReady) return@LaunchedEffect
+        val gateThresholdNs = SceneFpsConfig.TARGET_FRAME_PERIOD_NS - SceneFpsConfig.PACING_TOLERANCE_NS
+        var lastPacedNanos = 0L
+        var windowStartNanos = 0L
+        var frameCount = 0
+        var lastDrawMs = 0f
+
         while (isActive) {
-            withFrameNanos {
-                if (SphereNativeEngine.isVulkanInitialized()) {
-                    SphereNativeEngine.renderVulkanFrame(
-                        lightPosX, lightPosY, lightPosZ,
-                        intensity, colorR, colorG, colorB,
-                        roughness, metallic,
-                        objectWidth, objectHeight, objectDepth,
-                        stageMode
-                    )
+            withFrameNanos { frameNanos ->
+                if (lastPacedNanos == 0L) {
+                    lastPacedNanos = frameNanos
+                    windowStartNanos = frameNanos
+                }
+                if (frameNanos - lastPacedNanos >= gateThresholdNs || frameCount == 0) {
+                    lastPacedNanos = frameNanos
+                    if (SphereNativeEngine.isVulkanInitialized()) {
+                        val t0 = System.nanoTime()
+                        SphereNativeEngine.renderVulkanFrame(
+                            lightPosX, lightPosY, lightPosZ,
+                            intensity, colorR, colorG, colorB,
+                            roughness, metallic,
+                            objectWidth, objectHeight, objectDepth,
+                            stageMode
+                        )
+                        lastDrawMs = ((System.nanoTime() - t0) / 1_000_000f).coerceAtLeast(0.1f)
+                    }
+                    frameCount++
+                }
+                val elapsedNs = frameNanos - windowStartNanos
+                if (elapsedNs >= 500_000_000L && frameCount > 0) {
+                    val fps = kotlin.math.round(
+                        (frameCount.toDouble() * 1_000_000_000.0) / elapsedNs.toDouble()
+                    ).toInt().coerceIn(1, SceneFpsConfig.TARGET_FPS)
+                    latestOnFps(fps, lastDrawMs)
+                    windowStartNanos = frameNanos
+                    frameCount = 0
                 }
             }
         }

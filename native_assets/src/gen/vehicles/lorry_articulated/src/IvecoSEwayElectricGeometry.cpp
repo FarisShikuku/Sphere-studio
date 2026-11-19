@@ -71,7 +71,8 @@ std::shared_ptr<Mesh> GenerateIvecoSEwayElectricMesh(const VehicleDef& def) {
     // 2. Interior
     CabComponents::AppendTruckCabInterior(
         mesh.get(), xFront + 0.32f, cabBackX - 0.08f,
-        cabClearY + 0.06f, cabTopY - 0.16f, cabHW, true, dashDark, interiorSeat, evBlue
+        cabClearY + 0.06f, cabTopY - 0.16f, cabHW, true, dashDark, interiorSeat, evBlue,
+        def.is_rhd, windBotY, def.steer_angle_deg
     );
 
     // 3. Smoothly Carved Curved Lower Prow & Corners

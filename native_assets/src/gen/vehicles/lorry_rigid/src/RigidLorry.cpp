@@ -192,7 +192,8 @@ std::shared_ptr<Mesh> RigidLorry::GenerateMesh(uint32_t lod) {
         mesh.get(),
         xFront + 0.30f, cabBackX - 0.06f,
         cabClearY + 0.05f, cabTopY - 0.14f,
-        cabHW, false, dashDark, interiorSeat, accent
+        cabHW, false, dashDark, interiorSeat, accent,
+        m_Def.is_rhd, winBotY, m_Def.steer_angle_deg
     );
 
     // 3. Modern Sculpted Euro/Urban COE Forward Cab Shell (built around real windshield & door cutouts)

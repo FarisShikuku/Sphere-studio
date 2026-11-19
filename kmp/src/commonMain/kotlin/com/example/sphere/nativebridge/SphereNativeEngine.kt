@@ -420,7 +420,7 @@ object SphereNativeEngine {
     // -----------------------------------------------------------------------
 
     fun getVehiclesCount(): Int {
-        return if (isLibraryLoaded) nativeGetVehiclesCount() else 21
+        return if (isLibraryLoaded) nativeGetVehiclesCount() else 51
     }
 
     fun getVehicleName(id: Int): String {
@@ -463,7 +463,9 @@ object SphereNativeEngine {
         trailerId: Int,
         showLoadedCargo: Boolean,
         cargoId: Int,
-        cargoQty: Int
+        cargoQty: Int,
+        isRhd: Boolean = false,
+        insideCabinView: Boolean = false
     ): IntArray {
         return if (isLibraryLoaded) {
             nativeRenderVehicleBitmap(
@@ -471,7 +473,8 @@ object SphereNativeEngine {
                 liveryOrdinal, randomSeed, baseArgb, accentArgb,
                 roughness, metallic, wheelbaseM, fifthWheelOffsetM,
                 actionRatio, doorOpenRatio, steerAngleDeg, headlightsOn, hasRoofRack, hasExhaustStacks,
-                hitchTrailer, trailerId, showLoadedCargo, cargoId, cargoQty
+                hitchTrailer, trailerId, showLoadedCargo, cargoId, cargoQty,
+                isRhd, insideCabinView
             ) ?: intArrayOf(0, 0, 0, 0)
         } else {
             intArrayOf(0, 0, 0, 0)
@@ -507,9 +510,401 @@ object SphereNativeEngine {
         trailerId: Int,
         showLoadedCargo: Boolean,
         cargoId: Int,
-        cargoQty: Int
+        cargoQty: Int,
+        isRhd: Boolean,
+        insideCabinView: Boolean
     ): IntArray?
+
+    // -----------------------------------------------------------------------
+    // Procedural Vehicle Audio & Spatial Meshlet Streaming Bridge
+    // -----------------------------------------------------------------------
+
+    fun configureVehicleAudio(
+        categoryOrdinal: Int,
+        powerHp: Float,
+        torqueNm: Float,
+        kerbKg: Float,
+        combinedLoadKg: Float
+    ) {
+        if (isLibraryLoaded) {
+            nativeConfigureVehicleAudio(categoryOrdinal, powerHp, torqueNm, kerbKg, combinedLoadKg)
+        }
+    }
+
+    fun setVehicleIgnition(turnOn: Boolean) {
+        if (isLibraryLoaded) {
+            nativeSetVehicleIgnition(turnOn)
+        }
+    }
+
+    fun setVehicleAudioControls(
+        throttle: Float,
+        brake: Float,
+        cruiseDrive: Boolean,
+        muted: Boolean
+    ) {
+        if (isLibraryLoaded) {
+            nativeSetVehicleAudioControls(throttle, brake, cruiseDrive, muted)
+        }
+    }
+
+    fun triggerVehicleOneShot(oneShotId: Int, gain: Float = 1.0f) {
+        if (isLibraryLoaded) {
+            nativeTriggerVehicleOneShot(oneShotId, gain)
+        }
+    }
+
+    fun renderVehicleAudioBlock(outPcmArray: ShortArray, sampleCount: Int): FloatArray {
+        return if (isLibraryLoaded) {
+            nativeRenderVehicleAudioBlock(outPcmArray, sampleCount)
+                ?: floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f)
+        } else {
+            floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f)
+        }
+    }
+
+    fun getVehicleAudioTelemetry(): FloatArray {
+        return if (isLibraryLoaded) {
+            nativeGetVehicleAudioTelemetry() ?: floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f)
+        } else {
+            floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f)
+        }
+    }
+
+    fun getVehicleStreamingStats(
+        vehicleId: Int,
+        hitchTrailer: Boolean,
+        trailerId: Int,
+        showLoadedCargo: Boolean,
+        cargoId: Int,
+        cargoQty: Int,
+        distanceDrivenM: Float
+    ): IntArray {
+        return if (isLibraryLoaded) {
+            nativeGetVehicleStreamingStats(
+                vehicleId,
+                hitchTrailer,
+                trailerId,
+                showLoadedCargo,
+                cargoId,
+                cargoQty,
+                distanceDrivenM
+            ) ?: intArrayOf(0, 0, 9, 0, 126, 6, 0)
+        } else {
+            val gridX = kotlin.math.floor(distanceDrivenM / 64f).toInt()
+            intArrayOf(gridX, 0, 9, if (hitchTrailer) 28 else 16, 126, 6, if (hitchTrailer) 2576 else 1472)
+        }
+    }
+
+    private external fun nativeConfigureVehicleAudio(
+        categoryOrdinal: Int,
+        powerHp: Float,
+        torqueNm: Float,
+        kerbKg: Float,
+        combinedLoadKg: Float
+    )
+    private external fun nativeSetVehicleIgnition(turnOn: Boolean)
+    private external fun nativeSetVehicleAudioControls(
+        throttle: Float,
+        brake: Float,
+        cruiseDrive: Boolean,
+        muted: Boolean
+    )
+    private external fun nativeTriggerVehicleOneShot(oneShotId: Int, gain: Float)
+    private external fun nativeRenderVehicleAudioBlock(outPcmArray: ShortArray, sampleCount: Int): FloatArray?
+    private external fun nativeGetVehicleAudioTelemetry(): FloatArray?
+    private external fun nativeGetVehicleStreamingStats(
+        vehicleId: Int,
+        hitchTrailer: Boolean,
+        trailerId: Int,
+        showLoadedCargo: Boolean,
+        cargoId: Int,
+        cargoQty: Int,
+        distanceDrivenM: Float
+    ): IntArray?
+
+    // -----------------------------------------------------------------------
+    // Procedural Weather Audio Bridge (gen/audio/weather)
+    // -----------------------------------------------------------------------
+
+    fun configureWeatherAudio(
+        rainIntensity: Float,
+        snowIntensity: Float,
+        windSpeedKmh: Float,
+        windAzimuthDeg: Float,
+        fogDensity: Float,
+        stormActive: Boolean,
+        enabled: Boolean,
+        muted: Boolean
+    ) {
+        if (isLibraryLoaded) {
+            nativeConfigureWeatherAudio(
+                rainIntensity,
+                snowIntensity,
+                windSpeedKmh,
+                windAzimuthDeg,
+                fogDensity,
+                stormActive,
+                enabled,
+                muted
+            )
+        }
+    }
+
+    fun triggerWeatherThunder(closeStrike: Boolean, gain: Float = 1.0f) {
+        if (isLibraryLoaded) {
+            nativeTriggerWeatherThunder(closeStrike, gain)
+        }
+    }
+
+    fun renderWeatherAudioBlock(outPcmArray: ShortArray, sampleCount: Int): FloatArray {
+        return if (isLibraryLoaded) {
+            nativeRenderWeatherAudioBlock(outPcmArray, sampleCount)
+                ?: floatArrayOf(0f, 0f, 0f, 0f, 0f)
+        } else {
+            floatArrayOf(0f, 0f, 0f, 0f, 0f)
+        }
+    }
+
+    fun getWeatherAudioTelemetry(): FloatArray {
+        return if (isLibraryLoaded) {
+            nativeGetWeatherAudioTelemetry() ?: floatArrayOf(0f, 0f, 0f, 0f, 0f)
+        } else {
+            floatArrayOf(0f, 0f, 0f, 0f, 0f)
+        }
+    }
+
+    private external fun nativeConfigureWeatherAudio(
+        rainIntensity: Float,
+        snowIntensity: Float,
+        windSpeedKmh: Float,
+        windAzimuthDeg: Float,
+        fogDensity: Float,
+        stormActive: Boolean,
+        enabled: Boolean,
+        muted: Boolean
+    )
+    private external fun nativeTriggerWeatherThunder(closeStrike: Boolean, gain: Float)
+    private external fun nativeRenderWeatherAudioBlock(outPcmArray: ShortArray, sampleCount: Int): FloatArray?
+    private external fun nativeGetWeatherAudioTelemetry(): FloatArray?
+
+    // -----------------------------------------------------------------------
+    // Vulkan SPH & Screen-Space Fluid Rendering Bridge (gen/water)
+    // -----------------------------------------------------------------------
+
+    fun configureWaterSimulation(
+        particleCount: Int,
+        scenarioOrdinal: Int,
+        smoothingRadius: Float,
+        targetDensity: Float,
+        pressureMultiplier: Float,
+        nearPressureMultiplier: Float,
+        viscosityStrength: Float,
+        surfaceTension: Float,
+        collisionDamping: Float,
+        gravityX: Float,
+        gravityY: Float,
+        gravityZ: Float,
+        windX: Float,
+        windZ: Float,
+        timeScale: Float,
+        substeps: Int,
+        boundsWidth: Float,
+        boundsHeight: Float,
+        boundsDepth: Float,
+        waveMakerEnabled: Boolean,
+        waveFrequency: Float,
+        waveAmplitude: Float,
+        obstacleEnabled: Boolean,
+        obstacleX: Float,
+        obstacleY: Float,
+        obstacleZ: Float,
+        obstacleRadius: Float,
+        debugModeOrdinal: Int,
+        particleVisualRadius: Float,
+        bilateralBlurEnabled: Boolean,
+        blurRadiusPx: Int,
+        blurSpatialSigma: Float,
+        blurDepthSigma: Float,
+        waterR: Float,
+        waterG: Float,
+        waterB: Float,
+        absorbR: Float,
+        absorbG: Float,
+        absorbB: Float,
+        absorbStrength: Float,
+        indexOfRefraction: Float,
+        refractionStrength: Float,
+        fresnelPower: Float,
+        fresnelBias: Float,
+        specularPower: Float,
+        reflectionIntensity: Float,
+        foamThreshold: Float,
+        causticsIntensity: Float,
+        sunAzimuthDeg: Float,
+        sunElevationDeg: Float,
+        showContainerBox: Boolean,
+        showFloorGrid: Boolean,
+        camYawDeg: Float,
+        camPitchDeg: Float,
+        camDistance: Float
+    ) {
+        if (isLibraryLoaded) {
+            nativeConfigureWaterSimulation(
+                particleCount, scenarioOrdinal, smoothingRadius, targetDensity,
+                pressureMultiplier, nearPressureMultiplier, viscosityStrength, surfaceTension,
+                collisionDamping, gravityX, gravityY, gravityZ, windX, windZ,
+                timeScale, substeps, boundsWidth, boundsHeight, boundsDepth,
+                waveMakerEnabled, waveFrequency, waveAmplitude,
+                obstacleEnabled, obstacleX, obstacleY, obstacleZ, obstacleRadius,
+                debugModeOrdinal, particleVisualRadius, bilateralBlurEnabled,
+                blurRadiusPx, blurSpatialSigma, blurDepthSigma,
+                waterR, waterG, waterB, absorbR, absorbG, absorbB, absorbStrength,
+                indexOfRefraction, refractionStrength, fresnelPower, fresnelBias,
+                specularPower, reflectionIntensity, foamThreshold, causticsIntensity,
+                sunAzimuthDeg, sunElevationDeg, showContainerBox, showFloorGrid,
+                camYawDeg, camPitchDeg, camDistance
+            )
+        }
+    }
+
+    fun resetWaterSimulation(scenarioOrdinal: Int, particleCount: Int) {
+        if (isLibraryLoaded) {
+            nativeResetWaterSimulation(scenarioOrdinal, particleCount)
+        }
+    }
+
+    fun configureWaterfall(
+        enabled: Boolean,
+        cliffHeight: Float,
+        cliffWidth: Float,
+        cliffDepth: Float,
+        flowVolume: Float,
+        lipSlopeDeg: Float,
+        undercut: Float,
+        steppedLedges: Int,
+        roughness: Float,
+        rockChanneling: Float,
+        airDragAndMist: Float,
+        plungePoolDepth: Float
+    ) {
+        if (isLibraryLoaded) {
+            nativeConfigureWaterfall(
+                enabled,
+                cliffHeight,
+                cliffWidth,
+                cliffDepth,
+                flowVolume,
+                lipSlopeDeg,
+                undercut,
+                steppedLedges,
+                roughness,
+                rockChanneling,
+                airDragAndMist,
+                plungePoolDepth
+            )
+        }
+    }
+
+    fun injectWaterImpulse(normU: Float, normV: Float, dragDx: Float, dragDy: Float, strength: Float) {
+        if (isLibraryLoaded) {
+            nativeInjectWaterImpulse(normU, normV, dragDx, dragDy, strength)
+        }
+    }
+
+    fun triggerWaterPulse(pulseType: Int, strength: Float = 1.0f) {
+        if (isLibraryLoaded) {
+            nativeTriggerWaterPulse(pulseType, strength)
+        }
+    }
+
+    fun stepAndRenderWaterBitmap(bitmap: Bitmap, dtSeconds: Float, isPlaying: Boolean): FloatArray {
+        return if (isLibraryLoaded) {
+            nativeStepAndRenderWaterBitmap(bitmap, dtSeconds, isPlaying)
+                ?: floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
+        } else {
+            floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
+        }
+    }
+
+    private external fun nativeConfigureWaterSimulation(
+        particleCount: Int,
+        scenarioOrdinal: Int,
+        smoothingRadius: Float,
+        targetDensity: Float,
+        pressureMultiplier: Float,
+        nearPressureMultiplier: Float,
+        viscosityStrength: Float,
+        surfaceTension: Float,
+        collisionDamping: Float,
+        gravityX: Float,
+        gravityY: Float,
+        gravityZ: Float,
+        windX: Float,
+        windZ: Float,
+        timeScale: Float,
+        substeps: Int,
+        boundsWidth: Float,
+        boundsHeight: Float,
+        boundsDepth: Float,
+        waveMakerEnabled: Boolean,
+        waveFrequency: Float,
+        waveAmplitude: Float,
+        obstacleEnabled: Boolean,
+        obstacleX: Float,
+        obstacleY: Float,
+        obstacleZ: Float,
+        obstacleRadius: Float,
+        debugModeOrdinal: Int,
+        particleVisualRadius: Float,
+        bilateralBlurEnabled: Boolean,
+        blurRadiusPx: Int,
+        blurSpatialSigma: Float,
+        blurDepthSigma: Float,
+        waterR: Float,
+        waterG: Float,
+        waterB: Float,
+        absorbR: Float,
+        absorbG: Float,
+        absorbB: Float,
+        absorbStrength: Float,
+        indexOfRefraction: Float,
+        refractionStrength: Float,
+        fresnelPower: Float,
+        fresnelBias: Float,
+        specularPower: Float,
+        reflectionIntensity: Float,
+        foamThreshold: Float,
+        causticsIntensity: Float,
+        sunAzimuthDeg: Float,
+        sunElevationDeg: Float,
+        showContainerBox: Boolean,
+        showFloorGrid: Boolean,
+        camYawDeg: Float,
+        camPitchDeg: Float,
+        camDistance: Float
+    )
+    private external fun nativeResetWaterSimulation(scenarioOrdinal: Int, particleCount: Int)
+    private external fun nativeConfigureWaterfall(
+        enabled: Boolean,
+        cliffHeight: Float,
+        cliffWidth: Float,
+        cliffDepth: Float,
+        flowVolume: Float,
+        lipSlopeDeg: Float,
+        undercut: Float,
+        steppedLedges: Int,
+        roughness: Float,
+        rockChanneling: Float,
+        airDragAndMist: Float,
+        plungePoolDepth: Float
+    )
+    private external fun nativeInjectWaterImpulse(normU: Float, normV: Float, dragDx: Float, dragDy: Float, strength: Float)
+    private external fun nativeTriggerWaterPulse(pulseType: Int, strength: Float)
+    private external fun nativeStepAndRenderWaterBitmap(bitmap: Bitmap, dtSeconds: Float, isPlaying: Boolean): FloatArray?
 }
+
+
 
 
 

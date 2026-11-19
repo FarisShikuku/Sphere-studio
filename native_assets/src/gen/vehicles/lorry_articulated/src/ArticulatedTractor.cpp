@@ -31,6 +31,9 @@ std::shared_ptr<Mesh> ArticulatedTractor::GenerateMesh(uint32_t lod) {
         case VehicleID::TRACTOR_VW_CONSTELLATION_25390: bespoke = trucks::GenerateVwConstellation25390Mesh(m_Def); break;
         case VehicleID::TRACTOR_VW_METEOR_28460:        bespoke = trucks::GenerateVwMeteor28460Mesh(m_Def); break;
         case VehicleID::TRACTOR_MAN_TGX_18510:          bespoke = trucks::GenerateManTgx18510Mesh(m_Def); break;
+        case VehicleID::TRACTOR_VOLVO_FH16_800:         bespoke = trucks::GenerateVolvoFh16800Mesh(m_Def); break;
+        case VehicleID::TRACTOR_VOLVO_FH16_780:         bespoke = trucks::GenerateVolvoFh16780Mesh(m_Def); break;
+        case VehicleID::TRACTOR_VOLVO_FH16_750_XXL:     bespoke = trucks::GenerateVolvoFh16750XxlMesh(m_Def); break;
         default: break;
     }
     if (bespoke) {
@@ -124,7 +127,8 @@ std::shared_ptr<Mesh> ArticulatedTractor::GenerateMesh(uint32_t lod) {
             mesh.get(),
             cabFrontMainX + 0.10f, cabBackX - 0.08f,
             cabClearY + 0.06f, dayRoofY - 0.14f,
-            cabHW, isCondo, dashDark, interiorSeat, accent
+            cabHW, isCondo, dashDark, interiorSeat, accent,
+            m_Def.is_rhd, windBotY, m_Def.steer_angle_deg
         );
 
         // Swept aero bumper + LED DRL fascia
@@ -224,7 +228,8 @@ std::shared_ptr<Mesh> ArticulatedTractor::GenerateMesh(uint32_t lod) {
             mesh.get(),
             xFront + 0.34f, cabBackX - 0.08f,
             cabClearY + 0.06f, cabTopY - 0.16f,
-            cabHW, true, dashDark, interiorSeat, accent
+            cabHW, true, dashDark, interiorSeat, accent,
+            m_Def.is_rhd, windBotY, m_Def.steer_angle_deg
         );
 
         CabComponents::AppendModernLedFascia(

@@ -67,9 +67,10 @@ std::shared_ptr<Mesh> GenerateScaniaR560SuperMesh(const VehicleDef& def) {
     const float doorTopY   = windTopY + 0.05f;
     const float doorBeltY  = windBotY - 0.02f;
 
-    CabComponents::AppendTruckCabInterior(
+    CabComponents::AppendScaniaCabInterior(
         mesh.get(), xFront + 0.32f, cabBackX - 0.08f,
-        cabClearY + 0.06f, cabTopY - 0.16f, cabHW, true, dashDark, interiorSeat, superRed
+        cabClearY + 0.06f, windBotY, cabTopY - 0.16f,
+        cabHW, true, def.is_rhd, def.steer_angle_deg, dashDark, interiorSeat, superRed
     );
 
     // Smoothly Carved Lower Cab Nose & Corners
@@ -128,8 +129,8 @@ std::shared_ptr<Mesh> GenerateScaniaR560SuperMesh(const VehicleDef& def) {
         RunningGear::AppendBox(mesh.get(), Vec3(doorX1 + 0.04f, windBotY + 0.08f, s > 0 ? cabHW - 0.01f : -cabHW - 0.012f), Vec3(doorX1 + 0.26f, windTopY - 0.06f, s > 0 ? cabHW + 0.012f : -cabHW + 0.01f), frameDark);
     }
 
-    AppendSteppedCabDoor(mesh.get(), doorX0, doorX1, cabClearY + 0.02f, doorTopY, -cabHW, false, def.door_open_ratio, 0.15f, false, false, gunmetalPaint, glossBlack, sideGlass, doorBeltY);
-    AppendSteppedCabDoor(mesh.get(), doorX0, doorX1, cabClearY + 0.02f, doorTopY,  cabHW, true,  def.door_open_ratio, 0.15f, false, false, gunmetalPaint, glossBlack, sideGlass, doorBeltY);
+    AppendSteppedCabDoor(mesh.get(), doorX0, doorX1, cabClearY + 0.02f, doorTopY, -cabHW, false, def.door_open_ratio, 0.15f, false, false, gunmetalPaint, glossBlack, sideGlass, doorBeltY, def.is_rhd, true);
+    AppendSteppedCabDoor(mesh.get(), doorX0, doorX1, cabClearY + 0.02f, doorTopY,  cabHW, true,  def.door_open_ratio, 0.15f, false, false, gunmetalPaint, glossBlack, sideGlass, doorBeltY, !def.is_rhd, true);
     CabComponents::AppendCantileverCoachMirrors(mesh.get(), xFront + 0.46f, cabTopY - 0.34f, cabHW, gunmetalPaint);
     AppendFrontKerbMirror(mesh.get(), xFront + 0.34f, cabTopY - 0.18f, cabHW, glossBlack);
 

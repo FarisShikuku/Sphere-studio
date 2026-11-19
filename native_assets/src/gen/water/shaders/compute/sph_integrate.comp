@@ -1,0 +1,62 @@
+#version 460
+// Vulkan 1.3 Compute Shader: Symplectic Integration & Container/Obstacle Collision
+// Ported from talvinckb/OpenGL-Water-Simulation
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, set = 0, binding = 0) buffer PositionsBuffer {
+    vec4 positions[];
+};
+
+layout(std430, set = 0, binding = 2) buffer VelocitiesBuffer {
+    vec4 velocities[];
+};
+
+layout(push_constant) uniform IntegratePush {
+    vec4 halfBoundsAndDamping; // xyz = half extents, w = collisionDamping
+    vec4 obstacleSphere;       // xyz = center, w = radius
+    float waveOffset;
+    float obstacleEnabled;
+    float dt;
+    uint particleCount;
+} pc;
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= pc.particleCount) return;
+
+    vec3 pos = positions[idx].xyz + velocities[idx].xyz * pc.dt;
+    vec3 vel = velocities[idx].xyz;
+    float damping = pc.halfBoundsAndDamping.w;
+
+    float minX = -pc.halfBoundsAndDamping.x + pc.waveOffset;
+    float maxX =  pc.halfBoundsAndDamping.x;
+    float minY =  0.0;
+    float maxY =  pc.halfBoundsAndDamping.y * 2.0;
+    float minZ = -pc.halfBoundsAndDamping.z;
+    float maxZ =  pc.halfBoundsAndDamping.z;
+
+    if (pos.x < minX) { pos.x = minX; vel.x = abs(vel.x) * damping; }
+    if (pos.x > maxX) { pos.x = maxX; vel.x = -abs(vel.x) * damping; }
+    if (pos.y < minY) { pos.y = minY; vel.y = abs(vel.y) * damping; }
+    if (pos.y > maxY) { pos.y = maxY; vel.y = -abs(vel.y) * damping; }
+    if (pos.z < minZ) { pos.z = minZ; vel.z = abs(vel.z) * damping; }
+    if (pos.z > maxZ) { pos.z = maxZ; vel.z = -abs(vel.z) * damping; }
+
+    if (pc.obstacleEnabled > 0.5) {
+        vec3 rel = pos - pc.obstacleSphere.xyz;
+        float dist = length(rel);
+        float minDist = pc.obstacleSphere.w + 0.03;
+        if (dist < minDist) {
+            vec3 n = dist > 1e-5 ? rel / dist : vec3(0.0, 1.0, 0.0);
+            pos = pc.obstacleSphere.xyz + n * minDist;
+            float vn = dot(vel, n);
+            if (vn < 0.0) {
+                vel -= (1.0 + damping) * vn * n;
+            }
+        }
+    }
+
+    positions[idx].xyz = pos;
+    velocities[idx].xyz = vel;
+}

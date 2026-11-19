@@ -30,6 +30,7 @@ import com.example.sphere.trailers.tabs.TrailerRegistryCppTab
 import com.example.sphere.trailers.tabs.TrailerRunningGearTab
 import com.example.sphere.trailers.tabs.TrailerSurfaceOpticsTab
 import com.example.sphere.trailers.tabs.TrailerVulkanComputeTab
+import kotlinx.coroutines.isActive
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,6 +55,21 @@ fun TrailersStudioScreen(
     var rotX by remember { mutableFloatStateOf(16f) }
     var rotY by remember { mutableFloatStateOf(32f) }
     var zoomFactor by remember { mutableFloatStateOf(1.0f) }
+    var isAutoRotating by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isAutoRotating) {
+        if (!isAutoRotating) return@LaunchedEffect
+        var prevFrameNs = 0L
+        while (isActive) {
+            withFrameNanos { frameNs ->
+                if (prevFrameNs != 0L) {
+                    val dtSec = ((frameNs - prevFrameNs) / 1_000_000_000f).coerceIn(0f, 0.05f)
+                    rotY = (rotY + dtSec * 42f) % 360f
+                }
+                prevFrameNs = frameNs
+            }
+        }
+    }
 
     val filteredItems by remember(catalog, selectedCategory) {
         derivedStateOf { catalog.filter { it.category == selectedCategory } }
@@ -269,6 +285,8 @@ fun TrailersStudioScreen(
                     cargoQuantity = cargoQuantity,
                     curtainOpenRatio = curtainOpenRatio,
                     hydraulicLiftRatio = hydraulicLiftRatio,
+                    isAutoRotating = isAutoRotating,
+                    onToggleAutoRotate = { isAutoRotating = !isAutoRotating },
                     modifier = Modifier.fillMaxSize()
                 )
             }

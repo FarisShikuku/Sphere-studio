@@ -63,7 +63,11 @@ fun NativeEngineTab() {
                     Triple("test_clouds.cpp", "native_assets/tests/weather/test_clouds.cpp", "Complete test suite validating AmanSachan1/Meteoros cloud physics (PASS)"),
                     Triple("WeatherSystem.cpp", "native_assets/src/weather/WeatherSystem.cpp", "Precipitation, wetness integration & world state sync"),
                     Triple("rain_particle.comp", "native_assets/src/weather/rain/shaders/rain_particle.comp", "GPU compute 65,536 rain particles with wind deflection"),
-                    Triple("fog_froxel.comp", "native_assets/src/weather/fog/shaders/fog_froxel.comp", "160x90x64 3D froxel volume grid with Mie inscattering")
+                    Triple("fog_froxel.comp", "native_assets/src/weather/fog/shaders/fog_froxel.comp", "160x90x64 3D froxel volume grid with Mie inscattering"),
+                    Triple("WeatherAudioSystem.cpp", "native_assets/src/gen/audio/weather/src/WeatherAudioSystem.cpp", "44.1kHz procedural rain, wind gusts, snow shimmer & RAM thunder PCM"),
+                    Triple("WeatherAudioMixer.cpp", "native_assets/src/gen/audio/weather/src/WeatherAudioMixer.cpp", "Soft-clipped zero-latency weather audio PCM16 mixer"),
+                    Triple("rain_granular.comp", "native_assets/src/gen/audio/weather/shaders/rain_granular.comp", "Vulkan compute procedural rain sheet & droplet splash synth"),
+                    Triple("wind_thunder_osc.comp", "native_assets/src/gen/audio/weather/shaders/wind_thunder_osc.comp", "Vulkan compute sweeping gale wind, fog bed & thunder synthesis")
                 )
 
                 modules.forEach { (name, path, desc) ->

@@ -67,9 +67,10 @@ std::shared_ptr<Mesh> GenerateScania40RXtElectricMesh(const VehicleDef& def) {
     const float doorTopY   = windTopY + 0.05f;
     const float doorBeltY  = windBotY - 0.02f;
 
-    CabComponents::AppendTruckCabInterior(
+    CabComponents::AppendScaniaCabInterior(
         mesh.get(), xFront + 0.32f, cabBackX - 0.08f,
-        cabClearY + 0.06f, cabTopY - 0.16f, cabHW, true, dashDark, interiorSeat, evBlue
+        cabClearY + 0.06f, windBotY, cabTopY - 0.16f,
+        cabHW, true, def.is_rhd, def.steer_angle_deg, dashDark, interiorSeat, evBlue
     );
 
     // 1. Smoothly Carved Lower Cab Nose & Rugged Heavy-Duty Curved XT Steel Bumper
@@ -113,8 +114,8 @@ std::shared_ptr<Mesh> GenerateScania40RXtElectricMesh(const VehicleDef& def) {
     }
     CabComponents::AppendAmberRoofMarkers(mesh.get(), xFront + 0.42f, cabTopY - 0.06f, cabHW * 0.85f, def.headlights_on);
 
-    AppendSteppedCabDoor(mesh.get(), doorX0, doorX1, cabClearY + 0.02f, doorTopY, -cabHW, false, def.door_open_ratio, 0.14f, false, false, whitePaint, glossBlack, sideGlass, doorBeltY);
-    AppendSteppedCabDoor(mesh.get(), doorX0, doorX1, cabClearY + 0.02f, doorTopY,  cabHW, true,  def.door_open_ratio, 0.14f, false, false, whitePaint, glossBlack, sideGlass, doorBeltY);
+    AppendSteppedCabDoor(mesh.get(), doorX0, doorX1, cabClearY + 0.02f, doorTopY, -cabHW, false, def.door_open_ratio, 0.14f, false, false, whitePaint, glossBlack, sideGlass, doorBeltY, def.is_rhd, true);
+    AppendSteppedCabDoor(mesh.get(), doorX0, doorX1, cabClearY + 0.02f, doorTopY,  cabHW, true,  def.door_open_ratio, 0.14f, false, false, whitePaint, glossBlack, sideGlass, doorBeltY, !def.is_rhd, true);
     CabComponents::AppendWingMirrors(mesh.get(), xFront + 0.46f, cabTopY - 0.42f, cabHW, xtCharcoal);
     AppendFrontKerbMirror(mesh.get(), xFront + 0.34f, cabTopY - 0.16f, cabHW, xtCharcoal);
 

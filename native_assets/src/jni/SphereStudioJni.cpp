@@ -1,5 +1,6 @@
 #include <jni.h>
 #include <string>
+#include <vector>
 #include <algorithm>
 #include <cmath>
 #include <mutex>
@@ -20,6 +21,10 @@
 #include "CargoRegistry.h"
 #include "TrailerRegistry.h"
 #include "VehicleRegistry.h"
+#include "EngineAudioSystem.h"
+#include "WeatherAudioSystem.h"
+#include "WorldStreamingMeshlets.h"
+#include "WaterSimulationEngine.hpp"
 #define LOG_TAG "SphereStudioNative"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 
@@ -818,7 +823,9 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderVehicleBitma
     jint trailerId,
     jboolean showLoadedCargo,
     jint cargoId,
-    jint cargoQty
+    jint cargoQty,
+    jboolean isRhd,
+    jboolean insideCabinView
 ) {
     jintArray result = env->NewIntArray(4);
     if (!result) return nullptr;
@@ -852,6 +859,8 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderVehicleBitma
     float trailerWidthM = 2.55f;
     float trailerKingpinOffsetM = 1.65f;
     float trailerDeckY = 1.35f;
+    bool effRhd = (isRhd == JNI_TRUE);
+    bool effInsideCabin = (insideCabinView == JNI_TRUE);
 
     {
         static std::mutex sVehicleRenderMutex;
@@ -885,7 +894,8 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderVehicleBitma
             !FloatNear(nextDef.steer_angle_deg, effSteer) ||
             nextDef.headlights_on != effHeadlights ||
             nextDef.has_roof_rack != effRoofRack ||
-            nextDef.has_exhaust_stacks != effExhaust;
+            nextDef.has_exhaust_stacks != effExhaust ||
+            nextDef.is_rhd != effRhd;
 
         if (defChanged) {
             nextDef.livery = effLivery;
@@ -902,6 +912,7 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderVehicleBitma
             nextDef.headlights_on = effHeadlights;
             nextDef.has_roof_rack = effRoofRack;
             nextDef.has_exhaust_stacks = effExhaust;
+            nextDef.is_rhd = effRhd;
             sphere::vehicles::VehicleRegistry::Get().SetDef(vid, nextDef);
         }
 
@@ -968,6 +979,8 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderVehicleBitma
         rParams.trailerDeckY = trailerDeckY;
         rParams.showLoadedCargo = (showLoadedCargo == JNI_TRUE);
         rParams.cargoQuantity = cargoQty;
+        rParams.insideCabinView = effInsideCabin;
+        rParams.isRhd = effRhd;
 
         sphere::scene::NativeMeshRasterizer::RenderVehicleBitmap(
             static_cast<uint32_t*>(pixelsPtr),
@@ -986,6 +999,499 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderVehicleBitma
     return result;
 }
 
+// ---------------------------------------------------------------------------
+// Hybrid Procedural + RAM PCM Vehicle Audio & Spatial Meshlet Streaming Bridge
+// ---------------------------------------------------------------------------
+
+JNIEXPORT void JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeConfigureVehicleAudio(
+    JNIEnv* env, jclass clazz,
+    jint categoryOrdinal,
+    jfloat powerHp,
+    jfloat torqueNm,
+    jfloat kerbKg,
+    jfloat combinedLoadKg
+) {
+    sphere::audio::EngineAudioSystem::Get().ConfigureVehicle(
+        static_cast<int32_t>(categoryOrdinal),
+        powerHp,
+        torqueNm,
+        kerbKg,
+        combinedLoadKg
+    );
+}
+
+JNIEXPORT void JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeSetVehicleIgnition(
+    JNIEnv* env, jclass clazz,
+    jboolean turnOn
+) {
+    sphere::audio::EngineAudioSystem::Get().SetIgnition(turnOn == JNI_TRUE);
+}
+
+JNIEXPORT void JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeSetVehicleAudioControls(
+    JNIEnv* env, jclass clazz,
+    jfloat throttle,
+    jfloat brake,
+    jboolean cruiseDrive,
+    jboolean muted
+) {
+    sphere::audio::EngineAudioSystem::Get().SetControls(
+        throttle,
+        brake,
+        cruiseDrive == JNI_TRUE,
+        muted == JNI_TRUE
+    );
+}
+
+JNIEXPORT void JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeTriggerVehicleOneShot(
+    JNIEnv* env, jclass clazz,
+    jint oneShotId,
+    jfloat gain
+) {
+    auto id = static_cast<sphere::audio::OneShotSoundId>(std::clamp(oneShotId, 0, 4));
+    sphere::audio::EngineAudioSystem::Get().TriggerOneShot(id, gain);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderVehicleAudioBlock(
+    JNIEnv* env, jclass clazz,
+    jshortArray outPcmArray,
+    jint sampleCount
+) {
+    jfloatArray telemetryOut = env->NewFloatArray(7);
+    if (!telemetryOut) return nullptr;
+
+    jint clampedCount = std::max<jint>(0, sampleCount);
+    if (outPcmArray && clampedCount > 0) {
+        jsize arrLen = env->GetArrayLength(outPcmArray);
+        jint writeCount = std::min<jint>(clampedCount, arrLen);
+        if (writeCount > 0) {
+            std::vector<int16_t> pcmBuf(static_cast<size_t>(writeCount), 0);
+            sphere::audio::EngineAudioSystem::Get().RenderAudioBlock(pcmBuf.data(), writeCount);
+            env->SetShortArrayRegion(outPcmArray, 0, writeCount, pcmBuf.data());
+        }
+    }
+
+    auto t = sphere::audio::EngineAudioSystem::Get().GetTelemetry();
+    jfloat vals[7] = {
+        static_cast<jfloat>(t.ignition_state),
+        t.rpm,
+        t.speed_kmh,
+        static_cast<jfloat>(t.gear),
+        t.turbo_boost_bar,
+        t.distance_m,
+        static_cast<jfloat>(t.has_active_sound)
+    };
+    env->SetFloatArrayRegion(telemetryOut, 0, 7, vals);
+    return telemetryOut;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeGetVehicleAudioTelemetry(
+    JNIEnv* env, jclass clazz
+) {
+    jfloatArray telemetryOut = env->NewFloatArray(7);
+    if (!telemetryOut) return nullptr;
+    auto t = sphere::audio::EngineAudioSystem::Get().GetTelemetry();
+    jfloat vals[7] = {
+        static_cast<jfloat>(t.ignition_state),
+        t.rpm,
+        t.speed_kmh,
+        static_cast<jfloat>(t.gear),
+        t.turbo_boost_bar,
+        t.distance_m,
+        static_cast<jfloat>(t.has_active_sound)
+    };
+    env->SetFloatArrayRegion(telemetryOut, 0, 7, vals);
+    return telemetryOut;
+}
+
+JNIEXPORT jintArray JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeGetVehicleStreamingStats(
+    JNIEnv* env, jclass clazz,
+    jint vehicleId,
+    jboolean hitchTrailer,
+    jint trailerId,
+    jboolean showLoadedCargo,
+    jint cargoId,
+    jint cargoQty,
+    jfloat distanceDrivenM
+) {
+    jintArray outStats = env->NewIntArray(7);
+    if (!outStats) return nullptr;
+
+    std::shared_ptr<sphere::Mesh> vehicleMesh;
+    std::shared_ptr<sphere::Mesh> trailerMesh;
+    std::shared_ptr<sphere::Mesh> cargoMesh;
+
+    if (vehicleId >= 0 && vehicleId < static_cast<jint>(sphere::vehicles::VehicleID::COUNT)) {
+        auto vid = static_cast<sphere::vehicles::VehicleID>(vehicleId);
+        auto v = sphere::vehicles::VehicleRegistry::Get().GetVehicle(vid);
+        if (v) {
+            vehicleMesh = v->GetCachedMesh();
+            if (!vehicleMesh) vehicleMesh = v->GenerateMesh(0);
+            if (hitchTrailer == JNI_TRUE && v->GetDef().fifth_wheel_offset_m > 0.1f &&
+                trailerId >= 0 && trailerId < static_cast<jint>(sphere::trailers::TrailerID::COUNT)) {
+                trailerMesh = sphere::trailers::TrailerRegistry::Get().RequestMesh(
+                    static_cast<sphere::trailers::TrailerID>(trailerId), 0
+                );
+                if (showLoadedCargo == JNI_TRUE && cargoQty > 0 &&
+                    cargoId >= 0 && cargoId < static_cast<jint>(sphere::cargo::CargoID::COUNT)) {
+                    cargoMesh = sphere::cargo::CargoRegistry::Get().RequestMesh(
+                        static_cast<sphere::cargo::CargoID>(cargoId), 1
+                    );
+                }
+            }
+        }
+    }
+
+    auto st = sphere::scene::WorldStreamingMeshlets::EvaluateTelemetry(
+        vehicleMesh.get(),
+        trailerMesh.get(),
+        cargoMesh.get(),
+        cargoQty,
+        distanceDrivenM
+    );
+
+    jint vals[7] = {
+        st.grid_cell_x,
+        st.grid_cell_z,
+        st.loaded_ring_cells,
+        st.hero_meshlet_count,
+        st.max_tris_per_meshlet,
+        st.hlod_proxy_batches,
+        st.hlod_culled_tris
+    };
+    env->SetIntArrayRegion(outStats, 0, 7, vals);
+    return outStats;
+}
+
+// ---------------------------------------------------------------------------
+// Hybrid Procedural + RAM PCM Weather Audio Bridge
+// ---------------------------------------------------------------------------
+
+JNIEXPORT void JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeConfigureWeatherAudio(
+    JNIEnv* env, jclass clazz,
+    jfloat rainIntensity,
+    jfloat snowIntensity,
+    jfloat windSpeedKmh,
+    jfloat windAzimuthDeg,
+    jfloat fogDensity,
+    jboolean stormActive,
+    jboolean enabled,
+    jboolean muted
+) {
+    sphere::audio::WeatherAudioSystem::Get().SetWeatherParams(
+        rainIntensity,
+        snowIntensity,
+        windSpeedKmh,
+        windAzimuthDeg,
+        fogDensity,
+        stormActive == JNI_TRUE,
+        enabled == JNI_TRUE,
+        muted == JNI_TRUE
+    );
+}
+
+JNIEXPORT void JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeTriggerWeatherThunder(
+    JNIEnv* env, jclass clazz,
+    jboolean closeStrike,
+    jfloat gain
+) {
+    sphere::audio::WeatherAudioSystem::Get().TriggerThunder(closeStrike == JNI_TRUE, gain);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderWeatherAudioBlock(
+    JNIEnv* env, jclass clazz,
+    jshortArray outPcmArray,
+    jint sampleCount
+) {
+    jfloatArray telemetryOut = env->NewFloatArray(5);
+    if (!telemetryOut) return nullptr;
+
+    jint clampedCount = std::max<jint>(0, sampleCount);
+    if (outPcmArray && clampedCount > 0) {
+        jsize arrLen = env->GetArrayLength(outPcmArray);
+        jint writeCount = std::min<jint>(clampedCount, arrLen);
+        if (writeCount > 0) {
+            std::vector<int16_t> pcmBuf(static_cast<size_t>(writeCount), 0);
+            sphere::audio::WeatherAudioSystem::Get().RenderAudioBlock(pcmBuf.data(), writeCount);
+            env->SetShortArrayRegion(outPcmArray, 0, writeCount, pcmBuf.data());
+        }
+    }
+
+    auto t = sphere::audio::WeatherAudioSystem::Get().GetTelemetry();
+    jfloat vals[5] = {
+        static_cast<jfloat>(t.active),
+        t.rain_level,
+        t.wind_level,
+        t.thunder_level,
+        static_cast<jfloat>(t.has_active_sound)
+    };
+    env->SetFloatArrayRegion(telemetryOut, 0, 5, vals);
+    return telemetryOut;
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeGetWeatherAudioTelemetry(
+    JNIEnv* env, jclass clazz
+) {
+    jfloatArray telemetryOut = env->NewFloatArray(5);
+    if (!telemetryOut) return nullptr;
+    auto t = sphere::audio::WeatherAudioSystem::Get().GetTelemetry();
+    jfloat vals[5] = {
+        static_cast<jfloat>(t.active),
+        t.rain_level,
+        t.wind_level,
+        t.thunder_level,
+        static_cast<jfloat>(t.has_active_sound)
+    };
+    env->SetFloatArrayRegion(telemetryOut, 0, 5, vals);
+    return telemetryOut;
+}
+
+// ---------------------------------------------------------------------------
+// Vulkan SPH & Screen-Space Fluid Rendering (gen/water) JNI Bridge
+// ---------------------------------------------------------------------------
+
+JNIEXPORT void JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeConfigureWaterSimulation(
+    JNIEnv* env, jclass clazz,
+    jint particleCount,
+    jint scenarioOrdinal,
+    jfloat smoothingRadius,
+    jfloat targetDensity,
+    jfloat pressureMultiplier,
+    jfloat nearPressureMultiplier,
+    jfloat viscosityStrength,
+    jfloat surfaceTension,
+    jfloat collisionDamping,
+    jfloat gravityX,
+    jfloat gravityY,
+    jfloat gravityZ,
+    jfloat windX,
+    jfloat windZ,
+    jfloat timeScale,
+    jint substeps,
+    jfloat boundsWidth,
+    jfloat boundsHeight,
+    jfloat boundsDepth,
+    jboolean waveMakerEnabled,
+    jfloat waveFrequency,
+    jfloat waveAmplitude,
+    jboolean obstacleEnabled,
+    jfloat obstacleX,
+    jfloat obstacleY,
+    jfloat obstacleZ,
+    jfloat obstacleRadius,
+    jint debugModeOrdinal,
+    jfloat particleVisualRadius,
+    jboolean bilateralBlurEnabled,
+    jint blurRadiusPx,
+    jfloat blurSpatialSigma,
+    jfloat blurDepthSigma,
+    jfloat waterR,
+    jfloat waterG,
+    jfloat waterB,
+    jfloat absorbR,
+    jfloat absorbG,
+    jfloat absorbB,
+    jfloat absorbStrength,
+    jfloat indexOfRefraction,
+    jfloat refractionStrength,
+    jfloat fresnelPower,
+    jfloat fresnelBias,
+    jfloat specularPower,
+    jfloat reflectionIntensity,
+    jfloat foamThreshold,
+    jfloat causticsIntensity,
+    jfloat sunAzimuthDeg,
+    jfloat sunElevationDeg,
+    jboolean showContainerBox,
+    jboolean showFloorGrid,
+    jfloat camYawDeg,
+    jfloat camPitchDeg,
+    jfloat camDistance
+) {
+    (void)env;
+    (void)clazz;
+    sphere::water::FluidPhysicsParams phys{};
+    phys.particleCount = static_cast<uint32_t>(std::clamp<jint>(particleCount, 128, 4096));
+    phys.scenario = static_cast<sphere::water::WaterSpawnScenario>(std::clamp<jint>(scenarioOrdinal, 0, 5));
+    phys.smoothingRadius = std::clamp(smoothingRadius, 0.12f, 0.70f);
+    phys.targetDensity = std::clamp(targetDensity, 1.0f, 30.0f);
+    phys.pressureMultiplier = std::clamp(pressureMultiplier, 1.0f, 150.0f);
+    phys.nearPressureMultiplier = std::clamp(nearPressureMultiplier, 0.0f, 80.0f);
+    phys.viscosityStrength = std::clamp(viscosityStrength, 0.0f, 2.0f);
+    phys.surfaceTension = std::clamp(surfaceTension, 0.0f, 2.5f);
+    phys.collisionDamping = std::clamp(collisionDamping, 0.05f, 0.99f);
+    phys.gravityX = gravityX;
+    phys.gravityY = gravityY;
+    phys.gravityZ = gravityZ;
+    phys.windForceX = windX;
+    phys.windForceZ = windZ;
+    phys.timeScale = std::clamp(timeScale, 0.1f, 2.5f);
+    phys.substeps = static_cast<uint32_t>(std::clamp<jint>(substeps, 1, 4));
+    phys.boundsWidth = std::clamp(boundsWidth, 1.2f, 6.0f);
+    phys.boundsHeight = std::clamp(boundsHeight, 1.2f, 5.0f);
+    phys.boundsDepth = std::clamp(boundsDepth, 1.2f, 6.0f);
+    phys.waveMakerEnabled = (waveMakerEnabled == JNI_TRUE);
+    phys.waveFrequency = std::clamp(waveFrequency, 0.1f, 4.0f);
+    phys.waveAmplitude = std::clamp(waveAmplitude, 0.0f, 1.5f);
+    phys.obstacleEnabled = (obstacleEnabled == JNI_TRUE);
+    phys.obstacleX = obstacleX;
+    phys.obstacleY = obstacleY;
+    phys.obstacleZ = obstacleZ;
+    phys.obstacleRadius = std::clamp(obstacleRadius, 0.15f, 1.0f);
+
+    sphere::water::FluidRenderParams ren{};
+    ren.debugMode = static_cast<sphere::water::FluidDebugViewMode>(std::clamp<jint>(debugModeOrdinal, 0, 5));
+    ren.particleVisualRadius = std::clamp(particleVisualRadius, 0.03f, 0.25f);
+    ren.bilateralBlurEnabled = (bilateralBlurEnabled == JNI_TRUE);
+    ren.blurRadiusPx = std::clamp<int32_t>(blurRadiusPx, 1, 10);
+    ren.blurSpatialSigma = std::clamp(blurSpatialSigma, 0.5f, 8.0f);
+    ren.blurDepthSigma = std::clamp(blurDepthSigma, 0.01f, 0.5f);
+    ren.waterColorR = waterR;
+    ren.waterColorG = waterG;
+    ren.waterColorB = waterB;
+    ren.absorptionR = absorbR;
+    ren.absorptionG = absorbG;
+    ren.absorptionB = absorbB;
+    ren.absorptionStrength = std::clamp(absorbStrength, 0.1f, 6.0f);
+    ren.indexOfRefraction = std::clamp(indexOfRefraction, 1.0f, 2.0f);
+    ren.refractionStrength = std::clamp(refractionStrength, 0.0f, 0.6f);
+    ren.fresnelPower = std::clamp(fresnelPower, 1.0f, 8.0f);
+    ren.fresnelBias = std::clamp(fresnelBias, 0.0f, 0.3f);
+    ren.specularPower = std::clamp(specularPower, 8.0f, 512.0f);
+    ren.reflectionIntensity = std::clamp(reflectionIntensity, 0.0f, 1.5f);
+    ren.foamThreshold = std::clamp(foamThreshold, 0.4f, 6.0f);
+    ren.causticsIntensity = std::clamp(causticsIntensity, 0.0f, 1.5f);
+    ren.sunAzimuthDeg = sunAzimuthDeg;
+    ren.sunElevationDeg = std::clamp(sunElevationDeg, 5.0f, 88.0f);
+    ren.showContainerBox = (showContainerBox == JNI_TRUE);
+    ren.showFloorGrid = (showFloorGrid == JNI_TRUE);
+
+    sphere::water::WaterSimulationEngine::Get().Configure(phys, ren, camYawDeg, camPitchDeg, camDistance);
+}
+
+JNIEXPORT void JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeResetWaterSimulation(
+    JNIEnv* env, jclass clazz,
+    jint scenarioOrdinal,
+    jint particleCount
+) {
+    (void)env;
+    (void)clazz;
+    auto scenario = static_cast<sphere::water::WaterSpawnScenario>(std::clamp<jint>(scenarioOrdinal, 0, 5));
+    uint32_t count = static_cast<uint32_t>(std::clamp<jint>(particleCount, 128, 4096));
+    sphere::water::WaterSimulationEngine::Get().ResetSimulation(scenario, count);
+}
+
+JNIEXPORT void JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeConfigureWaterfall(
+    JNIEnv* env, jclass clazz,
+    jboolean enabled,
+    jfloat cliffHeight,
+    jfloat cliffWidth,
+    jfloat cliffDepth,
+    jfloat flowVolume,
+    jfloat lipSlopeDeg,
+    jfloat undercut,
+    jint steppedLedges,
+    jfloat roughness,
+    jfloat rockChanneling,
+    jfloat airDragAndMist,
+    jfloat plungePoolDepth
+) {
+    (void)env;
+    (void)clazz;
+    sphere::water::WaterSimulationEngine::Get().ConfigureWaterfall(
+        enabled == JNI_TRUE,
+        cliffHeight,
+        cliffWidth,
+        cliffDepth,
+        flowVolume,
+        lipSlopeDeg,
+        undercut,
+        static_cast<int32_t>(steppedLedges),
+        roughness,
+        rockChanneling,
+        airDragAndMist,
+        plungePoolDepth
+    );
+}
+
+JNIEXPORT void JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeInjectWaterImpulse(
+    JNIEnv* env, jclass clazz,
+    jfloat normU, jfloat normV, jfloat dragDx, jfloat dragDy, jfloat strength
+) {
+    (void)env;
+    (void)clazz;
+    sphere::water::WaterSimulationEngine::Get().InjectScreenImpulse(normU, normV, dragDx, dragDy, strength);
+}
+
+JNIEXPORT void JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeTriggerWaterPulse(
+    JNIEnv* env, jclass clazz,
+    jint pulseType, jfloat strength
+) {
+    (void)env;
+    (void)clazz;
+    sphere::water::WaterSimulationEngine::Get().TriggerSplashPulse(pulseType, strength);
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeStepAndRenderWaterBitmap(
+    JNIEnv* env, jclass clazz,
+    jobject bitmap,
+    jfloat dtSeconds,
+    jboolean isPlaying
+) {
+    (void)clazz;
+    jfloatArray outTelemetry = env->NewFloatArray(9);
+    if (!outTelemetry) return nullptr;
+
+    jfloat vals[9] = {0};
+    AndroidBitmapInfo info{};
+    if (bitmap &&
+        AndroidBitmap_getInfo(env, bitmap, &info) == ANDROID_BITMAP_RESULT_SUCCESS &&
+        info.format == ANDROID_BITMAP_FORMAT_RGBA_8888 &&
+        info.width > 0 && info.height > 0) {
+        void* pixelsPtr = nullptr;
+        if (AndroidBitmap_lockPixels(env, bitmap, &pixelsPtr) == ANDROID_BITMAP_RESULT_SUCCESS && pixelsPtr) {
+            auto t = sphere::water::WaterSimulationEngine::Get().StepAndRenderBitmap(
+                static_cast<uint32_t*>(pixelsPtr),
+                static_cast<int32_t>(info.stride / 4),
+                info.width,
+                info.height,
+                dtSeconds,
+                isPlaying == JNI_TRUE
+            );
+            AndroidBitmap_unlockPixels(env, bitmap);
+
+            vals[0] = static_cast<jfloat>(t.activeParticles);
+            vals[1] = static_cast<jfloat>(t.occupiedCells);
+            vals[2] = static_cast<jfloat>(t.hashTableSize);
+            vals[3] = t.physicsStepMs;
+            vals[4] = t.renderPassMs;
+            vals[5] = t.avgDensity;
+            vals[6] = t.maxSpeed;
+            vals[7] = t.kineticEnergy;
+            vals[8] = t.vulkanGpuActive ? 1.0f : 0.0f;
+        }
+    }
+    env->SetFloatArrayRegion(outTelemetry, 0, 9, vals);
+    return outTelemetry;
+}
+
 } // extern "C"
+
 
 

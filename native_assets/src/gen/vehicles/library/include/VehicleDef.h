@@ -71,6 +71,7 @@ struct VehicleDef {
     bool headlights_on = true;
     bool has_roof_rack = false;
     bool has_exhaust_stacks = false;
+    bool is_rhd = false;            // false = LHD (Left-Hand Drive), true = RHD (Right-Hand Drive)
 };
 
 } // namespace sphere::vehicles

@@ -1,6 +1,7 @@
 #include "GeneratorRegistry.h"
 #include "core/Log.h"
 #include "weather/WeatherSystem.h"
+#include "WaterSimulationEngine.hpp"
 namespace sphere {
 GeneratorRegistry& GeneratorRegistry::Get() {
     static GeneratorRegistry instance;
@@ -9,6 +10,7 @@ GeneratorRegistry& GeneratorRegistry::Get() {
 void GeneratorRegistry::Initialize() {
     SPHERE_LOG_INFO("GeneratorRegistry initialized. Ready for procedural asset bindings.");
     Register(std::make_shared<WeatherSystem>());
+    Register(std::shared_ptr<IGenerator>(&water::WaterSimulationEngine::Get(), [](IGenerator*) {}));
 }
 void GeneratorRegistry::Register(std::shared_ptr<IGenerator> generator) {
     if (generator) {

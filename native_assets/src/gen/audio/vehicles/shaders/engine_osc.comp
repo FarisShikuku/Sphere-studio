@@ -1,0 +1,43 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "audio_common.glsl"
+
+layout(local_size_x = 128, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, binding = 0) writeonly buffer PcmOutBuffer {
+    float outSamples[];
+};
+
+layout(push_constant) uniform EngineAudioPush {
+    float sampleRate;
+    float currentRpm;
+    float idleRpm;
+    float maxRpm;
+    float throttle;
+    float exhaustPitch;
+    float turboBoostBar;
+    uint cylinders;
+    uint sampleOffset;
+    uint sampleCount;
+} push;
+
+void main() {
+    uint gid = gl_GlobalInvocationID.x;
+    if (gid >= push.sampleCount) return;
+
+    float t = float(push.sampleOffset + gid) / push.sampleRate;
+    float firingHz = max(10.0, (push.currentRpm / 60.0) * (float(push.cylinders) * 0.5) * push.exhaustPitch);
+
+    float fund = sin(AUDIO_TWO_PI * firingHz * t);
+    float sub = sin(AUDIO_TWO_PI * (firingHz * 0.5) * t);
+    float harm2 = fract(firingHz * 2.0 * t) * 2.0 - 1.0;
+    float knock = whiteNoise(gid, uint(push.currentRpm)) * (0.08 + 0.12 * push.throttle);
+
+    float rpmFrac = clamp((push.currentRpm - push.idleRpm) / max(300.0, push.maxRpm - push.idleRpm), 0.0, 1.0);
+    float gain = 0.28 + 0.30 * rpmFrac + 0.16 * push.throttle;
+    float turboHz = 1850.0 + push.turboBoostBar * 1450.0;
+    float turbo = sin(AUDIO_TWO_PI * turboHz * t) * clamp((push.turboBoostBar - 0.15) * 0.055, 0.0, 0.09);
+
+    float combined = (sub * 0.42 + fund * 0.48 + harm2 * 0.18 + knock * (0.5 + 0.5 * fund)) * gain + turbo;
+    outSamples[gid] = softClipAudio(combined);
+}

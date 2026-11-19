@@ -16,7 +16,10 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Dashboard
+import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.MeetingRoom
+import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,6 +43,9 @@ import com.example.sphere.model.CommodityItem
 import com.example.sphere.model.TrailerItem
 import com.example.sphere.model.VehicleItem
 import com.example.sphere.nativebridge.SphereNativeEngine
+import com.example.sphere.viewport.SceneFpsBadge
+import com.example.sphere.viewport.SceneFpsConfig
+import com.example.sphere.viewport.ScenePlayRotateButton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -73,7 +79,9 @@ private data class VehicleRenderKey(
     val trailerId: Int,
     val showLoadedCargo: Boolean,
     val cargoId: Int,
-    val cargoQty: Int
+    val cargoQty: Int,
+    val isRhd: Boolean,
+    val insideCabinView: Boolean
 )
 
 private class DoubleBufferedVehicleRaster {
@@ -97,6 +105,11 @@ fun VehiclesViewportCanvas(
     showLoadedCargo: Boolean,
     loadedCargo: CommodityItem?,
     cargoQuantity: Int,
+    insideCabinView: Boolean = false,
+    onToggleCabinView: () -> Unit = {},
+    onToggleCabDriveSide: () -> Unit = {},
+    isAutoRotating: Boolean = false,
+    onToggleAutoRotate: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showTelemetryInfo by remember { mutableStateOf(false) }
@@ -104,6 +117,9 @@ fun VehiclesViewportCanvas(
     var canvasSizePx by remember { mutableStateOf(IntSize.Zero) }
     var displayImageBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var isRendering by remember { mutableStateOf(false) }
+    var lastRenderMs by remember { mutableFloatStateOf(0f) }
+    var measuredAutoFps by remember { mutableIntStateOf(SceneFpsConfig.TARGET_FPS) }
+    val currentAutoRotating by rememberUpdatedState(isAutoRotating)
     val rasterBuffers = remember { DoubleBufferedVehicleRaster() }
 
     val effectiveHitch = item.canHitchTrailer && hitchTrailerEnabled && hitchedTrailer != null
@@ -124,15 +140,17 @@ fun VehiclesViewportCanvas(
         hitchedTrailer?.id,
         showLoadedCargo,
         loadedCargo?.id,
-        cargoQuantity
+        cargoQuantity,
+        insideCabinView
     ) {
         if (canvasSizePx.width <= 0 || canvasSizePx.height <= 0) {
             null
         } else {
             val maxDim = max(canvasSizePx.width, canvasSizePx.height)
-            val resScale = if (maxDim > 720) 720f / maxDim.toFloat() else 1f
+            val resScale = if (maxDim > 540) 540f / maxDim.toFloat() else 1f
             val bmpW = (canvasSizePx.width * resScale).roundToInt().coerceAtLeast(64)
             val bmpH = (canvasSizePx.height * resScale).roundToInt().coerceAtLeast(64)
+            val effectiveRhd = item.cabDriveSide.name == "RHD"
             VehicleRenderKey(
                 bmpW = bmpW,
                 bmpH = bmpH,
@@ -158,7 +176,9 @@ fun VehiclesViewportCanvas(
                 trailerId = hitchedTrailer?.id ?: 0,
                 showLoadedCargo = effectiveHitch && showLoadedCargo,
                 cargoId = loadedCargo?.id ?: 0,
-                cargoQty = cargoQuantity
+                cargoQty = cargoQuantity,
+                isRhd = effectiveRhd,
+                insideCabinView = insideCabinView && item.isTruck
             )
         }
     }
@@ -166,6 +186,8 @@ fun VehiclesViewportCanvas(
     val latestKeyState = rememberUpdatedState(currentRenderKey)
 
     LaunchedEffect(Unit) {
+        var prevCommitNs = 0L
+        var emaFps = SceneFpsConfig.TARGET_FPS.toFloat()
         snapshotFlow { latestKeyState.value }
             .filterNotNull()
             .distinctUntilChanged()
@@ -183,6 +205,7 @@ fun VehiclesViewportCanvas(
                     }
                 }
 
+                val tStartNs = System.nanoTime()
                 val stats = withContext(Dispatchers.Default) {
                     SphereNativeEngine.renderVehicleBitmap(
                         bitmap = targetBmp,
@@ -208,9 +231,24 @@ fun VehiclesViewportCanvas(
                         trailerId = key.trailerId,
                         showLoadedCargo = key.showLoadedCargo,
                         cargoId = key.cargoId,
-                        cargoQty = key.cargoQty
+                        cargoQty = key.cargoQty,
+                        isRhd = key.isRhd,
+                        insideCabinView = key.insideCabinView
                     )
                 }
+                val nowNs = System.nanoTime()
+                lastRenderMs = ((nowNs - tStartNs) / 1_000_000f).coerceAtLeast(0.1f)
+                if (currentAutoRotating && prevCommitNs != 0L) {
+                    val deltaNs = (nowNs - prevCommitNs).coerceAtLeast(1_000_000L)
+                    if (deltaNs < 250_000_000L) {
+                        val instFps = (1_000_000_000f / deltaNs.toFloat()).coerceIn(1f, SceneFpsConfig.TARGET_FPS.toFloat())
+                        emaFps = emaFps * 0.80f + instFps * 0.20f
+                        measuredAutoFps = emaFps.roundToInt().coerceIn(1, SceneFpsConfig.TARGET_FPS)
+                    } else {
+                        emaFps = SceneFpsConfig.TARGET_FPS.toFloat()
+                    }
+                }
+                prevCommitNs = nowNs
 
                 displayImageBitmap = targetBmp.asImageBitmap()
                 rasterBuffers.writeToA = !writeA
@@ -220,6 +258,10 @@ fun VehiclesViewportCanvas(
                 isRendering = false
             }
     }
+
+    val currentOnDrag by rememberUpdatedState(onDrag)
+    val currentOnZoomChange by rememberUpdatedState(onZoomChange)
+    val currentZoomFactor by rememberUpdatedState(zoomFactor)
 
     Box(
         modifier = modifier
@@ -232,9 +274,9 @@ fun VehiclesViewportCanvas(
             }
             .pointerInput(Unit) {
                 detectTransformGestures { _, pan, zoom, _ ->
-                    onDrag(pan.x, pan.y)
+                    currentOnDrag(pan.x, pan.y)
                     if (zoom != 1.0f) {
-                        onZoomChange((zoomFactor * zoom).coerceIn(0.55f, 2.8f))
+                        currentOnZoomChange((currentZoomFactor * zoom).coerceIn(0.55f, 2.8f))
                     }
                 }
             }
@@ -272,7 +314,7 @@ fun VehiclesViewportCanvas(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 FilledTonalButton(
                     onClick = { showTelemetryInfo = !showTelemetryInfo },
                     shape = RoundedCornerShape(20.dp),
@@ -280,14 +322,14 @@ fun VehiclesViewportCanvas(
                         containerColor = if (showTelemetryInfo) MaterialTheme.colorScheme.primaryContainer else Color(0xCC0F172A),
                         contentColor = if (showTelemetryInfo) MaterialTheme.colorScheme.onPrimaryContainer else Color(0xFFE2E8F0)
                     ),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    contentPadding = PaddingValues(horizontal = 9.dp, vertical = 6.dp),
                     modifier = Modifier
                         .defaultMinSize(minHeight = 36.dp)
                         .testTag("vehicle_toggle_specs_button")
                 ) {
-                    Icon(Icons.Default.Info, contentDescription = "Toggle Vehicle Telemetry", modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(5.dp))
-                    Text(if (showTelemetryInfo) "Hide Specs" else "Specs", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Icon(Icons.Default.Info, contentDescription = "Toggle Vehicle Telemetry", modifier = Modifier.size(15.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(if (showTelemetryInfo) "Specs" else "Specs", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 }
 
                 val isDoorOpen = item.doorOpenRatio > 0.05f
@@ -298,14 +340,38 @@ fun VehiclesViewportCanvas(
                         containerColor = if (isDoorOpen) MaterialTheme.colorScheme.primary else Color(0xCC0F172A),
                         contentColor = if (isDoorOpen) MaterialTheme.colorScheme.onPrimary else Color(0xFFE2E8F0)
                     ),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    contentPadding = PaddingValues(horizontal = 9.dp, vertical = 6.dp),
                     modifier = Modifier
                         .defaultMinSize(minHeight = 36.dp)
                         .testTag("vehicle_toggle_door_button")
                 ) {
-                    Icon(Icons.Outlined.MeetingRoom, contentDescription = "Toggle Vehicle Door", modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(5.dp))
-                    Text(if (isDoorOpen) "Close Door" else "Open Door", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Icon(Icons.Outlined.MeetingRoom, contentDescription = "Toggle Vehicle Door", modifier = Modifier.size(15.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(if (isDoorOpen) "Close" else "Door", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                }
+
+                if (item.isTruck) {
+                    val inCabin = insideCabinView
+                    FilledTonalButton(
+                        onClick = onToggleCabinView,
+                        shape = RoundedCornerShape(20.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = if (inCabin) MaterialTheme.colorScheme.tertiary else Color(0xCC0F172A),
+                            contentColor = if (inCabin) MaterialTheme.colorScheme.onTertiary else Color(0xFFE2E8F0)
+                        ),
+                        contentPadding = PaddingValues(horizontal = 9.dp, vertical = 6.dp),
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = 36.dp)
+                            .testTag("vehicle_toggle_cabin_view_button")
+                    ) {
+                        Icon(
+                            imageVector = if (inCabin) Icons.Outlined.DirectionsCar else Icons.Outlined.Dashboard,
+                            contentDescription = if (inCabin) "Exit Cabin View" else "Inside Cabin View",
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(if (inCabin) "Exterior" else "Cabin", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
 
@@ -344,6 +410,49 @@ fun VehiclesViewportCanvas(
                         Icon(Icons.AutoMirrored.Filled.RotateRight, contentDescription = "Reset View", tint = Color(0xFFA5D6A7), modifier = Modifier.size(16.dp))
                     }
                 }
+            }
+        }
+
+        // Quick LHD / RHD steering-side badge while inside truck cabin
+        if (item.isTruck && insideCabinView && !showTelemetryInfo) {
+            FilledTonalButton(
+                onClick = onToggleCabDriveSide,
+                shape = RoundedCornerShape(18.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = Color(0xCC0F172A),
+                    contentColor = Color(0xFF38BDF8)
+                ),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 12.dp, top = 54.dp)
+                    .defaultMinSize(minHeight = 36.dp)
+                    .testTag("vehicle_toggle_cab_side_button")
+            ) {
+                Icon(Icons.Outlined.SwapHoriz, contentDescription = "Switch LHD or RHD Steering Side", modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(5.dp))
+                Text("${item.cabDriveSide.shortLabel} Cockpit", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+
+        if (!showTelemetryInfo) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 56.dp, end = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                ScenePlayRotateButton(
+                    isPlaying = isAutoRotating,
+                    onToggle = onToggleAutoRotate,
+                    tag = "vehicle_play_rotate_button"
+                )
+                SceneFpsBadge(
+                    overrideFps = if (isAutoRotating) measuredAutoFps else null,
+                    renderTimeMs = lastRenderMs,
+                    tag = "vehicle_scene_fps_badge"
+                )
             }
         }
 
@@ -417,6 +526,8 @@ fun VehiclesViewportCanvas(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 val statusLabel = when {
+                    insideCabinView && item.isTruck ->
+                        "CABIN (${item.cabDriveSide.shortLabel}) • HEAD ${rotY.roundToInt()}° / ${rotX.roundToInt()}° • Drag 360° Look"
                     effectiveHitch && hitchedTrailer != null && showLoadedCargo && loadedCargo != null ->
                         "RIG: ${item.cppEnumName} + ${hitchedTrailer.name} (${cargoQuantity}× ${loadedCargo.name})"
                     effectiveHitch && hitchedTrailer != null ->
@@ -427,7 +538,7 @@ fun VehiclesViewportCanvas(
                 Text(
                     text = statusLabel,
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = if (effectiveHitch) Color(0xFFFACC15) else Color.White,
+                    color = if (insideCabinView && item.isTruck) Color(0xFF38BDF8) else if (effectiveHitch) Color(0xFFFACC15) else Color.White,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 10.sp
                 )

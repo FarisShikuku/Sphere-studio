@@ -93,6 +93,9 @@ void VehicleRegistry::RegisterAll() {
     add(std::make_shared<ArticulatedTractor>(VehicleID::TRACTOR_VW_CONSTELLATION_25390));
     add(std::make_shared<ArticulatedTractor>(VehicleID::TRACTOR_VW_METEOR_28460));
     add(std::make_shared<ArticulatedTractor>(VehicleID::TRACTOR_MAN_TGX_18510));
+    add(std::make_shared<ArticulatedTractor>(VehicleID::TRACTOR_VOLVO_FH16_800));
+    add(std::make_shared<ArticulatedTractor>(VehicleID::TRACTOR_VOLVO_FH16_780));
+    add(std::make_shared<ArticulatedTractor>(VehicleID::TRACTOR_VOLVO_FH16_750_XXL));
 }
 
 std::shared_ptr<IVehicle> VehicleRegistry::GetVehicle(VehicleID id) {

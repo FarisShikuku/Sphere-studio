@@ -1,0 +1,31 @@
+#version 450
+#extension GL_GOOGLE_include_directive : enable
+
+#include "include/weather_audio_common.glsl"
+
+layout(local_size_x = 128, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform WeatherAudioPush {
+    float rain_intensity;
+    float snow_intensity;
+    float sample_rate;
+    uint sample_offset;
+} pc;
+
+layout(std430, binding = 0) writeonly buffer RainOutputBuffer {
+    float out_rain_pcm[];
+};
+
+void main() {
+    uint gid = gl_GlobalInvocationID.x;
+    uint idx = pc.sample_offset + gid;
+    float n0 = weatherAudioHash(idx * 3u + 11u);
+    float n1 = weatherAudioHash(idx * 3u + 13u);
+    float n2 = weatherAudioHash(idx * 3u + 17u);
+
+    // Filtered pink-ish rain noise + droplet impulse
+    float bed = (n0 * 0.50 + n1 * 0.30 + n2 * 0.20) * pc.rain_intensity * 0.58;
+    float drop = (abs(n0) > (0.996 - pc.rain_intensity * 0.008)) ? n1 * 0.45 : 0.0;
+    float snowAir = (n2 - n0) * pc.snow_intensity * 0.14;
+    out_rain_pcm[gid] = clamp(bed + drop + snowAir, -1.0, 1.0);
+}

@@ -3,6 +3,7 @@ project(SphereStudioEngine LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+add_compile_options(-O3 -fno-math-errno)
 find_package(Vulkan REQUIRED)
 find_library(log-lib log)
 find_library(android-lib android)
@@ -49,6 +50,9 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/vehicles/bus_minibus/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/vehicles/cab_components/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/vehicles/chassis_components/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/audio/vehicles/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/audio/weather/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/water/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jni
     ${Vulkan_INCLUDE_DIRS}
 )
@@ -63,6 +67,9 @@ add_subdirectory(src/lighting)
 add_subdirectory(src/gen/cargo)
 add_subdirectory(src/gen/trailers)
 add_subdirectory(src/gen/vehicles)
+add_subdirectory(src/gen/audio/vehicles)
+add_subdirectory(src/gen/audio/weather)
+add_subdirectory(src/gen/water)
 add_library(SphereStudioEngine SHARED
     src/jni/SphereStudioJni.cpp
 )
@@ -78,6 +85,9 @@ target_link_libraries(SphereStudioEngine PRIVATE
     cargo
     trailers
     vehicles
+    audio_vehicles
+    audio_weather
+    water
     Vulkan::Vulkan
     ${log-lib}
     ${android-lib}

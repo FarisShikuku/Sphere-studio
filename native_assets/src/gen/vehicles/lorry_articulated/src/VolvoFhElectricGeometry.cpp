@@ -60,22 +60,44 @@ std::shared_ptr<Mesh> GenerateVolvoFhElectricMesh(const VehicleDef& def) {
     );
 
     const float windFrontX = xFront + 0.14f;
-    const float windBrowX  = xFront + 0.34f;
-    const float windBotY   = cabClearY + 1.22f;
-    const float windTopY   = std::min(cabTopY - 0.52f, windBotY + 0.86f);
+    const float windBrowX  = xFront + 0.36f;
+    const float windBotY   = cabClearY + 1.16f;
+    const float windTopY   = std::min(cabTopY - 0.52f, windBotY + 0.84f);
     const float doorX0     = xFront + 0.44f;
     const float doorX1     = cabBackX - 0.72f;
     const float doorTopY   = windTopY + 0.05f;
     const float doorBeltY  = windBotY - 0.02f;
 
-    // 2. Interior
-    CabComponents::AppendTruckCabInterior(
+    // 2. Volvo FH Electric Interior (LHD/RHD mirrored cockpit + ambient cyan glow)
+    CabComponents::AppendVolvoCabInterior(
         mesh.get(), xFront + 0.32f, cabBackX - 0.08f,
-        cabClearY + 0.06f, cabTopY - 0.16f, cabHW, true, dashDark, interiorSeat, evCyan
+        cabClearY + 0.06f, windBotY, cabTopY - 0.16f,
+        cabHW, true, def.is_rhd, def.steer_angle_deg, def.headlights_on,
+        dashDark, interiorSeat, chromeCol, evCyan
     );
 
-    // 3. Smoothly Carved Curved Lower Nose & Corners
-    AppendCarvedLowerNose(mesh.get(), xFront, xFront + 0.48f, cabBaseY, windBotY, cabHW, tealPaint);
+    // 3. Grounded Front Bumper Apron + Carved Lower Nose & Tight Semicircular Wheel Arches
+    const float bumperBotY = std::clamp(def.ground_clearance_m, 0.24f, 0.36f);
+    const float bumperEndX = frontAxleX - archHalfLen + 0.02f;
+    std::vector<HullStationX> evBumper = {
+        {xFront + 0.10f, bumperBotY, cabClearY + 0.02f, cabHW - 0.14f, 0.10f, 0.10f, 0.00f, 0.08f},
+        {xFront + 0.26f, bumperBotY, cabClearY + 0.04f, cabHW - 0.02f, 0.10f, 0.08f, 0.00f, 0.04f},
+        {bumperEndX,     bumperBotY, cabClearY + 0.04f, cabHW,         0.08f, 0.08f, 0.00f, 0.00f},
+    };
+    CabComponents::AppendSculptedHullX(mesh.get(), evBumper, tealPaint, 6);
+    AppendCarvedLowerNose(mesh.get(), xFront, xFront + 0.52f, cabClearY, windBotY, cabHW, tealPaint);
+    for (int side : {-1, 1}) {
+        bool rightSide = (side > 0);
+        float sideZ = rightSide ? cabHW : -cabHW;
+        CabComponents::AppendSemicircularWheelArchSkirt(
+            mesh.get(), frontAxleX, wheelR, wheelR + 0.068f, archHalfLen,
+            bumperBotY, cabClearY + 0.04f, sideZ, rightSide, 0.042f, tealPaint, glossBlack
+        );
+        CabComponents::AppendWheelArchFender(
+            mesh.get(), frontAxleX, wheelR, wheelR + 0.072f, sideZ, rightSide, 0.042f, tealPaint
+        );
+    }
+    AppendCabEntrySteps(mesh.get(), frontAxleX + archHalfLen, std::min(doorX1, cabBackX - 0.04f), bumperBotY + 0.06f, cabClearY + 0.02f, cabHW, glossBlack, alloyCol);
 
     // Upper Curved Gloss-Black VOLVO Collar Directly Beneath Windshield + Silver VOLVO Wordmark
     AppendTrapezoidGrillePocketX(mesh.get(), xFront - 0.002f, xFront + 0.105f, windBotY - 0.22f, windBotY - 0.01f, cabHW * 0.74f, cabHW * 0.82f, 0.024f, glossBlack, glossBlack, cabHW, 0.09f);
@@ -141,8 +163,8 @@ std::shared_ptr<Mesh> GenerateVolvoFhElectricMesh(const VehicleDef& def) {
     }
 
     // 5. MirrorCam Pods + Kerb-Dipped Doors aligned to panoramic windshield + Skirts
-    AppendSteppedCabDoor(mesh.get(), doorX0, doorX1, cabClearY + 0.02f, doorTopY, -cabHW, false, def.door_open_ratio, 0.16f, false, false, tealPaint, glossBlack, sideGlass, doorBeltY);
-    AppendSteppedCabDoor(mesh.get(), doorX0, doorX1, cabClearY + 0.02f, doorTopY,  cabHW, true,  def.door_open_ratio, 0.16f, false, false, tealPaint, glossBlack, sideGlass, doorBeltY);
+    AppendSteppedCabDoor(mesh.get(), doorX0, doorX1, cabClearY + 0.02f, doorTopY, -cabHW, false, def.door_open_ratio, 0.16f, false, false, tealPaint, glossBlack, sideGlass, doorBeltY, def.is_rhd, true);
+    AppendSteppedCabDoor(mesh.get(), doorX0, doorX1, cabClearY + 0.02f, doorTopY,  cabHW, true,  def.door_open_ratio, 0.16f, false, false, tealPaint, glossBlack, sideGlass, doorBeltY, !def.is_rhd, true);
     AppendMirrorCamWings(mesh.get(), xFront + 0.46f, windTopY - 0.18f, cabHW, tealPaint, glossBlack, chromeCol);
     AppendFrontKerbMirror(mesh.get(), xFront + 0.36f, windTopY - 0.14f, -cabHW, glossBlack);
     CabComponents::AppendAmberRoofMarkers(mesh.get(), xFront + 0.46f, cabTopY - 0.10f, cabHW * 0.85f, def.headlights_on);

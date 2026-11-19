@@ -84,7 +84,8 @@ std::shared_ptr<Mesh> GenerateManTgxBoxLorryMesh(const VehicleDef& def) {
     CabComponents::AppendTruckCabInterior(
         mesh.get(), xFront + 0.30f, cabBackX - 0.06f,
         cabClearY + 0.05f, cabTopY - 0.14f,
-        cabHW, true, dashDark, interiorSeat, amberCol
+        cabHW, true, dashDark, interiorSeat, amberCol,
+        def.is_rhd, winBotY, def.steer_angle_deg
     );
 
     // Smoothly carved front nose & bumper wrap
@@ -139,8 +140,8 @@ std::shared_ptr<Mesh> GenerateManTgxBoxLorryMesh(const VehicleDef& def) {
     }
 
     AppendCabEntrySteps(mesh.get(), xFront + 0.44f, frontAxleX - archHalfLen + 0.04f, frameBotY, cabClearY, cabHW, darkTrim, alloyCol);
-    AppendSteppedCabDoor(mesh.get(), doorX0, doorX1, cabClearY + 0.02f, doorTopY, -cabHW, false, def.door_open_ratio, 0.05f, true, false, orangePaint, glossBlack, sideGlass, doorBeltY);
-    AppendSteppedCabDoor(mesh.get(), doorX0, doorX1, cabClearY + 0.02f, doorTopY,  cabHW, true,  def.door_open_ratio, 0.05f, true, false, orangePaint, glossBlack, sideGlass, doorBeltY);
+    AppendSteppedCabDoor(mesh.get(), doorX0, doorX1, cabClearY + 0.02f, doorTopY, -cabHW, false, def.door_open_ratio, 0.05f, true, false, orangePaint, glossBlack, sideGlass, doorBeltY, def.is_rhd, true);
+    AppendSteppedCabDoor(mesh.get(), doorX0, doorX1, cabClearY + 0.02f, doorTopY,  cabHW, true,  def.door_open_ratio, 0.05f, true, false, orangePaint, glossBlack, sideGlass, doorBeltY, !def.is_rhd, true);
     CabComponents::AppendCantileverCoachMirrors(mesh.get(), xFront + 0.46f, cabTopY - 0.30f, cabHW, darkTrim);
     AppendFrontKerbMirror(mesh.get(), xFront + 0.34f, cabTopY - 0.18f, cabHW, glossBlack);
 

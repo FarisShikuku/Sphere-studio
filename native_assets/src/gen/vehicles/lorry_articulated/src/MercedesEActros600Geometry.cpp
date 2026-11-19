@@ -70,7 +70,8 @@ std::shared_ptr<Mesh> GenerateMercedesEActros600Mesh(const VehicleDef& def) {
 
     CabComponents::AppendTruckCabInterior(
         mesh.get(), xFront + 0.36f, cabBackX - 0.08f,
-        cabClearY + 0.06f, cabTopY - 0.16f, cabHW, true, dashDark, interiorSeat, limeAccent
+        cabClearY + 0.06f, cabTopY - 0.16f, cabHW, true, dashDark, interiorSeat, limeAccent,
+        def.is_rhd, windBotY, def.steer_angle_deg
     );
 
     // 2. Signature Ultra-Smooth Extended Carved Aero ProCabin Nose (extended -60mm cleanly forward)

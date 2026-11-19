@@ -1,0 +1,39 @@
+#version 460
+// Vulkan 1.3 Compute Shader: External Gravity/Wind & Predicted Position Pass
+// Ported from talvinckb/OpenGL-Water-Simulation
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, set = 0, binding = 0) readonly buffer PositionsBuffer {
+    vec4 positions[];
+};
+
+layout(std430, set = 0, binding = 1) writeonly buffer PredictedPositionsBuffer {
+    vec4 predictedPositions[];
+};
+
+layout(std430, set = 0, binding = 2) buffer VelocitiesBuffer {
+    vec4 velocities[];
+};
+
+layout(push_constant) uniform PredictPush {
+    vec4 gravityAndDt;     // xyz = gravity, w = dt
+    vec4 windAndCount;     // x = windX, y = windZ, z = lookaheadFactor, w = float(particleCount)
+} pc;
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    uint count = uint(pc.windAndCount.w);
+    if (idx >= count) return;
+
+    float dt = pc.gravityAndDt.w;
+    vec3 vel = velocities[idx].xyz;
+    vec3 externalAccel = pc.gravityAndDt.xyz + vec3(pc.windAndCount.x, 0.0, pc.windAndCount.y);
+
+    vel += externalAccel * dt;
+    velocities[idx].xyz = vel;
+
+    float predictionDt = dt * pc.windAndCount.z;
+    predictedPositions[idx].xyz = positions[idx].xyz + vel * predictionDt;
+    predictedPositions[idx].w = 1.0;
+}
