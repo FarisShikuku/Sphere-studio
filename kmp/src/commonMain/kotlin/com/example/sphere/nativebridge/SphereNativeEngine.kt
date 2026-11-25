@@ -1007,6 +1007,149 @@ object SphereNativeEngine {
         cutoutHeightM: Float,
         cutoutDepthM: Float
     )
+
+    // -----------------------------------------------------------------------
+    // Procedural Buildings & Architecture Bridge (gen/buildings)
+    // -----------------------------------------------------------------------
+
+    fun getBuildingDiagnostics(): String {
+        return if (isLibraryLoaded) {
+            nativeGetBuildingDiagnostics()
+        } else {
+            "BuildingSystem: 12 generators registered (Massing, Residential, Commercial, Industrial, Civic, Interiors, Props, Signage, Damage, LOD)"
+        }
+    }
+
+    fun renderBuildingBitmap(
+        bitmap: Bitmap,
+        domainOrdinal: Int,
+        subTypeOrdinal: Int,
+        rotX: Float,
+        rotY: Float,
+        zoom: Float,
+        shapeOrdinal: Int,
+        cornerOrdinal: Int,
+        cornerSize: Float,
+        stepModeOrdinal: Int,
+        stepTiers: Int,
+        topTaperRatio: Float,
+        stepShrinkFactor: Float,
+        stepTerraceRailing: Boolean,
+        floorCount: Int,
+        floorHeight: Float,
+        width: Float,
+        depth: Float,
+        cornerRadius: Float,
+        windowsPerFacade: Int,
+        windowTypeOrdinal: Int,
+        windowWidth: Float,
+        windowHeight: Float,
+        windowSillHeight: Float,
+        glassTypeOrdinal: Int,
+        windowIor: Float,
+        wallMaterialOrdinal: Int,
+        wallColorArgb: Int,
+        doorTypeOrdinal: Int,
+        doorWidth: Float,
+        doorHeight: Float,
+        hasEntranceCanopy: Boolean,
+        roofTypeOrdinal: Int,
+        roofHeight: Float,
+        roofOverhang: Float,
+        showRooftopClutter: Boolean,
+        balconyTypeOrdinal: Int,
+        hasBalconies: Boolean,
+        balconyDepth: Float,
+        hasSunLouvres: Boolean,
+        hasFireEscape: Boolean,
+        hasCornice: Boolean,
+        hasGroundPillars: Boolean,
+        pillarCount: Int,
+        hasWindowShutters: Boolean,
+        showInside: Boolean,
+        interiorDesign: Int,
+        detailIntensity: Float,
+        detailCount: Int,
+        detailFlagA: Boolean,
+        detailFlagB: Boolean,
+        wireframe: Boolean
+    ): FloatArray {
+        return if (isLibraryLoaded) {
+            nativeRenderBuildingBitmap(
+                bitmap, domainOrdinal, subTypeOrdinal, rotX, rotY, zoom,
+                shapeOrdinal, cornerOrdinal, cornerSize, stepModeOrdinal, stepTiers,
+                topTaperRatio, stepShrinkFactor, stepTerraceRailing,
+                floorCount, floorHeight, width, depth, cornerRadius,
+                windowsPerFacade, windowTypeOrdinal, windowWidth, windowHeight, windowSillHeight,
+                glassTypeOrdinal, windowIor, wallMaterialOrdinal, wallColorArgb,
+                doorTypeOrdinal, doorWidth, doorHeight, hasEntranceCanopy,
+                roofTypeOrdinal, roofHeight, roofOverhang, showRooftopClutter,
+                balconyTypeOrdinal, hasBalconies, balconyDepth,
+                hasSunLouvres, hasFireEscape, hasCornice, hasGroundPillars, pillarCount,
+                hasWindowShutters, showInside, interiorDesign,
+                detailIntensity, detailCount, detailFlagA, detailFlagB, wireframe
+            ) ?: floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f)
+        } else {
+            floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f)
+        }
+    }
+
+    private external fun nativeGetBuildingDiagnostics(): String
+
+    private external fun nativeRenderBuildingBitmap(
+        bitmap: Bitmap,
+        domainOrdinal: Int,
+        subTypeOrdinal: Int,
+        rotX: Float,
+        rotY: Float,
+        zoom: Float,
+        shapeOrdinal: Int,
+        cornerOrdinal: Int,
+        cornerSize: Float,
+        stepModeOrdinal: Int,
+        stepTiers: Int,
+        topTaperRatio: Float,
+        stepShrinkFactor: Float,
+        stepTerraceRailing: Boolean,
+        floorCount: Int,
+        floorHeight: Float,
+        width: Float,
+        depth: Float,
+        cornerRadius: Float,
+        windowsPerFacade: Int,
+        windowTypeOrdinal: Int,
+        windowWidth: Float,
+        windowHeight: Float,
+        windowSillHeight: Float,
+        glassTypeOrdinal: Int,
+        windowIor: Float,
+        wallMaterialOrdinal: Int,
+        wallColorArgb: Int,
+        doorTypeOrdinal: Int,
+        doorWidth: Float,
+        doorHeight: Float,
+        hasEntranceCanopy: Boolean,
+        roofTypeOrdinal: Int,
+        roofHeight: Float,
+        roofOverhang: Float,
+        showRooftopClutter: Boolean,
+        balconyTypeOrdinal: Int,
+        hasBalconies: Boolean,
+        balconyDepth: Float,
+        hasSunLouvres: Boolean,
+        hasFireEscape: Boolean,
+        hasCornice: Boolean,
+        hasGroundPillars: Boolean,
+        pillarCount: Int,
+        hasWindowShutters: Boolean,
+        showInside: Boolean,
+        interiorDesign: Int,
+        detailIntensity: Float,
+        detailCount: Int,
+        detailFlagA: Boolean,
+        detailFlagB: Boolean,
+        wireframe: Boolean
+    ): FloatArray?
 }
 
 

@@ -492,6 +492,13 @@ fun SphereStudioApp() {
                     }
                 )
             }
+            "buildings" -> {
+                BuildingsStudioScreen(
+                    onNavigateBack = {
+                        selectedCategoryIndex = 0
+                    }
+                )
+            }
             else -> {
                 EmptyAssetScreen(
                     category = currentCategory,

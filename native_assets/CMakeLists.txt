@@ -53,6 +53,7 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/audio/vehicles/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/audio/weather/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/water/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gen/buildings
     ${CMAKE_CURRENT_SOURCE_DIR}/src/jni
     ${Vulkan_INCLUDE_DIRS}
 )
@@ -70,6 +71,7 @@ add_subdirectory(src/gen/vehicles)
 add_subdirectory(src/gen/audio/vehicles)
 add_subdirectory(src/gen/audio/weather)
 add_subdirectory(src/gen/water)
+add_subdirectory(src/gen/buildings)
 add_library(SphereStudioEngine SHARED
     src/jni/SphereStudioJni.cpp
 )
@@ -88,6 +90,7 @@ target_link_libraries(SphereStudioEngine PRIVATE
     audio_vehicles
     audio_weather
     water
+    building_engine
     Vulkan::Vulkan
     ${log-lib}
     ${android-lib}

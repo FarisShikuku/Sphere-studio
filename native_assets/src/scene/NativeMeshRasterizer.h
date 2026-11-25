@@ -68,6 +68,16 @@ struct PbrStageRasterParams {
     uint32_t stageMode = 0;
 };
 
+struct BuildingRasterParams {
+    float rotXDeg = 20.0f;
+    float rotYDeg = -35.0f;
+    float zoom = 1.0f;
+    float roughness = 0.62f;
+    float metallic = 0.15f;
+    bool wireframe = false;
+    bool doubleSided = false;
+};
+
 class NativeMeshRasterizer {
 public:
     static void RenderCargoBitmap(
@@ -99,6 +109,15 @@ public:
         const Mesh* hitchedTrailerMesh,
         const Mesh* loadedCargoMesh,
         const VehicleRasterParams& params
+    );
+
+    static void RenderBuildingBitmap(
+        uint32_t* pixelsRGBA8888,
+        int32_t stridePixels,
+        int32_t width,
+        int32_t height,
+        const Mesh* buildingMesh,
+        const BuildingRasterParams& params
     );
 
     static void RenderPbrStageRGBA8888(

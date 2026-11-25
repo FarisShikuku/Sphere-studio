@@ -25,6 +25,7 @@
 #include "WeatherAudioSystem.h"
 #include "WorldStreamingMeshlets.h"
 #include "WaterSimulationEngine.hpp"
+#include "BuildingSystem.h"
 #define LOG_TAG "SphereStudioNative"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 
@@ -60,6 +61,7 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeInitEngine(JNIEnv*
     LOGI("Sphere Studio Native C++20 Core initializing with Sascha Willems Vulkan 1.3 pipeline...");
     sphere::Log::Init();
     sphere::GeneratorRegistry::Get().Initialize();
+    procedural::buildings::BuildingSystem::instance().initialize(procedural::GeneratorContext{});
     LOGI("Native Vulkan C++ engine initialized. Total registered KTX2 textures: %zu", sphere::textures::kRegisteredTextures.size());
     return JNI_TRUE;
 }
@@ -1620,6 +1622,760 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeConfigureWaterSurf
     p.cutoutDepthM = std::clamp(cutoutDepthM, 2.0f, 36.0f);
     p.debugMode = static_cast<sphere::water::WaterSurfaceDebugMode>(std::clamp<jint>(debugModeOrdinal, 0, 5));
     sphere::water::WaterSimulationEngine::Get().ConfigureWaterSurface(p);
+}
+
+} // extern "C"
+
+namespace {
+
+inline sphere::Vec4 ComputeGlassSlotColor(int32_t glassTypeIdx, float windowIor) {
+    float r = 0.14f, g = 0.42f, b = 0.62f;
+    switch (glassTypeIdx) {
+        case 1: r = 0.12f; g = 0.15f; b = 0.20f; break; // SolarTintedSmoke
+        case 2: r = 0.58f; g = 0.66f; b = 0.74f; break; // ReflectiveChromeMirror
+        case 3: r = 0.08f; g = 0.48f; b = 0.36f; break; // LowEEmerald
+        case 4: r = 0.42f; g = 0.25f; b = 0.12f; break; // BronzeArchitectural
+        case 5: r = 0.82f; g = 0.87f; b = 0.92f; break; // FrostedSatinPrivacy
+        case 6: r = 0.86f; g = 0.64f; b = 0.18f; break; // GoldMirroredLuxury
+        case 7: r = 0.42f; g = 0.28f; b = 0.78f; break; // StainedGlassArtisan
+        case 8: r = 0.38f; g = 0.46f; b = 0.52f; break; // WiredSafety
+        default: break;                               // ClearFloat
+    }
+    float safeIor = std::clamp(windowIor, 1.0f, 2.8f);
+    float alpha = 0.32f;
+    if (glassTypeIdx == 5) {
+        alpha = std::clamp(0.88f + 0.10f * ((safeIor - 1.0f) / 1.8f), 0.88f, 0.98f);
+    } else {
+        float iorNorm = std::clamp((safeIor - 1.0f) / 0.55f, 0.0f, 1.0f);
+        float smooth = iorNorm * iorNorm * (3.0f - 2.0f * iorNorm);
+        alpha = std::clamp(0.28f + 0.72f * smooth, 0.28f, 1.0f);
+    }
+    return sphere::Vec4(r, g, b, alpha);
+}
+
+inline sphere::Vec4 ResolveBuildingMaterialColor(
+    uint32_t materialId,
+    float u,
+    float v,
+    const sphere::Vec4& wallTint,
+    bool hasCustomWallTint,
+    int32_t glassTypeIdx,
+    float windowIor
+) {
+    using MS = procedural::buildings::MaterialSlot;
+    switch (static_cast<MS>(materialId)) {
+        case MS::WallConcrete: {
+            sphere::Vec4 base(0.73f, 0.74f, 0.76f, 1.0f);
+            if (hasCustomWallTint) {
+                base.x = base.x * 0.45f + wallTint.x * 0.55f;
+                base.y = base.y * 0.45f + wallTint.y * 0.55f;
+                base.z = base.z * 0.45f + wallTint.z * 0.55f;
+            }
+            return base;
+        }
+        case MS::Glass:
+            return ComputeGlassSlotColor(glassTypeIdx, windowIor);
+        case MS::FrameMetal:
+            return sphere::Vec4(0.18f, 0.20f, 0.24f, 1.0f);
+        case MS::DoorWoodMetal:
+            return sphere::Vec4(0.42f, 0.25f, 0.14f, 1.0f);
+        case MS::RoofSurface:
+            return sphere::Vec4(0.36f, 0.21f, 0.18f, 1.0f);
+        case MS::Foundation:
+            return sphere::Vec4(0.26f, 0.28f, 0.31f, 1.0f);
+        case MS::HvacMetal:
+            return sphere::Vec4(0.58f, 0.62f, 0.66f, 1.0f);
+        case MS::GlassTinted:
+            return ComputeGlassSlotColor(1, windowIor);
+        case MS::GlassReflective:
+            return ComputeGlassSlotColor(2, windowIor);
+        case MS::GlassFrosted:
+            return ComputeGlassSlotColor(5, windowIor);
+        case MS::GlassEmerald:
+            return ComputeGlassSlotColor(3, windowIor);
+        case MS::GlassGold:
+            return ComputeGlassSlotColor(6, windowIor);
+        case MS::GlassWired:
+            return ComputeGlassSlotColor(8, windowIor);
+        case MS::GlassBronze:
+            return ComputeGlassSlotColor(4, windowIor);
+        case MS::GlassStained:
+            return ComputeGlassSlotColor(7, windowIor);
+        case MS::BalconyMetal:
+            return sphere::Vec4(0.20f, 0.23f, 0.27f, 1.0f);
+        case MS::BalconyGlass: {
+            sphere::Vec4 g = ComputeGlassSlotColor(glassTypeIdx, std::min(windowIor, 1.38f));
+            g.w = std::min(g.w, 0.52f);
+            return g;
+        }
+        case MS::WoodShutters:
+            return sphere::Vec4(0.32f, 0.20f, 0.12f, 1.0f);
+        case MS::CorniceStone:
+            return sphere::Vec4(0.86f, 0.84f, 0.78f, 1.0f);
+        case MS::BrassHardware:
+            return sphere::Vec4(0.84f, 0.68f, 0.26f, 1.0f);
+        case MS::WallBrick: {
+            float fy = v * 12.0f;
+            float row = std::floor(fy);
+            float fx = u * 6.0f + std::fmod(row, 2.0f) * 0.5f;
+            float cx = fx - std::floor(fx);
+            float cy = fy - row;
+            bool isBrick = (cx > 0.06f && cx < 0.94f && cy > 0.10f && cy < 0.90f);
+            if (!isBrick) return sphere::Vec4(0.72f, 0.69f, 0.65f, 1.0f);
+            float grain = 0.92f + 0.12f * std::sin(std::floor(fx) * 12.9898f + row * 78.233f);
+            return sphere::Vec4(
+                std::clamp(0.56f * grain, 0.0f, 1.0f),
+                std::clamp(0.23f * grain, 0.0f, 1.0f),
+                std::clamp(0.18f * grain, 0.0f, 1.0f),
+                1.0f
+            );
+        }
+        case MS::WallLimestone:
+            return sphere::Vec4(0.86f, 0.82f, 0.73f, 1.0f);
+        case MS::WallStucco:
+            return hasCustomWallTint ? wallTint : sphere::Vec4(0.91f, 0.90f, 0.86f, 1.0f);
+        case MS::WallCorten:
+            return sphere::Vec4(0.54f, 0.24f, 0.12f, 1.0f);
+        case MS::WallBasalt:
+            return sphere::Vec4(0.16f, 0.18f, 0.21f, 1.0f);
+        case MS::WallTimber:
+            return sphere::Vec4(0.56f, 0.36f, 0.20f, 1.0f);
+        case MS::PergolaWood:
+            return sphere::Vec4(0.48f, 0.29f, 0.15f, 1.0f);
+        case MS::GreenTurfDeck:
+            return sphere::Vec4(0.22f, 0.56f, 0.28f, 1.0f);
+        case MS::PlanterBox:
+            return sphere::Vec4(0.46f, 0.38f, 0.31f, 1.0f);
+        case MS::WallBlackAluminum:
+            return sphere::Vec4(0.12f, 0.14f, 0.17f, 1.0f);
+        case MS::WallChampagneAluminum:
+            return sphere::Vec4(0.79f, 0.73f, 0.63f, 1.0f);
+        case MS::WallGunmetalAluminum:
+            return sphere::Vec4(0.30f, 0.33f, 0.37f, 1.0f);
+        case MS::WallBronzeAluminum:
+            return sphere::Vec4(0.44f, 0.32f, 0.21f, 1.0f);
+        case MS::WallSilverAluminum:
+            return sphere::Vec4(0.76f, 0.79f, 0.83f, 1.0f);
+        case MS::WallSpandrelGlass:
+            return sphere::Vec4(0.14f, 0.26f, 0.38f, 1.0f);
+        case MS::StadiumSeatBlue:
+            return sphere::Vec4(0.12f, 0.42f, 0.85f, 1.0f);
+        case MS::TrackRed:
+            return sphere::Vec4(0.76f, 0.22f, 0.18f, 1.0f);
+        case MS::SafetyYellow:
+            return sphere::Vec4(0.95f, 0.78f, 0.14f, 1.0f);
+        case MS::TarmacDark:
+            return sphere::Vec4(0.16f, 0.17f, 0.19f, 1.0f);
+        case MS::CommercialAccentRed:
+            return sphere::Vec4(0.84f, 0.16f, 0.18f, 1.0f);
+        case MS::CommercialSignOrange:
+            return sphere::Vec4(0.96f, 0.48f, 0.10f, 1.0f);
+        case MS::TireRubber:
+            return sphere::Vec4(0.10f, 0.10f, 0.11f, 1.0f);
+        case MS::ShopFloorEpoxy:
+            return sphere::Vec4(0.36f, 0.44f, 0.50f, 1.0f);
+        case MS::CardboardTan:
+            return sphere::Vec4(0.68f, 0.53f, 0.34f, 1.0f);
+        case MS::VehicleBlue:
+            return sphere::Vec4(0.18f, 0.44f, 0.82f, 1.0f);
+        case MS::VehicleWhite:
+            return sphere::Vec4(0.92f, 0.94f, 0.96f, 1.0f);
+        case MS::HydraulicGreen:
+            return sphere::Vec4(0.16f, 0.68f, 0.36f, 1.0f);
+        case MS::LightBulbWarm:
+            return sphere::Vec4(1.00f, 0.88f, 0.62f, 1.0f);
+        case MS::LightBulbDaylight:
+            return sphere::Vec4(0.90f, 0.96f, 1.00f, 1.0f);
+        case MS::LightFixtureMetal:
+            return sphere::Vec4(0.26f, 0.28f, 0.32f, 1.0f);
+        default:
+            return sphere::Vec4(0.75f, 0.76f, 0.78f, 1.0f);
+    }
+}
+
+std::shared_ptr<sphere::Mesh> ConvertBuildingPayloadToSphereMesh(
+    const procedural::GeneratedMeshPayload& payload,
+    jint wallTintArgb,
+    jint glassTypeIdx,
+    float windowIor
+) {
+    auto mesh = std::make_shared<sphere::Mesh>();
+    mesh->name = "ProceduralBuildingMesh";
+
+    const size_t floatsPerVert = 9;
+    const size_t vertCount = payload.vertexBuffer.size() / floatsPerVert;
+    if (vertCount == 0 || payload.indexBuffer.size() < 3) {
+        return mesh;
+    }
+
+    const sphere::Vec4 wallTint = UnpackArgbToVec4(wallTintArgb, 1.0f);
+    const bool hasCustomWallTint = (static_cast<uint32_t>(wallTintArgb) & 0x00FFFFFFu) != 0x00E2E8F0u;
+
+    mesh->vertices.reserve(vertCount);
+    for (size_t i = 0; i < vertCount; ++i) {
+        const size_t base = i * floatsPerVert;
+        sphere::Vertex v;
+        v.position = sphere::Vec3(
+            payload.vertexBuffer[base + 0],
+            payload.vertexBuffer[base + 1],
+            payload.vertexBuffer[base + 2]
+        );
+        v.normal = sphere::Vec3(
+            payload.vertexBuffer[base + 3],
+            payload.vertexBuffer[base + 4],
+            payload.vertexBuffer[base + 5]
+        );
+        float u = payload.vertexBuffer[base + 6];
+        float tv = payload.vertexBuffer[base + 7];
+        uint32_t matId = static_cast<uint32_t>(std::max(0.0f, payload.vertexBuffer[base + 8]) + 0.5f);
+        v.uv[0] = u;
+        v.uv[1] = tv;
+        v.color = ResolveBuildingMaterialColor(
+            matId, u, tv, wallTint, hasCustomWallTint, glassTypeIdx, windowIor
+        );
+        mesh->vertices.push_back(v);
+    }
+
+    // Draw opaque triangles first, translucent glass triangles second for proper Z-buffer compositing
+    std::vector<uint32_t> opaqueIndices;
+    std::vector<uint32_t> glassIndices;
+    opaqueIndices.reserve(payload.indexBuffer.size());
+    glassIndices.reserve(payload.indexBuffer.size() / 4);
+
+    const size_t triCount = payload.indexBuffer.size() / 3;
+    for (size_t t = 0; t < triCount; ++t) {
+        uint32_t i0 = payload.indexBuffer[t * 3 + 0];
+        uint32_t i1 = payload.indexBuffer[t * 3 + 1];
+        uint32_t i2 = payload.indexBuffer[t * 3 + 2];
+        if (i0 >= vertCount || i1 >= vertCount || i2 >= vertCount) continue;
+        float minAlpha = std::min({
+            mesh->vertices[i0].color.w,
+            mesh->vertices[i1].color.w,
+            mesh->vertices[i2].color.w
+        });
+        if (minAlpha < 0.99f) {
+            glassIndices.push_back(i0);
+            glassIndices.push_back(i1);
+            glassIndices.push_back(i2);
+        } else {
+            opaqueIndices.push_back(i0);
+            opaqueIndices.push_back(i1);
+            opaqueIndices.push_back(i2);
+        }
+    }
+
+    mesh->indices.reserve(opaqueIndices.size() + glassIndices.size());
+    mesh->indices.insert(mesh->indices.end(), opaqueIndices.begin(), opaqueIndices.end());
+    mesh->indices.insert(mesh->indices.end(), glassIndices.begin(), glassIndices.end());
+    mesh->CalculateBounds();
+    return mesh;
+}
+
+} // namespace
+
+extern "C" {
+
+JNIEXPORT jstring JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeGetBuildingDiagnostics(
+    JNIEnv* env, jclass clazz
+) {
+    (void)clazz;
+    std::string diag = procedural::buildings::BuildingSystem::instance().getDiagnostics();
+    return env->NewStringUTF(diag.c_str());
+}
+
+JNIEXPORT jfloatArray JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderBuildingBitmap(
+    JNIEnv* env, jclass clazz,
+    jobject bitmap,
+    jint domainOrdinal,
+    jint subTypeOrdinal,
+    jfloat rotX,
+    jfloat rotY,
+    jfloat zoom,
+    jint shapeOrdinal,
+    jint cornerOrdinal,
+    jfloat cornerSize,
+    jint stepModeOrdinal,
+    jint stepTiers,
+    jfloat topTaperRatio,
+    jfloat stepShrinkFactor,
+    jboolean stepTerraceRailing,
+    jint floorCount,
+    jfloat floorHeight,
+    jfloat width,
+    jfloat depth,
+    jfloat cornerRadius,
+    jint windowsPerFacade,
+    jint windowTypeOrdinal,
+    jfloat windowWidth,
+    jfloat windowHeight,
+    jfloat windowSillHeight,
+    jint glassTypeOrdinal,
+    jfloat windowIor,
+    jint wallMaterialOrdinal,
+    jint wallColorArgb,
+    jint doorTypeOrdinal,
+    jfloat doorWidth,
+    jfloat doorHeight,
+    jboolean hasEntranceCanopy,
+    jint roofTypeOrdinal,
+    jfloat roofHeight,
+    jfloat roofOverhang,
+    jboolean showRooftopClutter,
+    jint balconyTypeOrdinal,
+    jboolean hasBalconies,
+    jfloat balconyDepth,
+    jboolean hasSunLouvres,
+    jboolean hasFireEscape,
+    jboolean hasCornice,
+    jboolean hasGroundPillars,
+    jint pillarCount,
+    jboolean hasWindowShutters,
+    jboolean showInside,
+    jint interiorDesign,
+    jfloat detailIntensity,
+    jint detailCount,
+    jboolean detailFlagA,
+    jboolean detailFlagB,
+    jboolean wireframe
+) {
+    (void)clazz;
+    jfloatArray result = env->NewFloatArray(6);
+    if (!result) return nullptr;
+    jfloat outStats[6] = {0.f, 0.f, 0.f, 0.f, 0.f, 0.f};
+
+    if (!bitmap) {
+        env->SetFloatArrayRegion(result, 0, 6, outStats);
+        return result;
+    }
+
+    AndroidBitmapInfo info{};
+    if (AndroidBitmap_getInfo(env, bitmap, &info) != ANDROID_BITMAP_RESULT_SUCCESS ||
+        info.format != ANDROID_BITMAP_FORMAT_RGBA_8888 ||
+        info.width == 0 || info.height == 0 ||
+        info.stride < info.width * 4u) {
+        env->SetFloatArrayRegion(result, 0, 6, outStats);
+        return result;
+    }
+
+    using namespace procedural::buildings;
+
+    const float safeRotX = std::clamp(FiniteOr(rotX, 20.0f), -85.0f, 85.0f);
+    const float safeRotY = FiniteOr(rotY, -35.0f);
+    const float safeZoom = std::clamp(FiniteOr(zoom, 1.0f), 0.25f, 4.5f);
+    const int32_t safeFloors = std::clamp<int32_t>(floorCount, 1, 80);
+    const float safeFloorH = std::clamp(FiniteOr(floorHeight, 3.0f), 2.2f, 8.0f);
+    const float safeW = std::clamp(FiniteOr(width, 20.0f), 3.0f, 120.0f);
+    const float safeD = std::clamp(FiniteOr(depth, 14.0f), 3.0f, 120.0f);
+    const float safeCornerSize = std::clamp(FiniteOr(cornerSize, 2.0f), 0.2f, 12.0f);
+    const float safeCornerRad = std::clamp(FiniteOr(cornerRadius, 3.0f), 0.2f, 20.0f);
+    const int32_t safeWinCount = std::clamp<int32_t>(windowsPerFacade, 0, 24);
+    const float safeWinW = std::clamp(FiniteOr(windowWidth, 1.6f), 0.4f, 6.0f);
+    const float safeWinH = std::clamp(FiniteOr(windowHeight, 1.8f), 0.4f, 4.5f);
+    const float safeWinSill = std::clamp(FiniteOr(windowSillHeight, 0.8f), 0.0f, 2.2f);
+    const float safeDoorW = std::clamp(FiniteOr(doorWidth, 2.4f), 0.8f, 8.0f);
+    const float safeDoorH = std::clamp(FiniteOr(doorHeight, 2.6f), 1.8f, 6.0f);
+    const float safeRoofH = std::clamp(FiniteOr(roofHeight, 2.5f), 0.2f, 18.0f);
+    const float safeRoofOver = std::clamp(FiniteOr(roofOverhang, 0.6f), 0.0f, 4.0f);
+    const float safeBalcDepth = std::clamp(FiniteOr(balconyDepth, 1.0f), 0.4f, 4.0f);
+    const float safeIor = std::clamp(FiniteOr(windowIor, 1.52f), 1.0f, 2.8f);
+
+    const auto shapeEnum = static_cast<BuildingVolumeShape>(std::clamp<int32_t>(shapeOrdinal, 0, 26));
+    const auto cornerEnum = static_cast<BuildingCornerType>(std::clamp<int32_t>(cornerOrdinal, 0, 6));
+    const auto stepEnum = static_cast<BuildingStepMode>(std::clamp<int32_t>(stepModeOrdinal, 0, 4));
+    const auto winEnum = static_cast<WindowType>(std::clamp<int32_t>(windowTypeOrdinal, 0, 22));
+    const int32_t safeGlassIdx = std::clamp<int32_t>(glassTypeOrdinal, 0, 8);
+    const auto glassEnum = static_cast<GlassType>(safeGlassIdx);
+    const auto wallEnum = static_cast<WallMaterialType>(std::clamp<int32_t>(wallMaterialOrdinal, 0, 15));
+    const auto doorEnum = static_cast<DoorType>(std::clamp<int32_t>(doorTypeOrdinal, 0, 9));
+    const auto roofEnum = static_cast<RoofType>(std::clamp<int32_t>(roofTypeOrdinal, 0, 21));
+    const auto balcEnum = static_cast<BalconyType>(std::clamp<int32_t>(balconyTypeOrdinal, 0, 3));
+
+    procedural::GeneratedMeshPayload payload;
+    BuildingStats bStats{};
+    bool hasExactStats = false;
+    bool doubleSided = (showInside == JNI_TRUE);
+
+    {
+        std::lock_guard<std::mutex> lock(gGeometryRegistryMutex);
+        auto& bs = BuildingSystem::instance();
+        procedural::GeneratorContext ctx{};
+
+        switch (domainOrdinal) {
+            case 0: { // ProceduralBuildingGenerator (Massing & Shapes)
+                BuildingParameters p{};
+                p.shape = shapeEnum;
+                p.cornerType = cornerEnum;
+                p.cornerSize = safeCornerSize;
+                p.stepMode = stepEnum;
+                p.stepTiers = std::clamp<int32_t>(stepTiers, 2, 6);
+                p.topTaperRatio = std::clamp(FiniteOr(topTaperRatio, 0.55f), 0.20f, 0.95f);
+                p.stepShrinkFactor = std::clamp(FiniteOr(stepShrinkFactor, 0.20f), 0.05f, 0.40f);
+                p.stepTerraceRailing = (stepTerraceRailing == JNI_TRUE);
+                p.floorCount = safeFloors;
+                p.floorHeight = safeFloorH;
+                p.width = safeW;
+                p.depth = safeD;
+                p.cornerRadius = safeCornerRad;
+                p.windowsPerFacade = safeWinCount;
+                p.windowType = winEnum;
+                p.windowWidth = safeWinW;
+                p.windowHeight = safeWinH;
+                p.windowSillHeight = safeWinSill;
+                p.glassType = glassEnum;
+                p.wallMaterial = wallEnum;
+                p.doorType = doorEnum;
+                p.doorWidth = safeDoorW;
+                p.doorHeight = safeDoorH;
+                p.hasEntranceCanopy = (hasEntranceCanopy == JNI_TRUE);
+                p.roofType = roofEnum;
+                p.roofHeight = safeRoofH;
+                p.roofOverhang = safeRoofOver;
+                p.showRooftopClutter = (showRooftopClutter == JNI_TRUE);
+                p.balconyType = balcEnum;
+                p.hasBalconies = (hasBalconies == JNI_TRUE) || (balcEnum != BalconyType::None);
+                p.balconyDepth = safeBalcDepth;
+                p.hasSunLouvres = (hasSunLouvres == JNI_TRUE);
+                p.hasFireEscape = (hasFireEscape == JNI_TRUE);
+                p.hasCornice = (hasCornice == JNI_TRUE);
+                p.hasGroundPillars = (hasGroundPillars == JNI_TRUE);
+                p.pillarCount = std::clamp<int32_t>(pillarCount, 2, 16);
+                p.hasWindowShutters = (hasWindowShutters == JNI_TRUE);
+                p.showInside = (showInside == JNI_TRUE);
+                p.interiorDesign = std::clamp<int32_t>(interiorDesign, 0, 3);
+
+                auto gen = bs.getProceduralBuildingGen();
+                gen->configure(p);
+                payload = gen->generateMesh(ctx);
+                bStats = gen->getStats();
+                hasExactStats = true;
+                break;
+            }
+            case 1: { // HouseGen (53 Residential Types)
+                ResidentialParams p{};
+                p.subType = static_cast<ResidentialType>(std::clamp<int32_t>(subTypeOrdinal, 0, 52));
+                p.stories = safeFloors;
+                p.storyHeight = safeFloorH;
+                p.footprintWidth = safeW;
+                p.footprintDepth = safeD;
+                p.roofStyle = roofEnum;
+                p.hasGarage = (detailFlagA == JNI_TRUE);
+                p.hasPorchOrBalcony = (hasBalconies == JNI_TRUE);
+                p.wallColor = static_cast<uint32_t>(wallColorArgb);
+                p.useExtendedParams = true;
+                p.windowsPerFacade = safeWinCount;
+                p.windowType = winEnum;
+                p.windowWidth = safeWinW;
+                p.windowHeight = safeWinH;
+                p.windowSillHeight = safeWinSill;
+                p.glassType = glassEnum;
+                p.doorType = doorEnum;
+                p.doorWidth = safeDoorW;
+                p.doorHeight = safeDoorH;
+                p.hasEntranceCanopy = (hasEntranceCanopy == JNI_TRUE);
+                p.roofHeight = safeRoofH;
+                p.roofOverhang = safeRoofOver;
+                p.showRooftopClutter = (showRooftopClutter == JNI_TRUE);
+                p.wallMaterial = wallEnum;
+                p.hasCornice = (hasCornice == JNI_TRUE);
+                p.hasWindowShutters = (hasWindowShutters == JNI_TRUE);
+                p.hasSunLouvres = (hasSunLouvres == JNI_TRUE);
+                p.balconyDepth = safeBalcDepth;
+
+                auto gen = bs.getHouseGen();
+                gen->configure(p);
+                payload = gen->generateMesh(ctx);
+                break;
+            }
+            case 2:   // TowerGen (36 Commercial Types)
+            case 3:   // PetrolStationGen
+            case 4: { // CarWashGen
+                CommercialParams p{};
+                p.subType = static_cast<CommercialType>(std::clamp<int32_t>(subTypeOrdinal, 0, 35));
+                p.stories = safeFloors;
+                p.storyHeight = safeFloorH;
+                p.footprintWidth = safeW;
+                p.footprintDepth = safeD;
+                p.hasSetbacks = (detailFlagA == JNI_TRUE);
+                p.hasEntranceAtrium = (detailFlagB == JNI_TRUE);
+                p.curtainWallGlazing = (wallEnum == WallMaterialType::GlassCurtainWall ||
+                                        wallEnum == WallMaterialType::StructuralSiliconeGlazing ||
+                                        wallEnum == WallMaterialType::SpiderPointFixedGlass);
+                p.useExtendedParams = true;
+                p.windowsPerFacade = safeWinCount;
+                p.windowType = winEnum;
+                p.windowWidth = safeWinW;
+                p.windowHeight = safeWinH;
+                p.windowSillHeight = safeWinSill;
+                p.glassType = glassEnum;
+                p.doorType = doorEnum;
+                p.doorWidth = safeDoorW;
+                p.doorHeight = safeDoorH;
+                p.hasEntranceCanopy = (hasEntranceCanopy == JNI_TRUE);
+                p.roofStyle = roofEnum;
+                p.roofHeight = safeRoofH;
+                p.roofOverhang = safeRoofOver;
+                p.showRooftopClutter = (showRooftopClutter == JNI_TRUE);
+                p.wallMaterial = wallEnum;
+                p.hasBalconies = (hasBalconies == JNI_TRUE);
+                p.hasCornice = (hasCornice == JNI_TRUE);
+                p.hasWindowShutters = (hasWindowShutters == JNI_TRUE);
+                p.hasSunLouvres = (hasSunLouvres == JNI_TRUE);
+                p.balconyDepth = safeBalcDepth;
+                p.showInside = (showInside == JNI_TRUE);
+                p.interiorDesign = std::clamp<int32_t>(interiorDesign, 0, 3);
+
+                if (domainOrdinal == 3) {
+                    auto gen = bs.getPetrolStationGen();
+                    gen->configure(p);
+                    payload = gen->generateMesh(ctx);
+                } else if (domainOrdinal == 4) {
+                    auto gen = bs.getCarWashGen();
+                    gen->configure(p);
+                    payload = gen->generateMesh(ctx);
+                } else {
+                    auto gen = bs.getTowerGen();
+                    gen->configure(p);
+                    payload = gen->generateMesh(ctx);
+                }
+                break;
+            }
+            case 5: { // WarehouseGen (14 Industrial Types)
+                IndustrialParams p{};
+                p.subType = static_cast<IndustrialType>(std::clamp<int32_t>(subTypeOrdinal, 0, 13));
+                p.length = safeD;
+                p.width = safeW;
+                p.height = safeFloors * safeFloorH;
+                p.loadingBays = std::clamp<int32_t>(detailCount, 1, 10);
+                p.hasCatwalks = (detailFlagA == JNI_TRUE);
+                p.hasSawtoothRoof = (detailFlagB == JNI_TRUE);
+                p.useExtendedParams = true;
+                p.windowsPerFacade = safeWinCount;
+                p.windowType = winEnum;
+                p.windowWidth = safeWinW;
+                p.windowHeight = safeWinH;
+                p.windowSillHeight = safeWinSill;
+                p.glassType = glassEnum;
+                p.doorType = doorEnum;
+                p.doorWidth = safeDoorW;
+                p.doorHeight = safeDoorH;
+                p.hasEntranceCanopy = (hasEntranceCanopy == JNI_TRUE);
+                p.roofStyle = roofEnum;
+                p.roofHeight = safeRoofH;
+                p.roofOverhang = safeRoofOver;
+                p.showRooftopClutter = (showRooftopClutter == JNI_TRUE);
+                p.wallMaterial = wallEnum;
+                p.hasCornice = (hasCornice == JNI_TRUE);
+                p.showInside = (showInside == JNI_TRUE);
+                p.interiorDesign = std::clamp<int32_t>(interiorDesign, 0, 3);
+
+                auto gen = bs.getWarehouseGen();
+                gen->configure(p);
+                payload = gen->generateMesh(ctx);
+                break;
+            }
+            case 6: { // CivicGen (20 Civic Types)
+                CivicParams p{};
+                p.subType = static_cast<CivicType>(std::clamp<int32_t>(subTypeOrdinal, 0, 19));
+                p.stories = safeFloors;
+                p.storyHeight = safeFloorH;
+                p.mainWidth = safeW;
+                p.mainDepth = safeD;
+                p.wingLength = safeW * 0.42f;
+                p.hasClockTower = (detailFlagA == JNI_TRUE);
+                p.hasHelipad = (detailFlagB == JNI_TRUE);
+                p.hasPortico = (hasEntranceCanopy == JNI_TRUE);
+                p.columnsCount = std::clamp<int32_t>(pillarCount, 2, 12);
+                p.busBays = std::clamp<int32_t>(detailCount, 2, 10);
+                p.hasCanopy = (hasEntranceCanopy == JNI_TRUE);
+                p.hasFloodlights = (showRooftopClutter == JNI_TRUE);
+                p.hasControlTower = (detailFlagA == JNI_TRUE);
+                p.useExtendedParams = true;
+                p.windowsPerFacade = safeWinCount;
+                p.windowType = winEnum;
+                p.windowWidth = safeWinW;
+                p.windowHeight = safeWinH;
+                p.windowSillHeight = safeWinSill;
+                p.glassType = glassEnum;
+                p.doorType = doorEnum;
+                p.doorWidth = safeDoorW;
+                p.doorHeight = safeDoorH;
+                p.hasEntranceCanopy = (hasEntranceCanopy == JNI_TRUE);
+                p.roofStyle = roofEnum;
+                p.roofHeight = safeRoofH;
+                p.roofOverhang = safeRoofOver;
+                p.showRooftopClutter = (showRooftopClutter == JNI_TRUE);
+                p.wallMaterial = wallEnum;
+                p.hasBalconies = (hasBalconies == JNI_TRUE);
+                p.hasCornice = (hasCornice == JNI_TRUE);
+                p.hasWindowShutters = (hasWindowShutters == JNI_TRUE);
+                p.hasSunLouvres = (hasSunLouvres == JNI_TRUE);
+                p.balconyDepth = safeBalcDepth;
+
+                auto gen = bs.getCivicGen();
+                gen->configure(p);
+                payload = gen->generateMesh(ctx);
+                break;
+            }
+            case 7: { // RoomGen (5 Interior Types)
+                RoomParams p{};
+                p.subType = static_cast<RoomType>(std::clamp<int32_t>(subTypeOrdinal, 0, 4));
+                p.width = std::clamp(safeW, 4.0f, 40.0f);
+                p.length = std::clamp(safeD, 4.0f, 40.0f);
+                p.ceilingHeight = std::clamp(safeFloorH, 2.4f, 9.0f);
+                p.hasInteriorDoors = (detailFlagA == JNI_TRUE);
+                p.hasFurnitureStubs = (detailFlagB == JNI_TRUE);
+                p.cubicleRows = std::clamp<int32_t>(detailCount, 1, 6);
+                p.cubicleCols = std::clamp<int32_t>(detailCount, 1, 6);
+                p.showInside = true;
+                p.interiorDesign = std::clamp<int32_t>(interiorDesign, 0, 3);
+                p.loadingBays = std::clamp<int32_t>(detailCount, 1, 6);
+
+                doubleSided = true;
+                auto gen = bs.getRoomGen();
+                gen->configure(p);
+                payload = gen->generateMesh(ctx);
+                break;
+            }
+            case 8: { // PropAttach (3 Rooftop Prop Types)
+                PropAttachParams p{};
+                p.subType = static_cast<AttachmentType>(std::clamp<int32_t>(subTypeOrdinal, 0, 2));
+                p.scale = std::clamp(FiniteOr(detailIntensity, 1.0f), 0.4f, 4.0f);
+                p.clusterUnits = (detailFlagA == JNI_TRUE);
+                p.clusterCount = std::clamp<int32_t>(detailCount, 1, 8);
+
+                auto gen = bs.getPropAttach();
+                gen->configure(p);
+                payload = gen->generateMesh(ctx);
+                break;
+            }
+            case 9: { // NeonSignGen (3 Signage Types)
+                NeonSignParams p{};
+                p.subType = static_cast<SignType>(std::clamp<int32_t>(subTypeOrdinal, 0, 2));
+                p.width = std::clamp(safeW, 2.0f, 24.0f);
+                p.height = std::clamp(safeFloorH * 1.4f, 1.5f, 12.0f);
+                p.columnHeight = std::clamp(safeFloors * safeFloorH * 0.6f, 2.0f, 18.0f);
+                p.hasSpotlights = (detailFlagA == JNI_TRUE);
+                p.hasCatwalk = (detailFlagB == JNI_TRUE);
+
+                auto gen = bs.getNeonSignGen();
+                gen->configure(p);
+                payload = gen->generateMesh(ctx);
+                break;
+            }
+            case 10: { // DamageGen (3 Structural Damage Types)
+                DamageParams p{};
+                p.subType = static_cast<DamageType>(std::clamp<int32_t>(subTypeOrdinal, 0, 2));
+                p.severity = std::clamp(FiniteOr(detailIntensity, 0.65f), 0.1f, 1.0f);
+                p.radius = std::clamp(safeW * 0.25f, 1.5f, 10.0f);
+                p.exposeRebar = (detailFlagA == JNI_TRUE);
+                p.rubbleChunkCount = std::clamp<int32_t>(detailCount, 6, 60);
+
+                auto gen = bs.getDamageGen();
+                gen->configure(p);
+                payload = gen->generateMesh(ctx);
+                break;
+            }
+            case 11: // ImpostorGen (3 LOD & Distant Block Types)
+            default: {
+                ImpostorParams p{};
+                p.subType = static_cast<ImpostorType>(std::clamp<int32_t>(subTypeOrdinal, 0, 2));
+                p.blockWidth = std::clamp(safeW * 2.5f, 20.0f, 160.0f);
+                p.blockDepth = std::clamp(safeD * 2.5f, 20.0f, 160.0f);
+                p.buildingCountX = std::clamp<int32_t>(detailCount, 1, 6);
+                p.buildingCountZ = std::clamp<int32_t>(detailCount, 1, 6);
+                p.maxBuildingHeight = std::clamp(safeFloors * safeFloorH, 6.0f, 120.0f);
+                if (p.subType != ImpostorType::CityBlockOctahedral) {
+                    doubleSided = true;
+                }
+
+                auto gen = bs.getImpostorGen();
+                gen->configure(p);
+                payload = gen->generateMesh(ctx);
+                break;
+            }
+        }
+    }
+
+    auto sphereMesh = ConvertBuildingPayloadToSphereMesh(
+        payload, wallColorArgb, safeGlassIdx, safeIor
+    );
+
+    const int32_t vtxCount = static_cast<int32_t>(sphereMesh->GetVertexCount());
+    const int32_t triCount = static_cast<int32_t>(sphereMesh->GetTriangleCount());
+
+    float minX = sphereMesh->bounds.min.x;
+    float maxX = sphereMesh->bounds.max.x;
+    float minY = sphereMesh->bounds.min.y;
+    float maxY = sphereMesh->bounds.max.y;
+    float minZ = sphereMesh->bounds.min.z;
+    float maxZ = sphereMesh->bounds.max.z;
+    float spanX = std::max(0.0f, maxX - minX);
+    float spanY = std::max(0.0f, maxY - minY);
+    float spanZ = std::max(0.0f, maxZ - minZ);
+
+    if (hasExactStats) {
+        outStats[0] = static_cast<jfloat>(bStats.vertexCount > 0 ? bStats.vertexCount : vtxCount);
+        outStats[1] = static_cast<jfloat>(bStats.triangleCount > 0 ? bStats.triangleCount : triCount);
+        outStats[2] = bStats.totalHeightMeters > 0.f ? bStats.totalHeightMeters : spanY;
+        outStats[3] = bStats.footprintAreaSqM > 0.f ? bStats.footprintAreaSqM : (spanX * spanZ);
+        outStats[4] = bStats.totalGrossFloorAreaSqM > 0.f ? bStats.totalGrossFloorAreaSqM : (spanX * spanZ * safeFloors);
+        outStats[5] = static_cast<jfloat>(bStats.totalWindowCount);
+    } else {
+        float footArea = spanX * spanZ;
+        outStats[0] = static_cast<jfloat>(vtxCount);
+        outStats[1] = static_cast<jfloat>(triCount);
+        outStats[2] = spanY;
+        outStats[3] = footArea;
+        outStats[4] = (domainOrdinal >= 8) ? footArea : (footArea * static_cast<float>(safeFloors));
+        outStats[5] = (domainOrdinal <= 6) ? static_cast<jfloat>(safeWinCount * 4 * safeFloors) : 0.f;
+    }
+
+    float matRoughness = 0.65f;
+    float matMetallic = 0.12f;
+    switch (wallEnum) {
+        case WallMaterialType::GlassCurtainWall:
+        case WallMaterialType::StructuralSiliconeGlazing:
+        case WallMaterialType::DoubleSkinAerodynamicGlass:
+        case WallMaterialType::SpiderPointFixedGlass:
+            matRoughness = 0.18f; matMetallic = 0.35f; break;
+        case WallMaterialType::BlackAluminumGlassGrid:
+        case WallMaterialType::ChampagneAluminumGlass:
+        case WallMaterialType::BronzeAluminumSolarFins:
+        case WallMaterialType::GunmetalAluminumCassette:
+        case WallMaterialType::PerforatedAluminumBriseSoleil:
+            matRoughness = 0.28f; matMetallic = 0.68f; break;
+        case WallMaterialType::WeatheredCortenSteel:
+            matRoughness = 0.52f; matMetallic = 0.55f; break;
+        default:
+            matRoughness = 0.68f; matMetallic = 0.08f; break;
+    }
+
+    void* pixelsPtr = nullptr;
+    if (AndroidBitmap_lockPixels(env, bitmap, &pixelsPtr) == ANDROID_BITMAP_RESULT_SUCCESS && pixelsPtr) {
+        sphere::scene::BuildingRasterParams rParams;
+        rParams.rotXDeg = safeRotX;
+        rParams.rotYDeg = safeRotY;
+        rParams.zoom = safeZoom;
+        rParams.roughness = matRoughness;
+        rParams.metallic = matMetallic;
+        rParams.wireframe = (wireframe == JNI_TRUE);
+        rParams.doubleSided = doubleSided;
+
+        sphere::scene::NativeMeshRasterizer::RenderBuildingBitmap(
+            static_cast<uint32_t*>(pixelsPtr),
+            static_cast<int32_t>(info.stride / 4),
+            static_cast<int32_t>(info.width),
+            static_cast<int32_t>(info.height),
+            sphereMesh.get(),
+            rParams
+        );
+        AndroidBitmap_unlockPixels(env, bitmap);
+    }
+
+    env->SetFloatArrayRegion(result, 0, 6, outStats);
+    return result;
 }
 
 } // extern "C"

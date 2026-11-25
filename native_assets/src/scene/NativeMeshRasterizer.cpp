@@ -555,7 +555,9 @@ struct FrameBufferView {
         float offsetY,
         float offsetZ,
         float roughness,
-        float metallic
+        float metallic,
+        bool doubleSided = false,
+        bool wireframe = false
     ) {
         if (!pm.sourcePtr || pm.triCount == 0) return;
         const Mesh& mesh = *pm.sourcePtr;
@@ -600,8 +602,24 @@ struct FrameBufferView {
 
             // Outward CCW in 3D projects to det2d < 0 because sy is Y-down
             float det2d = (sx1 - sx0) * (sy2 - sy0) - (sy1 - sy0) * (sx2 - sx0);
-            if (det2d >= -1e-4f) continue;
-            float invArea = 1.0f / (-det2d);
+            if (!doubleSided && det2d >= -1e-4f) continue;
+            if (std::abs(det2d) <= 1e-4f) continue;
+            const bool flipped = (det2d > 0.0f);
+            float invArea = 1.0f / std::abs(det2d);
+
+            if (wireframe) {
+                uint32_t wireCol = PackRGBA8888(56, 189, 248, 200);
+                DrawLine(sx0, sy0, sx1, sy1, wireCol, 1.0f);
+                DrawLine(sx1, sy1, sx2, sy2, wireCol, 1.0f);
+                DrawLine(sx2, sy2, sx0, sy0, wireCol, 1.0f);
+                continue;
+            }
+
+            if (flipped) {
+                std::swap(sx1, sx2);
+                std::swap(sy1, sy2);
+                std::swap(iz1, iz2);
+            }
 
             const float maxWf = static_cast<float>(width - 1);
             const float maxHf = static_cast<float>(height - 1);
@@ -612,13 +630,20 @@ struct FrameBufferView {
             if (minPx > maxPx || minPy > maxPy) continue;
 
             Vec3 vn0 = cam.RotateNormalToView(pm.cornerNormals[t * 3 + 0]);
-            Vec3 vn1 = cam.RotateNormalToView(pm.cornerNormals[t * 3 + 1]);
-            Vec3 vn2 = cam.RotateNormalToView(pm.cornerNormals[t * 3 + 2]);
+            Vec3 vn1 = cam.RotateNormalToView(pm.cornerNormals[t * 3 + (flipped ? 2 : 1)]);
+            Vec3 vn2 = cam.RotateNormalToView(pm.cornerNormals[t * 3 + (flipped ? 1 : 2)]);
+            if (flipped) {
+                vn0 = vn0 * -1.0f;
+                vn1 = vn1 * -1.0f;
+                vn2 = vn2 * -1.0f;
+            }
+            const Vertex& cV1 = flipped ? v2 : v1;
+            const Vertex& cV2 = flipped ? v1 : v2;
 
             float r0, g0, b0, r1, g1, b1, r2, g2, b2;
             ShadeCornerPBR(Vec3(v0.color.x, v0.color.y, v0.color.z), vn0, roughness, metallic, r0, g0, b0);
-            ShadeCornerPBR(Vec3(v1.color.x, v1.color.y, v1.color.z), vn1, roughness, metallic, r1, g1, b1);
-            ShadeCornerPBR(Vec3(v2.color.x, v2.color.y, v2.color.z), vn2, roughness, metallic, r2, g2, b2);
+            ShadeCornerPBR(Vec3(cV1.color.x, cV1.color.y, cV1.color.z), vn1, roughness, metallic, r1, g1, b1);
+            ShadeCornerPBR(Vec3(cV2.color.x, cV2.color.y, cV2.color.z), vn2, roughness, metallic, r2, g2, b2);
 
             float avgAlpha = std::clamp((v0.color.w + v1.color.w + v2.color.w) * (1.0f / 3.0f), 0.0f, 1.0f);
             bool isOpaque = (avgAlpha >= 0.99f);
@@ -1312,6 +1337,107 @@ void NativeMeshRasterizer::RenderPbrStageRGBA8888(
     );
 
     fb.RasterizeMesh(pmBox, cam, 1.0f, 0.0f, 0.0f, 0.0f, params.roughness, params.metallic);
+}
+
+void NativeMeshRasterizer::RenderBuildingBitmap(
+    uint32_t* pixelsRGBA8888,
+    int32_t stridePixels,
+    int32_t width,
+    int32_t height,
+    const Mesh* buildingMesh,
+    const BuildingRasterParams& params
+) {
+    if (!pixelsRGBA8888 || width <= 0 || height <= 0 || stridePixels < width || !buildingMesh) return;
+
+    const auto pmPtr = GetPreparedMesh(buildingMesh);
+    const PreparedMesh& pm = *pmPtr;
+    if (pm.triCount == 0) {
+        thread_local FrameBufferView emptyFb;
+        emptyFb.Begin(pixelsRGBA8888, stridePixels, width, height);
+        emptyFb.FillStudioBackground(width * 0.5f, height * 0.5f, std::max(width, height) * 0.9f,
+                                     width * 0.5f, height * 0.65f, width * 0.25f, height * 0.1f);
+        return;
+    }
+
+    float minX = pm.bounds.min.x;
+    float maxX = pm.bounds.max.x;
+    float minY = pm.bounds.min.y;
+    float maxY = pm.bounds.max.y;
+    float minZ = pm.bounds.min.z;
+    float maxZ = pm.bounds.max.z;
+
+    float spanX = std::max(1.0f, maxX - minX);
+    float spanY = std::max(1.0f, maxY - minY);
+    float spanZ = std::max(1.0f, maxZ - minZ);
+    float maxHoriz = std::max(spanX, spanZ);
+    float maxSpan3D = std::max({spanX, spanY, spanZ});
+
+    float radX = params.rotXDeg * (kPi / 180.0f);
+    float radY = params.rotYDeg * (kPi / 180.0f);
+
+    float fitScaleX = (static_cast<float>(width) * 0.72f) / (maxHoriz * 1.18f);
+    float fitScaleY = (static_cast<float>(height) * 0.66f) / (spanY + maxHoriz * 0.30f);
+    float worldScale = std::min(fitScaleX, fitScaleY) * params.zoom;
+
+    float midX = (minX + maxX) * 0.5f;
+    float midY = (minY + maxY) * 0.5f;
+    float midZ = (minZ + maxZ) * 0.5f;
+
+    CameraXform cam;
+    cam.cx = static_cast<float>(width) * 0.5f;
+    cam.cy = static_cast<float>(height) * 0.52f + (midY - minY) * worldScale * 0.78f;
+    cam.baseScale = worldScale;
+    cam.cosY = std::cos(radY);
+    cam.sinY = std::sin(radY);
+    cam.cosX = std::cos(radX);
+    cam.sinX = std::sin(radX);
+    cam.camDist = std::max(18.0f, maxSpan3D * 2.25f);
+
+    float shadowSx, shadowSy, shadowIz, shadowVz;
+    cam.ProjectPoint(0.0f, 0.0f, 0.0f, shadowSx, shadowSy, shadowIz, shadowVz);
+    float shadowRadius = std::clamp(maxHoriz * 0.60f * worldScale, 12.0f, static_cast<float>(width) * 0.65f);
+    float tiltSquash = std::clamp(std::abs(cam.sinX), 0.18f, 0.55f);
+
+    thread_local FrameBufferView fb;
+    fb.Begin(pixelsRGBA8888, stridePixels, width, height);
+    fb.FillStudioBackground(
+        static_cast<float>(width) * 0.5f,
+        static_cast<float>(height) * 0.52f,
+        static_cast<float>(std::max(width, height)) * 0.90f,
+        shadowSx,
+        shadowSy,
+        shadowRadius,
+        shadowRadius * tiltSquash
+    );
+
+    // Subtle ground architectural reference grid around building base (y = minY)
+    float gridHalf = maxHoriz * 0.75f;
+    int gridSteps = 6;
+    float gridStep = (gridHalf * 2.0f) / static_cast<float>(gridSteps);
+    uint32_t gridCol = PackRGBA8888(51, 65, 85, 95);
+    for (int i = 0; i <= gridSteps; ++i) {
+        float t = -gridHalf + static_cast<float>(i) * gridStep;
+        float x0, y0, x1, y1, iz, vz;
+        cam.ProjectPoint(-gridHalf, 0.0f, t, x0, y0, iz, vz);
+        cam.ProjectPoint(gridHalf, 0.0f, t, x1, y1, iz, vz);
+        fb.DrawLine(x0, y0, x1, y1, gridCol, 1.0f);
+        cam.ProjectPoint(t, 0.0f, -gridHalf, x0, y0, iz, vz);
+        cam.ProjectPoint(t, 0.0f, gridHalf, x1, y1, iz, vz);
+        fb.DrawLine(x0, y0, x1, y1, gridCol, 1.0f);
+    }
+
+    fb.RasterizeMesh(
+        pm,
+        cam,
+        1.0f,
+        -midX,
+        -minY,
+        -midZ,
+        params.roughness,
+        params.metallic,
+        params.doubleSided,
+        params.wireframe
+    );
 }
 
 } // namespace sphere::scene
