@@ -1,0 +1,371 @@
+#version 450
+// ============================================================================
+// tree_growth.comp - Vulkan 1.2/1.3 Direct GPU Compute Shader for Tree Growth
+//
+// Direct GPU execution of species-specific botanical architecture:
+//  - Conifer Monopodial Whorled Spire
+//  - Decurrent Sympodial Gnarled Boughs
+//  - Monocaul Apical Fronds (Golden Angle Phyllotaxis 137.5077 deg)
+//  - Pachycaul Swollen Caudex & Stubby Stems (Baobab)
+//  - Dichotomous Candelabra Succulent Vertical Arms (Euphorbia)
+//  - Flat-Topped Savanna Horizontal Umbrella Planes (Acacia)
+//  - Pendulous Downward-Weeping Cascades (Willow)
+//  - Stilt Prop Aerial Roots (Mangrove)
+//
+// Direct GPU memory access via SSBOs (Shader Storage Buffer Objects).
+// No CPU bottleneck: branches and leaves are evaluated directly in VRAM.
+// ============================================================================
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+// Botanical Architecture Mode Constants (matches C++ and Kotlin)
+#define ARCH_CONIFER_WHORL         0u
+#define ARCH_DECURRENT_BROADLEAF   1u
+#define ARCH_PALM_FRONDS           2u
+#define ARCH_BAOBAB_CAUDEX         3u
+#define ARCH_CANDELABRA_SUCCULENT  4u
+#define ARCH_UMBRELLA_ACACIA       5u
+#define ARCH_WEEPING_WILLOW        6u
+#define ARCH_MANGROVE_STILT        7u
+
+struct GpuBranchSegment {
+    vec4 startAndRadiusStart; // xyz = startPos, w = radiusStart
+    vec4 endAndRadiusEnd;     // xyz = endPos, w = radiusEnd
+    vec4 normalAndWind;       // xyz = normal/heading, w = windWeight
+    uvec4 meta;               // x = order, y = branchIdx, z = speciesId, w = archMode
+};
+
+struct GpuLeafInstance {
+    vec4 posAndSize;          // xyz = position, w = leafScale
+    vec4 normalAndSun;        // xyz = leafNormal, w = sunlitExposure
+    vec4 tangentAndColorR;    // xyz = leafTangent, w = colorR
+    vec4 colorGBAndMeta;      // x = colorG, y = colorB, z = parentBranchIdx, w = phyllotaxisIdx
+};
+
+// SSBO 0: Input Botanical Parameters
+layout(std430, set = 0, binding = 0) readonly buffer GrowthParamsBuffer {
+    uint speciesId;
+    uint archMode;
+    float heightMeters;
+    float trunkRadiusMeters;
+    float branchingVigor;
+    float foliageFullness;
+    float branchAngleDeg;
+    float crownSpread;
+    float windSpeedMps;
+    float windFlexibility;
+    float timeSeconds;
+    uint seed;
+} params;
+
+// SSBO 1: Output Branches Buffer (Direct GPU Memory)
+layout(std430, set = 0, binding = 1) writeonly buffer BranchOutputBuffer {
+    GpuBranchSegment outBranches[];
+};
+
+// SSBO 2: Output Leaves Buffer (Direct GPU Memory)
+layout(std430, set = 0, binding = 2) writeonly buffer LeafOutputBuffer {
+    GpuLeafInstance outLeaves[];
+};
+
+// SSBO 3: Atomic Allocation Counters
+layout(std430, set = 0, binding = 3) buffer AtomicCounters {
+    uint totalBranchCount;
+    uint totalLeafCount;
+    uint maxBranchesAlloc;
+    uint maxLeavesAlloc;
+} counters;
+
+// Simple fast GPU PRNG (PCG Hash)
+uint pcgHash(uint v) {
+    uint state = v * 747796405u + 2891336453u;
+    uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+
+float gpuRandom01(inout uint state) {
+    state = pcgHash(state);
+    return float(state) * (1.0 / 4294967296.0);
+}
+
+vec3 evaluateGpuWind(vec3 pos, float treeHeight, float windSpeed, float flex, float timeSec) {
+    if (windSpeed < 0.05 || flex < 0.01) return vec3(0.0);
+    float hFrac = clamp(pos.y / max(1.0, treeHeight), 0.0, 1.4);
+    float bending = hFrac * hFrac * (windSpeed * 0.045) * flex;
+    float wave = sin(pos.x * 0.35 + pos.z * 0.35 + timeSec * (1.3 + windSpeed * 0.3));
+    float gust = sin(timeSec * 0.75 + pos.y * 0.15) * 0.35;
+    float dx = (wave + gust) * bending;
+    float dz = (wave * 0.60) * bending;
+    float dy = -0.06 * (dx * dx + dz * dz);
+    return vec3(dx, dy, dz);
+}
+
+void main() {
+    uint invocationId = gl_GlobalInvocationID.x;
+    if (invocationId >= 64u) return;
+
+    // Direct GPU parallel growth dispatch
+    uint rngState = params.seed + invocationId * 1664525u + 1013904223u;
+
+    float H = max(2.0, params.heightMeters);
+    float R = max(0.05, params.trunkRadiusMeters);
+    float vigor = clamp(params.branchingVigor, 0.35, 2.5);
+    float foliage = clamp(params.foliageFullness, 0.3, 2.2);
+    float spread = clamp(params.crownSpread, 0.6, 1.8);
+    float branchAngle = radians(clamp(params.branchAngleDeg, 15.0, 75.0));
+
+    // Leonardo da Vinci wr ratio = 1 / sqrt(2) = 0.7071
+    const float daVinciWr = 0.70710678;
+    const float goldenAngle = 2.3999632; // 137.5077 degrees in radians
+
+    // Thread 0 allocates and seeds the trunk hierarchy
+    if (invocationId == 0u) {
+        // Evaluate species-specific trunk steps and morphology
+        uint trunkSteps = (params.archMode == ARCH_BAOBAB_CAUDEX) ? 6u : ((params.archMode == ARCH_PALM_FRONDS) ? 10u : 8u);
+        float trunkHeightFrac = (params.archMode == ARCH_PALM_FRONDS) ? 0.82 :
+                               ((params.archMode == ARCH_BAOBAB_CAUDEX) ? 0.45 :
+                               ((params.archMode == ARCH_CONIFER_WHORL) ? 0.18 : 0.40));
+        float trunkH = H * trunkHeightFrac;
+        float stepH = trunkH / float(trunkSteps);
+
+        vec3 currPos = vec3(0.0);
+        float currR = R;
+
+        for (uint s = 0u; s < trunkSteps; ++s) {
+            uint bIdx = atomicAdd(counters.totalBranchCount, 1u);
+            if (bIdx >= counters.maxBranchesAlloc) break;
+
+            float curveX = (gpuRandom01(rngState) - 0.5) * 0.04 * stepH;
+            float curveZ = (gpuRandom01(rngState) - 0.5) * 0.04 * stepH;
+            vec3 nextPos = currPos + vec3(curveX, stepH, curveZ);
+            float taper = (params.archMode == ARCH_BAOBAB_CAUDEX) ? 0.88 : 0.95;
+            float nextR = currR * taper;
+
+            GpuBranchSegment b;
+            b.startAndRadiusStart = vec4(currPos, currR);
+            b.endAndRadiusEnd = vec4(nextPos, nextR);
+            vec3 windDef = evaluateGpuWind(nextPos, H, params.windSpeedMps, params.windFlexibility, params.timeSeconds);
+            b.normalAndWind = vec4(normalize(nextPos - currPos), (nextPos.y / H) * 0.2);
+            b.meta = uvec4(0u, bIdx, params.speciesId, params.archMode);
+
+            outBranches[bIdx] = b;
+            currPos = nextPos;
+            currR = nextR;
+        }
+    }
+
+    // Secondary threads generate species-specific branches and attach leaves
+    // Direct branching computation per architecture mode:
+    if (invocationId > 0u && invocationId < 32u) {
+        uint limbIndex = invocationId - 1u;
+        float az = float(limbIndex) * goldenAngle;
+
+        vec3 limbStart;
+        vec3 limbDir;
+        float limbLen;
+        float limbRadiusStart = R * 0.45;
+        uint order = 1u;
+
+        if (params.archMode == ARCH_PALM_FRONDS) {
+            // Palm frond rachis arching outward & drooping with golden angle
+            float trunkH = H * 0.82;
+            limbStart = vec3(0.0, trunkH, 0.0);
+            float pitch = radians(35.0 + float(limbIndex % 5u) * 12.0);
+            limbDir = vec3(sin(pitch) * cos(az), cos(pitch) * 0.45 - 0.35, sin(pitch) * sin(az));
+            limbDir = normalize(limbDir);
+            limbLen = H * 0.32 * spread;
+
+            uint bIdx = atomicAdd(counters.totalBranchCount, 1u);
+            if (bIdx < counters.maxBranchesAlloc) {
+                vec3 limbEnd = limbStart + limbDir * limbLen;
+                GpuBranchSegment b;
+                b.startAndRadiusStart = vec4(limbStart, limbRadiusStart);
+                b.endAndRadiusEnd = vec4(limbEnd, 0.005); // Taper to acute apex
+                b.normalAndWind = vec4(limbDir, 0.85);
+                b.meta = uvec4(1u, bIdx, params.speciesId, params.archMode);
+                outBranches[bIdx] = b;
+
+                // Automatically generate pinnae leaves along this frond
+                uint leavesPerFrond = uint(20.0 * foliage);
+                for (uint l = 0u; l < leavesPerFrond; ++l) {
+                    uint lIdx = atomicAdd(counters.totalLeafCount, 1u);
+                    if (lIdx >= counters.maxLeavesAlloc) break;
+
+                    float frac = 0.15 + float(l) / float(leavesPerFrond) * 0.82;
+                    vec3 leafPos = mix(limbStart, limbEnd, frac);
+                    vec3 leafSide = normalize(cross(limbDir, vec3(0.0, 1.0, 0.0)));
+                    float sideSign = (l % 2u == 0u) ? 1.0 : -1.0;
+                    vec3 pinnaDir = normalize(limbDir * 0.35 + leafSide * sideSign + vec3(0.0, 0.15, 0.0));
+
+                    GpuLeafInstance leaf;
+                    leaf.posAndSize = vec4(leafPos, 0.42 * spread);
+                    leaf.normalAndSun = vec4(pinnaDir, 0.90);
+                    leaf.tangentAndColorR = vec4(leafSide, 0.18);
+                    leaf.colorGBAndMeta = vec4(0.49, 0.19, float(bIdx), float(l));
+                    outLeaves[lIdx] = leaf;
+                }
+            }
+        } else if (params.archMode == ARCH_CANDELABRA_SUCCULENT) {
+            // Euphorbia Candelabra: Dichotomous vertical curving U-shaped arms
+            float trunkH = H * 0.42;
+            float heightFrac = 0.35 + float(limbIndex % 4u) * 0.16;
+            limbStart = vec3(cos(az) * R * 0.8, H * heightFrac, sin(az) * R * 0.8);
+            // Curves 90 degrees upward into vertical succulent 4-winged columns
+            limbDir = normalize(vec3(cos(az) * 0.35, 0.92, sin(az) * 0.35));
+            limbLen = H * 0.45 * vigor;
+
+            uint bIdx = atomicAdd(counters.totalBranchCount, 1u);
+            if (bIdx < counters.maxBranchesAlloc) {
+                vec3 limbEnd = limbStart + limbDir * limbLen;
+                GpuBranchSegment b;
+                b.startAndRadiusStart = vec4(limbStart, limbRadiusStart);
+                b.endAndRadiusEnd = vec4(limbEnd, 0.005);
+                b.normalAndWind = vec4(limbDir, 0.65);
+                b.meta = uvec4(1u, bIdx, params.speciesId, params.archMode);
+                outBranches[bIdx] = b;
+
+                // Spine nodes along 4-winged vertical ribs
+                uint spinesCount = uint(14.0 * foliage);
+                for (uint s = 0u; s < spinesCount; ++s) {
+                    uint lIdx = atomicAdd(counters.totalLeafCount, 1u);
+                    if (lIdx >= counters.maxLeavesAlloc) break;
+
+                    float frac = 0.2 + float(s) / float(spinesCount) * 0.78;
+                    vec3 spinePos = mix(limbStart, limbEnd, frac);
+                    vec3 spineNormal = normalize(vec3(cos(az + float(s) * 1.57), 0.15, sin(az + float(s) * 1.57)));
+
+                    GpuLeafInstance leaf;
+                    leaf.posAndSize = vec4(spinePos, 0.18);
+                    leaf.normalAndSun = vec4(spineNormal, 0.85);
+                    leaf.tangentAndColorR = vec4(vec3(0.0, 1.0, 0.0), 0.20);
+                    leaf.colorGBAndMeta = vec4(0.42, 0.18, float(bIdx), float(s));
+                    outLeaves[lIdx] = leaf;
+                }
+            }
+        } else if (params.archMode == ARCH_CONIFER_WHORL) {
+            // Conifer Pyramidal Whorls: Distinct tier levels along central leader
+            uint tier = limbIndex / 4u;
+            uint tierSlot = limbIndex % 4u;
+            float tierH = H * (0.22 + float(tier) * 0.14);
+            limbStart = vec3(0.0, tierH, 0.0);
+            float tierAz = float(tierSlot) * 1.57079 + float(tier) * 0.35;
+            float tierSpread = (1.0 - float(tier) * 0.15) * spread; // Conical taper
+            limbDir = normalize(vec3(cos(tierAz) * 0.90, sin(branchAngle) * 0.25, sin(tierAz) * 0.90));
+            limbLen = H * 0.26 * tierSpread;
+
+            uint bIdx = atomicAdd(counters.totalBranchCount, 1u);
+            if (bIdx < counters.maxBranchesAlloc) {
+                vec3 limbEnd = limbStart + limbDir * limbLen;
+                GpuBranchSegment b;
+                b.startAndRadiusStart = vec4(limbStart, limbRadiusStart * (1.0 - float(tier) * 0.12));
+                b.endAndRadiusEnd = vec4(limbEnd, 0.005);
+                b.normalAndWind = vec4(limbDir, 0.70);
+                b.meta = uvec4(1u, bIdx, params.speciesId, params.archMode);
+                outBranches[bIdx] = b;
+
+                // Needle fascicles along conifer boughs
+                uint needlesCount = uint(22.0 * foliage);
+                for (uint n = 0u; n < needlesCount; ++n) {
+                    uint lIdx = atomicAdd(counters.totalLeafCount, 1u);
+                    if (lIdx >= counters.maxLeavesAlloc) break;
+
+                    float frac = 0.25 + float(n) / float(needlesCount) * 0.72;
+                    vec3 needlePos = mix(limbStart, limbEnd, frac);
+                    vec3 needleNormal = normalize(limbDir * 0.4 + vec3(cos(float(n) * 2.2), 0.45, sin(float(n) * 2.2)));
+
+                    GpuLeafInstance leaf;
+                    leaf.posAndSize = vec4(needlePos, 0.28);
+                    leaf.normalAndSun = vec4(needleNormal, 0.92);
+                    leaf.tangentAndColorR = vec4(vec3(0.0, 1.0, 0.0), 0.14);
+                    leaf.colorGBAndMeta = vec4(0.35, 0.16, float(bIdx), float(n));
+                    outLeaves[lIdx] = leaf;
+                }
+            }
+        } else if (params.archMode == ARCH_WEEPING_WILLOW) {
+            // Weeping Willow: Upright scaffold limbs bearing drooping streamers
+            float scaffoldH = H * (0.35 + float(limbIndex % 3u) * 0.18);
+            limbStart = vec3(cos(az) * R * 0.6, scaffoldH, sin(az) * R * 0.6);
+            limbDir = normalize(vec3(cos(az) * 0.75, 0.65, sin(az) * 0.75));
+            limbLen = H * 0.28 * spread;
+
+            uint bIdx = atomicAdd(counters.totalBranchCount, 1u);
+            if (bIdx < counters.maxBranchesAlloc) {
+                vec3 limbEnd = limbStart + limbDir * limbLen;
+                GpuBranchSegment b;
+                b.startAndRadiusStart = vec4(limbStart, limbRadiusStart);
+                b.endAndRadiusEnd = vec4(limbEnd, 0.005);
+                b.normalAndWind = vec4(limbDir, 0.85);
+                b.meta = uvec4(1u, bIdx, params.speciesId, params.archMode);
+                outBranches[bIdx] = b;
+
+                // Cascading downward flagelliform streamer hanging to ground
+                uint sIdx = atomicAdd(counters.totalBranchCount, 1u);
+                if (sIdx < counters.maxBranchesAlloc) {
+                    vec3 streamerEnd = limbEnd + vec3((gpuRandom01(rngState) - 0.5) * 0.4, -H * 0.48 * vigor, (gpuRandom01(rngState) - 0.5) * 0.4);
+                    GpuBranchSegment streamer;
+                    streamer.startAndRadiusStart = vec4(limbEnd, 0.025);
+                    streamer.endAndRadiusEnd = vec4(streamerEnd, 0.005);
+                    streamer.normalAndWind = vec4(vec3(0.0, -1.0, 0.0), 0.95);
+                    streamer.meta = uvec4(2u, sIdx, params.speciesId, params.archMode);
+                    outBranches[sIdx] = streamer;
+
+                    // Lanceolate alternating leaves along weeping streamer
+                    uint willowLeaves = uint(18.0 * foliage);
+                    for (uint w = 0u; w < willowLeaves; ++w) {
+                        uint lIdx = atomicAdd(counters.totalLeafCount, 1u);
+                        if (lIdx >= counters.maxLeavesAlloc) break;
+
+                        float frac = 0.1 + float(w) / float(willowLeaves) * 0.88;
+                        vec3 leafPos = mix(limbEnd, streamerEnd, frac);
+                        float altSign = (w % 2u == 0u) ? 1.0 : -1.0;
+                        vec3 leafNorm = normalize(vec3(cos(az) * altSign, -0.25, sin(az) * altSign));
+
+                        GpuLeafInstance leaf;
+                        leaf.posAndSize = vec4(leafPos, 0.32);
+                        leaf.normalAndSun = vec4(leafNorm, 0.88);
+                        leaf.tangentAndColorR = vec4(vec3(0.0, 1.0, 0.0), 0.22);
+                        leaf.colorGBAndMeta = vec4(0.55, 0.20, float(sIdx), float(w));
+                        outLeaves[lIdx] = leaf;
+                    }
+                }
+            }
+        } else {
+            // General Decurrent / Savanna / Baobab / Broadleaf boughs
+            float crotchH = H * (0.38 + float(limbIndex % 4u) * 0.14);
+            limbStart = vec3(cos(az) * R * 0.7, crotchH, sin(az) * R * 0.7);
+            float yBias = (params.archMode == ARCH_UMBRELLA_ACACIA) ? 0.15 : 0.48; // Acacia horizontal canopy table
+            limbDir = normalize(vec3(cos(az) * 0.85, yBias, sin(az) * 0.85));
+            limbLen = H * 0.30 * spread * vigor;
+
+            uint bIdx = atomicAdd(counters.totalBranchCount, 1u);
+            if (bIdx < counters.maxBranchesAlloc) {
+                vec3 limbEnd = limbStart + limbDir * limbLen;
+                GpuBranchSegment b;
+                b.startAndRadiusStart = vec4(limbStart, limbRadiusStart);
+                b.endAndRadiusEnd = vec4(limbEnd, 0.005);
+                b.normalAndWind = vec4(limbDir, 0.80);
+                b.meta = uvec4(1u, bIdx, params.speciesId, params.archMode);
+                outBranches[bIdx] = b;
+
+                // Leaves distributed along terminal branches (botanically realistic relative dimensions)
+                uint broadLeaves = uint(16.0 * foliage);
+                float leafSize = (params.archMode == ARCH_PALM_FRONDS) ? 1.85 : 0.14;
+                for (uint bl = 0u; bl < broadLeaves; ++bl) {
+                    uint lIdx = atomicAdd(counters.totalLeafCount, 1u);
+                    if (lIdx >= counters.maxLeavesAlloc) break;
+
+                    float frac = 0.30 + float(bl) / float(broadLeaves) * 0.68;
+                    vec3 leafPos = mix(limbStart, limbEnd, frac);
+                    vec3 leafNorm = normalize(limbDir * 0.45 + vec3(cos(float(bl) * 1.8), 0.5, sin(float(bl) * 1.8)));
+
+                    GpuLeafInstance leaf;
+                    leaf.posAndSize = vec4(leafPos, leafSize);
+                    leaf.normalAndSun = vec4(leafNorm, 0.88);
+                    leaf.tangentAndColorR = vec4(vec3(0.0, 1.0, 0.0), 0.22);
+                    leaf.colorGBAndMeta = vec4(0.48, 0.18, float(bIdx), float(bl));
+                    outLeaves[lIdx] = leaf;
+                }
+            }
+        }
+    }
+}

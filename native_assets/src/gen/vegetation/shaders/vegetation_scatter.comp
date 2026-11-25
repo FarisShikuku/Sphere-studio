@@ -1,0 +1,36 @@
+#version 450
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+#include "include/vegetation_common.glsl"
+#include "include/vegetation_types.glsl"
+
+layout(std430, binding = 0) readonly buffer DensityMapBuffer {
+    float uDensityMap[];
+};
+
+layout(std430, binding = 1) writeonly buffer InstanceBuffer {
+    vec4 uInstances[]; // xyz = pos, w = scale
+};
+
+layout(push_constant) uniform PushConsts {
+    uint uMaxInstances;
+    float uAreaSize;
+    float uSeed;
+} pc;
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= pc.uMaxInstances) return;
+
+    // Golden ratio quasi-random Poisson scatter
+    float phi = 1.61803398875;
+    float r = sqrt(float(idx) / float(pc.uMaxInstances)) * pc.uAreaSize * 0.5;
+    float theta = 2.0 * 3.14159265 * float(idx) * phi;
+
+    float x = r * cos(theta);
+    float z = r * sin(theta);
+    float y = 0.0;
+    float scale = 0.85 + fract(sin(float(idx) * 12.9898 + pc.uSeed) * 43758.5453) * 0.35;
+
+    uInstances[idx] = vec4(x, y, z, scale);
+}

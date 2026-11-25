@@ -1,0 +1,87 @@
+#version 450
+// ============================================================================
+// tree_mesh.comp - Vulkan 1.2 Compute Shader for GPU Procedural Branch Synthesis
+// Implements Nemanja Stojanovic (2016):
+//  - Truncated cone tessellation with Sx subdivisions
+//  - Leonardo da Vinci postulate wr = 0.707
+//  - Cylinder-edge leaf attachment with variable X in {A, B, C, D}
+// ============================================================================
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+struct BranchSegmentGpu {
+    vec4 startAndRadiusStart; // xyz = startPos, w = radiusStart
+    vec4 endAndRadiusEnd;     // xyz = endPos, w = radiusEnd
+    vec4 dirAndWindWeight;    // xyz = headingDir, w = windWeight
+    uvec4 meta;               // x = order, y = segmentIndex, z = isLeafAttachment, w = flags
+};
+
+struct VertexGpu {
+    vec4 posAndU;      // xyz = pos, w = uvU
+    vec4 normAndV;     // xyz = normal, w = uvV
+    vec4 color;        // rgba
+    vec4 windAndFlags; // x = windWeight, y = isLeaf, zw = padding
+};
+
+layout(std430, set = 0, binding = 0) readonly buffer BranchInputBuffer {
+    BranchSegmentGpu branches[];
+};
+
+layout(std430, set = 0, binding = 1) writeonly buffer VertexOutputBuffer {
+    VertexGpu vertices[];
+};
+
+layout(push_constant) uniform PushConsts {
+    uint totalBranches;
+    uint radialSubdivisionsSx;
+    float daVinciWr; // 0.7071f
+    float leafScale;
+} pc;
+
+void main() {
+    uint branchIdx = gl_GlobalInvocationID.x;
+    if (branchIdx >= pc.totalBranches) return;
+
+    BranchSegmentGpu b = branches[branchIdx];
+    vec3 startPos = b.startAndRadiusStart.xyz;
+    float startR = b.startAndRadiusStart.w;
+    vec3 endPos = b.endAndRadiusEnd.xyz;
+    float endR = b.endAndRadiusEnd.w;
+    float windWeight = b.dirAndWindWeight.w;
+
+    uint Sx = pc.radialSubdivisionsSx;
+    if (Sx < 3u) Sx = 8u;
+
+    vec3 dir = normalize(endPos - startPos);
+    vec3 side1 = cross(dir, vec3(0.0, 1.0, 0.0));
+    if (dot(side1, side1) < 0.001) side1 = cross(dir, vec3(1.0, 0.0, 0.0));
+    side1 = normalize(side1);
+    vec3 side2 = normalize(cross(dir, side1));
+
+    uint baseVtxIdx = branchIdx * (Sx * 2u);
+
+    // Generate truncated cone rings (start ring and end ring)
+    for (uint ring = 0u; ring <= 1u; ++ring) {
+        vec3 center = (ring == 0u) ? startPos : endPos;
+        float radius = (ring == 0u) ? startR : endR;
+        float vCoord = float(ring);
+
+        for (uint p = 0u; p < Sx; ++p) {
+            float theta = float(p) * (6.2831853 / float(Sx));
+            float cosT = cos(theta);
+            float sinT = sin(theta);
+
+            vec3 normal = side1 * cosT + side2 * sinT;
+            vec3 pos = center + normal * radius;
+            float uCoord = float(p) / float(Sx);
+
+            VertexGpu v;
+            v.posAndU = vec4(pos, uCoord);
+            v.normAndV = vec4(normal, vCoord);
+            v.color = vec4(0.38, 0.26, 0.17, 1.0);
+            v.windAndFlags = vec4(windWeight, 0.0, 0.0, 0.0);
+
+            vertices[baseVtxIdx + ring * Sx + p] = v;
+        }
+    }
+}

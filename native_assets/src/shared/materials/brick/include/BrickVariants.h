@@ -8,4 +8,4 @@ enum class BrickVariant : uint32_t {
     WEATHERED_RECLAIMED,
     BLACK_BASALT
 };
-} // namespace spher
+} // namespace sphere

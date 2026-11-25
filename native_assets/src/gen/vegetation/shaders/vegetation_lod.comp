@@ -1,0 +1,33 @@
+#version 450
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, binding = 0) readonly buffer InstanceIn {
+    vec4 uInPositions[]; // xyz = pos, w = scale
+};
+
+layout(std430, binding = 1) writeonly buffer LodOut {
+    uint uLodTiers[]; // 0 = Full geometry, 1 = Simplified mesh, 2 = Billboard impostor
+};
+
+layout(push_constant) uniform LodConsts {
+    vec3 uCameraPos;
+    float uLod0Distance;
+    float uLod1Distance;
+    uint uInstanceCount;
+} pc;
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= pc.uInstanceCount) return;
+
+    vec3 pos = uInPositions[idx].xyz;
+    float dist = distance(pos, pc.uCameraPos);
+
+    uint lod = 0;
+    if (dist > pc.uLod1Distance) {
+        lod = 2; // Impostor
+    } else if (dist > pc.uLod0Distance) {
+        lod = 1; // Simplified
+    }
+    uLodTiers[idx] = lod;
+}
