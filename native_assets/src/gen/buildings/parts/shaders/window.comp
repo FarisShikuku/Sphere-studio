@@ -1,0 +1,29 @@
+#version 450
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform WindowPushConstants {
+    float uWidth;
+    float uHeight;
+    uint uWindowType;
+    uint uMullionCount;
+    float uWindowIor;
+    uint uGlassType;
+} pc;
+
+layout(std430, binding = 0) writeonly buffer WindowFrameBuffer {
+    vec4 outPaneData[];
+};
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx > 1u) return;
+    if (idx == 0u) {
+        outPaneData[0] = vec4(pc.uWidth, pc.uHeight, float(pc.uWindowType), float(pc.uMullionCount));
+    } else {
+        float ior = clamp(pc.uWindowIor > 0.5 ? pc.uWindowIor : 1.85, 1.0, 2.8);
+        float r0 = (ior - 1.0) / (ior + 1.0);
+        float f0 = r0 * r0;
+        float opacity = clamp(0.26 + 0.72 * smoothstep(1.0, 1.55, ior), 0.26, 1.0);
+        outPaneData[1] = vec4(ior, f0, opacity, float(pc.uGlassType));
+    }
+}

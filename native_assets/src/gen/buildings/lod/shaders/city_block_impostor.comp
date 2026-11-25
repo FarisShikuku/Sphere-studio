@@ -1,0 +1,47 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(binding = 0, rgba8) uniform writeonly image2D uCityBlockAtlas;
+
+layout(push_constant) uniform PushConstants {
+    uint uGridSizeX;
+    uint uGridSizeZ;
+    float uBuildingDensity;
+    float uTime;
+} pc;
+
+float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+}
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(uCityBlockAtlas);
+    if (coord.x >= size.x || coord.y >= size.y) return;
+
+    vec2 uv = vec2(coord) / vec2(size);
+
+    // City block grid cell
+    vec2 cell = floor(uv * vec2(float(pc.uGridSizeX), float(pc.uGridSizeZ)));
+    vec2 cellUV = fract(uv * vec2(float(pc.uGridSizeX), float(pc.uGridSizeZ)));
+
+    float rnd = hash(cell);
+    vec4 col = vec4(0.15, 0.16, 0.18, 1.0); // Street asphalt
+
+    // Sidewalk & building footprint
+    if (cellUV.x > 0.15 && cellUV.x < 0.85 && cellUV.y > 0.15 && cellUV.y < 0.85) {
+        if (rnd < pc.uBuildingDensity) {
+            // Lit building roof / facade window pattern
+            float winFrac = fract(cellUV.x * 12.0) * fract(cellUV.y * 12.0);
+            if (winFrac > 0.25) {
+                col = vec4(0.85, 0.90, 0.95, 1.0); // Warm office lighting
+            } else {
+                col = vec4(0.22, 0.24, 0.28, 1.0); // Structural facade column
+            }
+        } else {
+            col = vec4(0.35, 0.38, 0.40, 1.0); // Concrete open plaza
+        }
+    }
+
+    imageStore(uCityBlockAtlas, coord, col);
+}

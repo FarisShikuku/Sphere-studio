@@ -1,0 +1,71 @@
+#version 450
+#include "../shaders/include/building_common.glsl"
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(binding = 0, rgba8) uniform writeonly image2D uGlassEnvironmentMap;
+layout(binding = 1, rgba16f) uniform writeonly image2D uGlassNormalRefractionMap;
+layout(binding = 2, rgba8) uniform writeonly image2D uGlassFresnelLut;
+
+layout(push_constant) uniform WindowGlassPbrPushConstants {
+    float uWindowIor;            // 1.00 (transparent) .. 2.80 (high-reflection mirror)
+    float uReflectionStrength;   // 0.00 .. 1.00
+    float uPaneScale;            // world-to-pane UV tiling factor
+    uint  uGlassType;            // 0=ClearFloat..8=Stained
+    vec4  uSunDirIntensity;      // xyz = sun direction, w = intensity
+} pc;
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 envSize = imageSize(uGlassEnvironmentMap);
+    ivec2 normSize = imageSize(uGlassNormalRefractionMap);
+    ivec2 lutSize = imageSize(uGlassFresnelLut);
+
+    // 1. Equirectangular reflected architectural environment map (Sky + Clouds + Cityscape Skyline)
+    if (coord.x < envSize.x && coord.y < envSize.y) {
+        vec2 uv = (vec2(coord) + 0.5) / vec2(envSize);
+        float phi = uv.x * 6.2831853;
+        float theta = (1.0 - uv.y) * 3.14159265;
+        vec3 R = normalize(vec3(
+            sin(theta) * cos(phi),
+            cos(theta),
+            sin(theta) * sin(phi)
+        ));
+        vec3 sunDir = normalize(pc.uSunDirIntensity.xyz);
+        vec3 envCol = sampleArchitecturalSkylineEnv(R, sunDir) * max(pc.uSunDirIntensity.w, 0.25);
+        imageStore(uGlassEnvironmentMap, coord, vec4(clamp(envCol, 0.0, 1.0), 1.0));
+    }
+
+    // 2. Tileable tempered-glass micro-distortion normal + roughness + privacy bevel map
+    if (coord.x < normSize.x && coord.y < normSize.y) {
+        vec2 uv = (vec2(coord) + 0.5) / vec2(normSize);
+        float waveX = sin(uv.x * 12.56637 + sin(uv.y * 6.283185) * 0.65) * 0.022
+                    + cos(uv.x * 25.13274 + uv.y * 12.56637) * 0.010;
+        float waveY = cos(uv.y * 12.56637 + cos(uv.x * 6.283185) * 0.55) * 0.026
+                    + sin(uv.y * 18.84955 - uv.x * 6.283185) * 0.009;
+
+        // Edge bevel / gasket vignette for unitized curtain-wall & window panes
+        float edgeDist = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
+        float bevelMask = smoothstep(0.0, 0.055, edgeDist);
+        float microRough = (pc.uGlassType == 5u)
+            ? (0.32 + 0.14 * buildingHash21(uv * 96.0))
+            : (0.03 + 0.04 * (1.0 - bevelMask));
+
+        float privacyAbsorption = clamp((pc.uWindowIor - 1.15) / 0.45, 0.26, 1.0);
+        imageStore(
+            uGlassNormalRefractionMap,
+            coord,
+            vec4(waveX, waveY, microRough, privacyAbsorption * (0.85 + 0.15 * bevelMask))
+        );
+    }
+
+    // 3. Schlick Fresnel + Non-See-Through Privacy Opacity LUT (X = NdotV, Y = IOR)
+    if (coord.x < lutSize.x && coord.y < lutSize.y) {
+        vec2 uv = (vec2(coord) + 0.5) / vec2(lutSize);
+        float nDotV = clamp(uv.x, 0.01, 1.0);
+        float ior = mix(1.0, 2.8, uv.y);
+        float fresnel = computeSchlickFresnelIor(nDotV, ior, pc.uGlassType);
+        float opacity = computeGlassPrivacyOpacity(ior, fresnel, pc.uGlassType);
+        imageStore(uGlassFresnelLut, coord, vec4(fresnel, opacity, (ior - 1.0) / 1.8, 1.0));
+    }
+}

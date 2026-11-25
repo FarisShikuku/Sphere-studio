@@ -1,0 +1,36 @@
+#version 450
+#include "include/building_common.glsl"
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+struct SocketTransform {
+    vec4 positionType;   // xyz=world pos, w=socket kind
+    vec4 rotationScale;  // xyz=euler, w=uniform scale
+};
+
+layout(std430, binding = 0) readonly buffer SocketBuffer {
+    SocketTransform inSockets[];
+};
+
+layout(std430, binding = 1) writeonly buffer OutputMatrices {
+    mat4 outMatrices[];
+};
+
+layout(push_constant) uniform SocketPushConstants {
+    uint socketCount;
+    float roofElevation;
+} pc;
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= pc.socketCount) return;
+
+    SocketTransform s = inSockets[idx];
+    float sc = max(s.rotationScale.w, 0.01);
+    mat4 m = mat4(1.0);
+    m[0][0] = sc;
+    m[1][1] = sc;
+    m[2][2] = sc;
+    m[3] = vec4(s.positionType.xyz, 1.0);
+    outMatrices[idx] = m;
+}

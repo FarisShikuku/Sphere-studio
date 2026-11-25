@@ -1,0 +1,21 @@
+#version 450
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform BuildingPropAttachPush {
+    uint uAttachmentCount;
+    float uRoofWidth;
+    float uRoofDepth;
+    float uRoofHeight;
+} pc;
+
+layout(std430, binding = 0) writeonly buffer RooftopPropOffsets {
+    vec4 outOffsets[];
+};
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= pc.uAttachmentCount) return;
+    float frac = (float(idx) + 0.5) / float(max(pc.uAttachmentCount, 1u));
+    float x = (frac - 0.5) * pc.uRoofWidth * 0.7;
+    outOffsets[idx] = vec4(x, pc.uRoofHeight, 0.0, 1.0);
+}

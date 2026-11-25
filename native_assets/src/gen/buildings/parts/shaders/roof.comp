@@ -1,0 +1,20 @@
+#version 450
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform RoofPushConstants {
+    float uWidth;
+    float uDepth;
+    float uPitchHeight;
+    float uOverhang;
+    uint uRoofType;
+} pc;
+
+layout(std430, binding = 0) writeonly buffer RoofRidgeBuffer {
+    vec4 outRidgePoints[];
+};
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx > 0u) return;
+    outRidgePoints[0] = vec4(0.0, pc.uPitchHeight, 0.0, pc.uOverhang);
+}

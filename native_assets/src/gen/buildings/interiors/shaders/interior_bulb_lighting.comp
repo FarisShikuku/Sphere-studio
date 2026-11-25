@@ -1,0 +1,104 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "interior_surfaces.glsl"
+
+// Compute pass evaluating 3D interior room bulb photometric flux, BVH/omni shadow occlusion,
+// and Beer-Lambert + Henyey-Greenstein participating media scatter (SaschaWillems/Vulkan pattern)
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+struct InteriorBulbGPU {
+    vec4 posRadius;      // xyz = world position, w = bulb emitter radius (m)
+    vec4 dirMaxRange;    // xyz = spot beam direction, w = cutoff maxRange (m)
+    vec4 colorLumens;    // rgb = linear blackbody color, w = luminous flux (lm)
+    vec4 coneAndVol;     // x = cosInner, y = cosOuter, z = volumetricStrength, w = shadowBias
+};
+
+layout(std430, binding = 0) readonly buffer BulbBuffer {
+    uint bulbCount;
+    uint pad0;
+    uint pad1;
+    uint pad2;
+    InteriorBulbGPU bulbs[];
+};
+
+layout(binding = 1) uniform sampler2D uWorldPosTex;
+layout(binding = 2) uniform sampler2D uWorldNormalTex;
+layout(binding = 3) uniform samplerCube uOmniShadowCubes[4];
+layout(binding = 4, rgba16f) uniform writeonly image2D outInteriorLighting;
+
+layout(push_constant) uniform InteriorLightPC {
+    vec4 camPosAnisotropy; // xyz = camera world pos, w = Henyey-Greenstein g
+    vec4 streamParams;     // x = sigmaS, y = sigmaT, z = nightDim, w = shadowFarPlane
+} pc;
+
+float evalHGPhase(float cosTheta, float g) {
+    float g2 = g * g;
+    float denom = max(0.05, 1.0 + g2 - 2.0 * g * cosTheta);
+    return (1.0 - g2) / (4.0 * PI_INT * denom * sqrt(denom));
+}
+
+void main() {
+    ivec2 px = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 dims = imageSize(outInteriorLighting);
+    if (px.x >= dims.x || px.y >= dims.y) return;
+
+    vec2 uv = (vec2(px) + 0.5) / vec2(dims);
+    vec4 posSample = texture(uWorldPosTex, uv);
+    vec3 N = normalize(texture(uWorldNormalTex, uv).xyz);
+    vec3 P = posSample.xyz;
+    float hitDist = posSample.w;
+    vec3 camPos = pc.camPosAnisotropy.xyz;
+    vec3 V = normalize(camPos - P);
+
+    vec3 accumDirect = vec3(0.0);
+    uint count = min(bulbCount, 16u);
+    for (uint i = 0u; i < count; ++i) {
+        InteriorBulbGPU b = bulbs[i];
+        vec3 toLight = b.posRadius.xyz - P;
+        float dist = length(toLight);
+        if (dist > b.dirMaxRange.w) continue;
+        vec3 L = toLight / max(dist, 1e-4);
+
+        float ndotl = max(dot(N, L), 0.0);
+        float atten = evalBulbWindowedInvSquare(dist, b.posRadius.w, b.dirMaxRange.w);
+        float cone = smoothstep(b.coneAndVol.y, b.coneAndVol.x, dot(-L, normalize(b.dirMaxRange.xyz)));
+
+        float vis = 1.0;
+        if (i < 4u) {
+            vis = sampleOmniBulbShadow(uOmniShadowCubes[i], P, b.posRadius.xyz, N, pc.streamParams.w);
+        }
+
+        float intensityCd = b.colorLumens.w / (4.0 * PI_INT);
+        accumDirect += b.colorLumens.rgb * (intensityCd * 0.015 * atten * cone * ndotl * vis);
+    }
+
+    // 3D ray-marched participating air haze along camera ray toward hitDist
+    vec3 rayD = normalize(P - camPos);
+    vec3 accumStream = vec3(0.0);
+    float sigmaS = pc.streamParams.x;
+    float sigmaT = pc.streamParams.y;
+    if (sigmaS > 0.001 && hitDist > 0.1) {
+        const int STEPS = 12;
+        float marchMax = min(hitDist, 45.0);
+        float dt = marchMax / float(STEPS);
+        for (int s = 0; s < STEPS; ++s) {
+            float t = (float(s) + 0.5) * dt;
+            vec3 X = camPos + rayD * t;
+            for (uint i = 0u; i < count; ++i) {
+                InteriorBulbGPU b = bulbs[i];
+                vec3 toL = b.posRadius.xyz - X;
+                float d = length(toL);
+                if (d > b.dirMaxRange.w) continue;
+                vec3 L = toL / max(d, 1e-4);
+                float cone = smoothstep(b.coneAndVol.y, b.coneAndVol.x, dot(-L, normalize(b.dirMaxRange.xyz)));
+                float atten = evalBulbWindowedInvSquare(d, b.posRadius.w, b.dirMaxRange.w);
+                float phase = evalHGPhase(dot(rayD, -L), pc.camPosAnisotropy.w);
+                float trans = exp(-sigmaT * (d + t * 0.25));
+                float candela = b.colorLumens.w / (4.0 * PI_INT);
+                accumStream += b.colorLumens.rgb * (candela * 0.005 * atten * cone * phase * sigmaS * trans * dt * b.coneAndVol.z);
+            }
+        }
+    }
+
+    imageStore(outInteriorLighting, px, vec4(accumDirect + accumStream, 1.0));
+}

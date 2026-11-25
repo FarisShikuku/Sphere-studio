@@ -1,0 +1,23 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(binding = 0, rgba8) uniform writeonly image2D uRollDoorTexture;
+
+layout(push_constant) uniform PushConstants {
+    float uCorrugationPitch;
+    float uRoughness;
+} pc;
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(uRollDoorTexture);
+    if (coord.x >= size.x || coord.y >= size.y) return;
+
+    vec2 uv = vec2(coord) / vec2(size);
+    // Horizontal corrugation slats
+    float slat = sin(uv.y * 6.28318 * 30.0);
+    float shade = 0.5 + 0.5 * slat;
+
+    vec4 metalCol = vec4(vec3(0.45 + shade * 0.25), 1.0);
+    imageStore(uRollDoorTexture, coord, metalCol);
+}

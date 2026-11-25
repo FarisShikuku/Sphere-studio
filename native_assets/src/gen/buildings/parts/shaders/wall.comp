@@ -1,0 +1,24 @@
+#version 450
+#include "../../shaders/include/building_common.glsl"
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform WallPushConstants {
+    float uLength;
+    float uHeight;
+    float uThickness;
+    uint uMaterialId;
+} pc;
+
+layout(std430, binding = 0) writeonly buffer WallVertices {
+    BuildingVertex outVerts[];
+};
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx > 0u) return;
+    outVerts[0].position = vec3(-pc.uLength * 0.5, 0.0, 0.0);
+    outVerts[0].normal = vec3(0.0, 0.0, 1.0);
+    outVerts[0].uv = vec2(0.0, 0.0);
+    outVerts[0].materialId = pc.uMaterialId;
+}
