@@ -1,0 +1,10 @@
+#version 450
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+layout(push_constant) uniform FarmWindmillPush { float towerHeight; float rotorDiameter; int bladeCount; } pc;
+layout(std430, binding = 0) writeonly buffer WindmillBlades { vec4 outBlades[]; };
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= uint(max(6, pc.bladeCount))) return;
+    float a = float(idx) * 6.2831853 / float(max(6, pc.bladeCount));
+    outBlades[idx] = vec4(cos(a) * pc.rotorDiameter * 0.5, pc.towerHeight + sin(a) * pc.rotorDiameter * 0.5, 0.0, 1.0);
+}

@@ -1,0 +1,14 @@
+#version 450
+#include "include/gate_common.glsl"
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+layout(push_constant) uniform BrutalistPortalGatePush { GatePushParams params; } pc;
+layout(std430, binding = 0) buffer OutputVertexBuffer { GatePropVertex vertices[]; };
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    uint fins = uint(max(10, int(pc.params.width / 0.14)));
+    if (idx > fins) return;
+    float fx = -pc.params.width * 0.5 + (float(idx) / float(fins)) * pc.params.width;
+    vertices[idx].position = vec4(fx, pc.params.height * 0.5, 0.0, 1.0);
+    vertices[idx].normal = vec4(0.0, 0.0, 1.0, 0.0);
+    vertices[idx].color = vec4(0.09, 0.09, 0.11, 1.0);
+}

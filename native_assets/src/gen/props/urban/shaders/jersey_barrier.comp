@@ -1,0 +1,9 @@
+#version 450
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+layout(push_constant) uniform JerseyBarrierPush { float length; float height; int style; } pc;
+layout(std430, binding = 0) writeonly buffer BarrierOut { vec4 outProfile[]; };
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx > 0u) return;
+    outProfile[0] = vec4(pc.length, pc.height, float(pc.style), 1.0);
+}

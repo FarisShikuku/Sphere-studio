@@ -1,0 +1,21 @@
+#version 450
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform SecurityFencePush {
+    float length;
+    float height;
+    float postSpacing;
+    int style;
+} pc;
+
+layout(std430, binding = 0) writeonly buffer SecurityFencePosts {
+    vec4 outPosts[];
+};
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    uint bays = uint(max(1, int(pc.length / max(pc.postSpacing, 0.5))));
+    if (idx > bays) return;
+    float x = -pc.length * 0.5 + (float(idx) / float(bays)) * pc.length;
+    outPosts[idx] = vec4(x, pc.height, 0.0, float(pc.style));
+}

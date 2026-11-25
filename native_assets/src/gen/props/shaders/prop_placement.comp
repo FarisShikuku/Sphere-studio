@@ -1,0 +1,25 @@
+#version 450
+#include "include/prop_common.glsl"
+#include "include/prop_types.glsl"
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform PlacementPushConstants {
+    uint totalInstances;
+    float maxDistance;
+    uint categoryMask;
+} u_placement;
+
+layout(std430, binding = 0) readonly buffer InstanceInput {
+    PropInstanceData inInstances[];
+};
+
+layout(std430, binding = 1) writeonly buffer VisibleInstances {
+    PropInstanceData outInstances[];
+};
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= u_placement.totalInstances) return;
+    outInstances[idx] = inInstances[idx];
+}

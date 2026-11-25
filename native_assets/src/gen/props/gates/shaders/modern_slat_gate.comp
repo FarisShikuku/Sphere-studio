@@ -1,0 +1,14 @@
+#version 450
+#include "include/gate_common.glsl"
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+layout(push_constant) uniform ModernSlatGatePush { GatePushParams params; } pc;
+layout(std430, binding = 0) buffer OutputVertexBuffer { GatePropVertex vertices[]; };
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    uint slats = uint(max(6, int((pc.params.height - 0.24) / 0.14)));
+    if (idx >= slats) return;
+    float y = 0.20 + float(idx) * ((pc.params.height - 0.28) / float(max(1u, slats - 1u)));
+    vertices[idx].position = vec4(0.0, y, 0.0, 1.0);
+    vertices[idx].normal = vec4(0.0, 0.0, 1.0, 0.0);
+    vertices[idx].color = vec4(resolveGateWoodTint(pc.params.colorScheme), 1.0);
+}

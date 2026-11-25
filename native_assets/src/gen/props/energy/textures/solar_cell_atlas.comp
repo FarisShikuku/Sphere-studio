@@ -1,0 +1,12 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(rgba8, binding = 0) uniform image2D u_pvAtlas;
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    vec4 col = vec4(0.08, 0.14, 0.28, 1.0); // Monocrystalline deep blue
+    if ((pixel.x % 64 < 2) || (pixel.y % 64 < 2)) {
+        col = vec4(0.85, 0.88, 0.92, 1.0); // Silver busbar / fingers
+    }
+    imageStore(u_pvAtlas, pixel, col);
+}

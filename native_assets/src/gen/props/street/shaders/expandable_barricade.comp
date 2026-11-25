@@ -1,0 +1,19 @@
+#version 450
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform ExpandableBarricadePush {
+    float spanLength;
+    float height;
+    int cellCount;
+} pc;
+
+layout(std430, binding = 0) writeonly buffer BarricadeNodes {
+    vec4 outNodes[];
+};
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= uint(max(1, pc.cellCount))) return;
+    float x = -pc.spanLength * 0.5 + (float(idx) + 0.5) * (pc.spanLength / float(max(1, pc.cellCount)));
+    outNodes[idx] = vec4(x, pc.height * 0.5, 0.0, 1.0);
+}

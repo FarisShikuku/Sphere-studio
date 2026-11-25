@@ -1,0 +1,16 @@
+#version 450
+#include "include/fence_common.glsl"
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform BambooSteelFencePush { FencePushParams params; } pc;
+layout(std430, binding = 0) buffer OutputVertexBuffer { FencePropVertex vertices[]; };
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    uint culms = uint(max(6, int(pc.params.length / 0.10)));
+    if (idx >= culms) return;
+    float x = -pc.params.length * 0.5 + (float(idx) + 0.5) * (pc.params.length / float(culms));
+    vertices[idx].position = vec4(x, pc.params.height * 0.5, 0.0, 1.0);
+    vertices[idx].normal = vec4(0.0, 0.0, 1.0, 0.0);
+    vertices[idx].color = vec4(0.84, 0.72, 0.43, 1.0);
+}

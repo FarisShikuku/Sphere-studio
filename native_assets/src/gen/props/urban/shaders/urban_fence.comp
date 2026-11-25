@@ -1,0 +1,11 @@
+#version 450
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+layout(push_constant) uniform UrbanFencePush { float length; float height; int style; } pc;
+layout(std430, binding = 0) writeonly buffer UrbanFenceOut { vec4 outPickets[]; };
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    uint pickets = uint(max(6, int(pc.length / 0.12)));
+    if (idx >= pickets) return;
+    float x = -pc.length * 0.5 + (float(idx) + 0.5) * (pc.length / float(pickets));
+    outPickets[idx] = vec4(x, pc.height * 0.5, 0.0, 1.0);
+}

@@ -1,0 +1,93 @@
+#version 450
+#extension GL_EXT_ray_query : require
+#extension GL_GOOGLE_include_directive : require
+#include "include/prop_pbr.glsl"
+
+// 3D Volumetric Light Stream Ray Marching Compute Shader for Street Lamps, Beacons & Gate Spotlights
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+struct PropLight3D {
+    vec4 posRadius;
+    vec4 dirRange;
+    vec4 colorFlux;
+    vec4 spotCosAndVol;
+};
+
+layout(set = 0, binding = 0) uniform accelerationStructureEXT uPropTLAS;
+layout(set = 0, binding = 1) readonly buffer PropLightBuffer {
+    uint activeLightCount;
+    PropLight3D lights[];
+};
+layout(set = 0, binding = 2) uniform sampler2D uDepthWorldDist;
+layout(set = 0, binding = 3, rgba16f) uniform image2D outColorBuffer;
+
+layout(push_constant) uniform StreamPush {
+    vec4 camPosAndDensity; // xyz = camera pos, w = scattering sigmaS
+    vec4 camForwardAndG;   // xyz = cam forward, w = anisotropy g
+    vec4 camRightAndFov;   // xyz = cam right, w = tanHalfFov
+    vec4 camUpAndSigmaT;   // xyz = cam up, w = extinction sigmaT
+} pc;
+
+void main() {
+    ivec2 px = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 dims = imageSize(outColorBuffer);
+    if (px.x >= dims.x || px.y >= dims.y) return;
+
+    vec2 ndc = (vec2(px) + 0.5) / vec2(dims) * 2.0 - 1.0;
+    float aspect = float(dims.x) / float(dims.y);
+    vec3 rayD = normalize(
+        pc.camForwardAndG.xyz +
+        pc.camRightAndFov.xyz * (ndc.x * aspect * pc.camRightAndFov.w) -
+        pc.camUpAndSigmaT.xyz * (ndc.y * pc.camRightAndFov.w)
+    );
+    vec3 camPos = pc.camPosAndDensity.xyz;
+    float hitDist = texture(uDepthWorldDist, (vec2(px) + 0.5) / vec2(dims)).r;
+    float sigmaS = pc.camPosAndDensity.w;
+    float sigmaT = pc.camUpAndSigmaT.w;
+    float g = pc.camForwardAndG.w;
+
+    vec3 streamAccum = vec3(0.0);
+    uint nLights = min(activeLightCount, 8u);
+    for (uint i = 0u; i < nLights; ++i) {
+        PropLight3D pl = lights[i];
+        vec3 oc = camPos - pl.posRadius.xyz;
+        float b = dot(oc, rayD);
+        float c = dot(oc, oc) - pl.dirRange.w * pl.dirRange.w;
+        float disc = b * b - c;
+        if (disc <= 0.0) continue;
+
+        float sqD = sqrt(disc);
+        float t0 = max(0.08, -b - sqD);
+        float t1 = min(hitDist, -b + sqD);
+        if (t1 <= t0) continue;
+
+        const int STEPS = 16;
+        float dt = (t1 - t0) / float(STEPS);
+        float omega = max(0.35, 2.0 * PI_PROP * (1.0 - pl.spotCosAndVol.y));
+        float candela = (pl.colorFlux.w / omega) * 0.005 * pl.spotCosAndVol.z;
+
+        for (int s = 0; s < STEPS; ++s) {
+            float t = t0 + (float(s) + 0.5) * dt;
+            vec3 X = camPos + rayD * t;
+            vec3 toL = pl.posRadius.xyz - X;
+            float d = length(toL);
+            vec3 L = toL / max(d, 1e-4);
+
+            float cone = evalPropSpotCone(L, pl.dirRange.xyz, pl.spotCosAndVol.x, pl.spotCosAndVol.y);
+            if (cone <= 0.002) continue;
+
+            rayQueryEXT rq;
+            rayQueryInitializeEXT(rq, uPropTLAS, gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT, 0xFF, X, 0.005, L, max(0.0, d - 0.02));
+            rayQueryProceedEXT(rq);
+            if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayIntersectionNoneEXT) continue;
+
+            float atten = evalPropWindowedInvSquare(d, pl.posRadius.w, pl.dirRange.w);
+            float phase = evalPropHGPhase(dot(rayD, -L), g);
+            float extinction = evalPropBeerLambert(sigmaT, d + t * 0.25);
+            streamAccum += pl.colorFlux.rgb * (candela * atten * cone * phase * sigmaS * extinction * dt);
+        }
+    }
+
+    vec4 prev = imageLoad(outColorBuffer, px);
+    imageStore(outColorBuffer, px, vec4(prev.rgb + streamAccum, prev.a));
+}

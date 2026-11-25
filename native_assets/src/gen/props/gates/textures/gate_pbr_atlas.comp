@@ -1,0 +1,20 @@
+#version 450
+#include "gate_finish.glsl"
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(binding = 0, rgba8) uniform writeonly image2D uGatePbrAtlas;
+
+layout(push_constant) uniform GateAtlasPush {
+    uint uFinishType;
+} pc;
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(uGatePbrAtlas);
+    if (coord.x >= size.x || coord.y >= size.y) return;
+
+    vec2 uv = vec2(coord) / vec2(size);
+    vec3 col = evalGateFinishColor(uv, pc.uFinishType);
+    imageStore(uGatePbrAtlas, coord, vec4(col, 1.0));
+}

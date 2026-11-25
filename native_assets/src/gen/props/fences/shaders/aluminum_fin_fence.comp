@@ -1,0 +1,16 @@
+#version 450
+#include "include/fence_common.glsl"
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform AluminumFinFencePush { FencePushParams params; } pc;
+layout(std430, binding = 0) buffer OutputVertexBuffer { FencePropVertex vertices[]; };
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    uint finCount = uint(max(4, int(pc.params.length / 0.14)));
+    if (idx >= finCount) return;
+    float x = -pc.params.length * 0.5 + (float(idx) + 0.5) * (pc.params.length / float(finCount));
+    vertices[idx].position = vec4(x, pc.params.height * 0.5, 0.0, 1.0);
+    vertices[idx].normal = vec4(1.0, 0.0, 0.0, 0.0);
+    vertices[idx].color = vec4(resolveFenceMetalTint(pc.params.colorScheme), 1.0);
+}

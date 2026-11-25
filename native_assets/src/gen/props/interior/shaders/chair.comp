@@ -1,0 +1,24 @@
+#version 450
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform ChairPushConstants {
+    int chairType;
+    float seatHeight;
+    uint hasArmrests;
+    uint hasWheels;
+    int upholsteryColor;
+} u_chair;
+
+struct PropVertex {
+    vec4 position;
+    vec4 normal;
+    vec4 color;
+};
+
+layout(std430, binding = 0) buffer OutputVertexBuffer {
+    PropVertex vertices[];
+};
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+}

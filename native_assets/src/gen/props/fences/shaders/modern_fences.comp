@@ -1,0 +1,25 @@
+#version 450
+#include "include/fence_common.glsl"
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform ModernFencePush {
+    float length;
+    float height;
+    float postSpacing;
+    int style;
+    int colorScheme;
+    int hasAccentDetail;
+} u_fence;
+
+layout(std430, binding = 0) writeonly buffer OutputPostTransforms {
+    vec4 outPostCoords[];
+};
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    uint bays = computeFenceBayCount(u_fence.length, u_fence.postSpacing);
+    if (idx > bays) return;
+    float x = -u_fence.length * 0.5 + (float(idx) / float(bays)) * u_fence.length;
+    outPostCoords[idx] = vec4(x, u_fence.height, 0.0, float(u_fence.style));
+}

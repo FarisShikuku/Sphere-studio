@@ -1,0 +1,11 @@
+#version 450
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+layout(push_constant) uniform WaterTankPush { float height; float diameter; int ribCount; } pc;
+layout(std430, binding = 0) writeonly buffer TankRibs { vec4 outRibs[]; };
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    uint ribs = uint(max(4, pc.ribCount));
+    if (idx >= ribs) return;
+    float y = 0.15 + float(idx) * ((pc.height * 0.8) / float(ribs));
+    outRibs[idx] = vec4(0.0, y, pc.diameter * 0.5, 1.0);
+}

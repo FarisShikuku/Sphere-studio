@@ -1,0 +1,13 @@
+#version 450
+#include "include/gate_common.glsl"
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+layout(push_constant) uniform GlassPivotGatePush { GatePushParams params; } pc;
+layout(std430, binding = 0) buffer OutputVertexBuffer { GatePropVertex vertices[]; };
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx > 0u) return;
+    float angle = (pc.params.style == 2) ? 0.0 : 0.24;
+    vertices[idx].position = vec4(0.0, pc.params.height * 0.5, sin(angle) * 0.25, 1.0);
+    vertices[idx].normal = normalize(vec4(-sin(angle), 0.0, cos(angle), 0.0));
+    vertices[idx].color = (pc.params.style == 1) ? vec4(0.28, 0.33, 0.41, 0.85) : vec4(0.73, 0.90, 0.99, 0.80);
+}

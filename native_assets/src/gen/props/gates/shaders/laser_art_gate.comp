@@ -1,0 +1,14 @@
+#version 450
+#include "include/gate_common.glsl"
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+layout(push_constant) uniform LaserArtGatePush { GatePushParams params; } pc;
+layout(std430, binding = 0) buffer OutputVertexBuffer { GatePropVertex vertices[]; };
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= 14u) return;
+    float side = (idx < 7u) ? -1.0 : 1.0;
+    float t = float(idx % 7u) / 6.0;
+    vertices[idx].position = vec4(side * pc.params.width * 0.25, 0.2 + t * (pc.params.height - 0.3), 0.0, 1.0);
+    vertices[idx].normal = vec4(0.0, 0.0, 1.0, 0.0);
+    vertices[idx].color = vec4(0.71, 0.33, 0.04, 1.0);
+}

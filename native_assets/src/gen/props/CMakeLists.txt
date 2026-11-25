@@ -1,0 +1,72 @@
+cmake_minimum_required(VERSION 3.22.1)
+# Procedural Props Domain — C++ / Vulkan 1.3
+
+add_library(
+    props_engine
+    STATIC
+    PropSystem.cpp
+    street/LampPostGen.cpp
+    street/TrafficLightGen.cpp
+    street/BenchGen.cpp
+    street/TrashBinGen.cpp
+    street/ExpandableBarricadeGen.cpp
+    street/FlagPostGen.cpp
+    industrial/CrateGen.cpp
+    industrial/BarrelGen.cpp
+    industrial/PalletGen.cpp
+    industrial/PipeGen.cpp
+    industrial/SecurityFenceGen.cpp
+    urban/HydrantGen.cpp
+    urban/MailboxGen.cpp
+    urban/BusStopGen.cpp
+    urban/UrbanFenceGen.cpp
+    urban/BollardGen.cpp
+    urban/JerseyBarrierGen.cpp
+    urban/SecurityGateGen.cpp
+    urban/PrivacyFenceGen.cpp
+    rural/FenceGen.cpp
+    rural/HayBaleGen.cpp
+    rural/WaterTroughGen.cpp
+    rural/GrainSiloGen.cpp
+    rural/FarmWindmillGen.cpp
+    rural/FarmWagonGen.cpp
+    rural/FarmGateGen.cpp
+    interior/DeskGen.cpp
+    interior/ChairGen.cpp
+    interior/ShelfGen.cpp
+    signage_street/InfoBoardGen.cpp
+    signage_street/KilometreMarkerGen.cpp
+    utility/ElectricPostGen.cpp
+    utility/TransformerGen.cpp
+    utility/PowerMeterGen.cpp
+    utility/StreetLightGen.cpp
+    utility/WaterTowerGen.cpp
+    utility/WaterTankGen.cpp
+    utility/TelecomTowerGen.cpp
+    energy/WindTurbineGen.cpp
+    energy/WindTurbineTower.cpp
+    energy/WindTurbineBlades.cpp
+    energy/SolarPanelGen.cpp
+    energy/SolarFarmGen.cpp
+    energy/SolarTracker.cpp
+    energy/BatteryBankGen.cpp
+    energy/SubstationGen.cpp
+    communication/RadioMastGen.cpp
+    communication/SatelliteDishGen.cpp
+    gates/EstateGateGen.cpp
+    gates/TollGateGen.cpp
+    gates/RailwayGateGen.cpp
+    gates/GardenGateGen.cpp
+    gates/ModernGatesGen.cpp
+    fences/ModernFencesGen.cpp
+)
+
+target_include_directories(
+    props_engine
+    PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR}/../shared
+)
+
+target_compile_options(props_engine PRIVATE -O3 -ffast-math)

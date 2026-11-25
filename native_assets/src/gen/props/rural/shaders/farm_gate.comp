@@ -1,0 +1,10 @@
+#version 450
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+layout(push_constant) uniform FarmGatePush { float width; float height; int style; } pc;
+layout(std430, binding = 0) writeonly buffer FarmGateOut { vec4 outBars[]; };
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= 5u) return;
+    float y = 0.2 + float(idx) * ((pc.height - 0.3) / 4.0);
+    outBars[idx] = vec4(0.0, y, pc.width, 1.0);
+}
