@@ -26,8 +26,8 @@ struct TextureFormatSpec {
     bool generateMips = true;
 };
 
-// Registered Khronos Texture 2.0 (KTX2) architectural assets for Sascha Willems Vulkan 1.3 pipeline (65 textures)
-inline constexpr std::array<TextureAssetEntry, 65> kRegisteredTextures = {{
+// Registered Khronos Texture 2.0 (KTX2) architectural assets for Sascha Willems Vulkan 1.3 pipeline (71 textures)
+inline constexpr std::array<TextureAssetEntry, 71> kRegisteredTextures = {{
     { "box_profile_stainless_steel", "src/shared/materials/metals/textures/box_profile_stainless_steel.ktx2", "Box Profile Stainless Steel (2500mm)", 900, 900, 10, VK_FORMAT_R8G8B8A8_SRGB, 1000, 0.25f, 0.95f, 2.50f },
     { "square_profile_zinc_cladding", "src/shared/materials/metals/textures/square_profile_zinc_cladding.ktx2", "Square Profile Zinc Cladding (1500mm)", 628, 900, 10, VK_FORMAT_R8G8B8A8_SRGB, 1010, 0.35f, 0.90f, 2.10f },
     { "corrugated_aluminium", "src/shared/materials/metals/textures/corrugated_aluminium.ktx2", "Corrugated Aluminium Sheet (3000mm)", 628, 900, 10, VK_FORMAT_R8G8B8A8_SRGB, 1020, 0.30f, 0.95f, 2.30f },
@@ -92,7 +92,13 @@ inline constexpr std::array<TextureAssetEntry, 65> kRegisteredTextures = {{
     { "terracotta_roman_roof_tile", "src/shared/materials/infrastructure/textures/terracotta_roman_roof_tile.ktx2", "Terracotta Roman Roof Tiles (1180mm)", 900, 884, 10, VK_FORMAT_R8G8B8A8_SRGB, 1610, 0.78f, 0.00f, 1.54f },
     { "bitumen_hexagonal_shingles", "src/shared/materials/infrastructure/textures/bitumen_hexagonal_shingles.ktx2", "Bitumen Hexagonal Roof Shingles (2040mm)", 900, 776, 10, VK_FORMAT_R8G8B8A8_SRGB, 1620, 0.85f, 0.00f, 1.52f },
     { "bitumen_roof_shingles", "src/shared/materials/infrastructure/textures/bitumen_roof_shingles.ktx2", "Bitumen Architectural Roof Shingles (1412mm)", 812, 900, 10, VK_FORMAT_R8G8B8A8_SRGB, 1630, 0.85f, 0.00f, 1.52f },
-    { "rough_felt_hexagonal_shingles", "src/shared/materials/infrastructure/textures/rough_felt_hexagonal_shingles.ktx2", "Rough Felt Hexagonal Shingles (2040mm)", 900, 776, 10, VK_FORMAT_R8G8B8A8_SRGB, 1640, 0.88f, 0.00f, 1.52f }
+    { "rough_felt_hexagonal_shingles", "src/shared/materials/infrastructure/textures/rough_felt_hexagonal_shingles.ktx2", "Rough Felt Hexagonal Shingles (2040mm)", 900, 776, 10, VK_FORMAT_R8G8B8A8_SRGB, 1640, 0.88f, 0.00f, 1.52f },
+    { "coast_sand_800", "src/shared/materials/dirt/textures/coast_sand_800.ktx2", "Coast Sand & Shell Aggregate (800mm)", 900, 900, 10, VK_FORMAT_R8G8B8A8_SRGB, 1650, 0.88f, 0.00f, 1.54f },
+    { "road_highway_two_lane", "src/shared/materials/infrastructure/textures/road_highway_two_lane.ktx2", "Highway Two-Lane (Yellow Edge & White Dash)", 1024, 1024, 10, VK_FORMAT_R8G8B8A8_SRGB, 1660, 0.84f, 0.00f, 1.53f },
+    { "road_two_lane_white_dash", "src/shared/materials/infrastructure/textures/road_two_lane_white_dash.ktx2", "Two-Lane Paved Highway (White Shoulders)", 1024, 1024, 10, VK_FORMAT_R8G8B8A8_SRGB, 1670, 0.88f, 0.00f, 1.53f },
+    { "road_double_yellow_line", "src/shared/materials/infrastructure/textures/road_double_yellow_line.ktx2", "Urban Two-Way Road (Double Yellow Center)", 1024, 1024, 10, VK_FORMAT_R8G8B8A8_SRGB, 1680, 0.89f, 0.00f, 1.53f },
+    { "road_highway_yellow_edge", "src/shared/materials/infrastructure/textures/road_highway_yellow_edge.ktx2", "Multi-Lane Highway Segment (White Dash & Yellow Edge)", 1024, 1024, 10, VK_FORMAT_R8G8B8A8_SRGB, 1690, 0.90f, 0.00f, 1.53f },
+    { "road_cracked_urban_unmarked", "src/shared/materials/infrastructure/textures/road_cracked_urban_unmarked.ktx2", "Cracked Urban Asphalt (Unmarked Lane)", 1024, 1024, 10, VK_FORMAT_R8G8B8A8_SRGB, 1700, 0.91f, 0.00f, 1.53f }
 }};
 
 } // namespace sphere::textures

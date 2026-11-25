@@ -70,11 +70,12 @@ TEXTURE_SPECS = [
     ("mondo_grass_four_leaf", "mondo-grass-four-leaf", "Mondo Grass Four Leaf Clump (1004mm)", "Nature", 0.70, 0.0, 1.45, 0.90, 1.004, 0.015, "0xFF4B7A32"),
     ("mondo_grass_picket_and_square", "mondo-grass-picket-and-square", "Mondo Grass Picket & Square (810mm)", "Nature", 0.72, 0.0, 1.45, 0.90, 0.81, 0.014, "0xFF477230"),
     ("sandy_artificial_grass", "sandy-artificial-grass", "Sandy Artificial Turf Grass (1498mm)", "Nature", 0.65, 0.0, 1.46, 0.80, 1.498, 0.010, "0xFF688A3E"),
-    ("grass_meadow_1000", "grass-1000-mm", "Lush Meadow Grass Turf (1000mm)", "Nature", 0.68, 0.0, 1.45, 0.90, 1.00, 0.016, "0xFF4C7D2B"),
+    ("grass_meadow_1000", "grass-1000-mm", "Lush Meadow Grass Turf (1000mm)", "Nature", 0.68, 0.0, 1.45, 0.90, 1.00, 0.016, "0xFF747848"),
     ("grass_patch_path", "grass-patch-path", "Grass Patch Stone Stepping Path (1000mm)", "Nature", 0.75, 0.0, 1.48, 1.10, 1.00, 0.022, "0xFF586F3E"),
     ("perennial_ryegrass", "perennial-ryegrass", "Perennial Ryegrass Lawn (350mm)", "Nature", 0.66, 0.0, 1.45, 0.85, 0.35, 0.014, "0xFF468428"),
     ("moss_ground_cover", "moss-300-mm", "Forest Cushion Moss (300mm)", "Nature", 0.82, 0.0, 1.44, 1.15, 0.30, 0.020, "0xFF436528"),
-    ("brown_mud_leaves", "brown-mud-leaves", "Brown Mud with Forest Leaves (1300mm)", "Nature", 0.88, 0.0, 1.49, 1.30, 1.30, 0.035, "0xFF6E563E"),
+    ("brown_mud_leaves", "brown-mud-leaves", "Brown Mud with Forest Leaves (1300mm)", "Nature", 0.88, 0.0, 1.49, 1.30, 1.30, 0.035, "0xFF655433"),
+    ("coast_sand_800", "coast-sand-800-mm", "Coast Sand & Shell Aggregate (800mm)", "Nature", 0.88, 0.0, 1.54, 1.30, 0.80, 0.024, "0xFF83745D"),
     ("soil_loam_700", "soil-700-mm", "Rich Organic Loam Soil (700mm)", "Nature", 0.92, 0.0, 1.50, 1.35, 0.70, 0.030, "0xFF5E4B37"),
     ("earth_foliage", "earth-with-foliage", "Earth with Foliage (700mm)", "Nature", 0.90, 0.0, 1.50, 1.15, 0.70, 0.032, "0xFF64533C"),
 
@@ -85,6 +86,13 @@ TEXTURE_SPECS = [
     ("bitumen_hexagonal_shingles", "bitumen-hexagonal-shingles", "Bitumen Hexagonal Roof Shingles (2040mm)", "Infrastructure", 0.85, 0.0, 1.52, 1.25, 2.04, 0.018, "0xFF424446"),
     ("bitumen_roof_shingles", "bitumen-roof-shingles", "Bitumen Architectural Roof Shingles (1412mm)", "Infrastructure", 0.85, 0.0, 1.52, 1.25, 1.412, 0.018, "0xFF484A4D"),
     ("rough_felt_hexagonal_shingles", "rough-felt-hexagonal-shingles", "Rough Felt Hexagonal Shingles (2040mm)", "Infrastructure", 0.88, 0.0, 1.52, 1.30, 2.04, 0.020, "0xFF4D4E50"),
+
+    # Roads & Highways
+    ("road_highway_two_lane", "asphalt_texture_seamless_by_rfalworth", "Highway Two-Lane (Yellow Edge & White Dash)", "Roads", 0.84, 0.0, 1.53, 1.30, 7.40, 0.018, "0xFF272520"),
+    ("road_two_lane_white_dash", "road_variety_texture_tileable_by_hhh316", "Two-Lane Paved Highway (White Shoulders)", "Roads", 0.88, 0.0, 1.53, 1.25, 7.20, 0.018, "0xFF77716B"),
+    ("road_double_yellow_line", "cumdyl_by_slc_world", "Urban Two-Way Road (Double Yellow Center)", "Roads", 0.89, 0.0, 1.53, 1.38, 6.80, 0.022, "0xFF514E4B"),
+    ("road_highway_yellow_edge", "dbmwluryl_by_slc_world", "Multi-Lane Highway Segment (White Dash & Yellow Edge)", "Roads", 0.90, 0.0, 1.53, 1.42, 7.50, 0.024, "0xFF4E4C4A"),
+    ("road_cracked_urban_unmarked", "cua_by_slc_world", "Cracked Urban Asphalt (Unmarked Lane)", "Roads", 0.91, 0.0, 1.53, 1.40, 4.00, 0.022, "0xFF4D4C4B"),
 ]
 
 def find_source_file(pattern):

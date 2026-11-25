@@ -1,0 +1,63 @@
+#version 460
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(std430, set = 0, binding = 0) readonly buffer H0Spectrum {
+    vec2 h0[];
+};
+
+layout(std430, set = 0, binding = 1) readonly buffer H0ConjSpectrum {
+    vec2 h0Conj[];
+};
+
+layout(std430, set = 0, binding = 2) writeonly buffer FrequencyFields {
+    vec4 tildeHeightAndDisp[]; // x,y = h(k,t), z,w = Dx(k,t)
+};
+
+layout(std430, set = 0, binding = 3) writeonly buffer SlopeFields {
+    vec4 tildeDzAndSlopeX[];   // x,y = Dz(k,t), z,w = Sx(k,t)
+};
+
+layout(push_constant) uniform FftPushConstants {
+    uint N;
+    float patchSizeM;
+    float timeSec;
+    float choppinessLambda;
+} pc;
+
+const float PI = 3.14159265359;
+const float G = 9.81;
+
+vec2 cmul(vec2 a, vec2 b) {
+    return vec2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
+}
+
+void main() {
+    uint ix = gl_GlobalInvocationID.x;
+    uint iz = gl_GlobalInvocationID.y;
+    if (ix >= pc.N || iz >= pc.N) return;
+
+    uint idx = iz * pc.N + ix;
+    int nx = (ix < pc.N / 2u) ? int(ix) : int(ix) - int(pc.N);
+    int nz = (iz < pc.N / 2u) ? int(iz) : int(iz) - int(pc.N);
+    float dk = (2.0 * PI) / max(1.0, pc.patchSizeM);
+    vec2 kVec = vec2(float(nx), float(nz)) * dk;
+    float kLen = length(kVec);
+    float omega = sqrt(G * kLen);
+    float wt = omega * pc.timeSec;
+
+    vec2 ePos = vec2(cos(wt), sin(wt));
+    vec2 eNeg = vec2(ePos.x, -ePos.y);
+    vec2 hkt = cmul(h0[idx], ePos) + cmul(h0Conj[idx], eNeg);
+
+    float invK = (kLen > 1e-6) ? (1.0 / kLen) : 0.0;
+    vec2 minusI = vec2(0.0, -1.0);
+    vec2 plusI = vec2(0.0, 1.0);
+
+    vec2 dxK = cmul(minusI * (kVec.x * invK), hkt);
+    vec2 dzK = cmul(minusI * (kVec.y * invK), hkt);
+    vec2 sxK = cmul(plusI * kVec.x, hkt);
+
+    tildeHeightAndDisp[idx] = vec4(hkt, dxK);
+    tildeDzAndSlopeX[idx] = vec4(dzK, sxK);
+}

@@ -291,14 +291,15 @@ fun ObjectDimensionsControlTab(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "CALCULATED UV TILING:",
+                            text = "REAPPLICATIONS (U × V):",
                             color = Color(0xFF94A3B8),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
                         )
+                        val totalRepeats = tilingU * tilingV
                         Text(
-                            text = "U: ${"%.2f".format(tilingU)}x  •  V: ${"%.2f".format(tilingV)}x",
+                            text = "${"%.2f".format(tilingU)}× × ${"%.2f".format(tilingV)}× (${"%.1f".format(totalRepeats)} tiles)",
                             color = Color(0xFF38BDF8),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
@@ -412,7 +413,12 @@ fun ObjectDimensionsControlTab(
                     FilterChip(
                         selected = (widthScale == 1.0f && depthScale == 1.0f && scale == 1.0f),
                         onClick = { onScaleChange(1.0f); onWidthScaleChange(1.0f); onHeightScaleChange(1.0f); onDepthScaleChange(1.0f) },
-                        label = { Text("Standard Floor 2m×2m (4m²)", fontSize = 11.sp) }
+                        label = { Text("Standard Slab 2m×2m (4m²)", fontSize = 11.sp) }
+                    )
+                    FilterChip(
+                        selected = (widthScale == 7.4f && depthScale == 14.8f),
+                        onClick = { onScaleChange(1.0f); onWidthScaleChange(7.4f); onHeightScaleChange(1.0f); onDepthScaleChange(14.8f) },
+                        label = { Text("2-Lane Road 14.8m×29.6m", fontSize = 11.sp) }
                     )
                     FilterChip(
                         selected = (widthScale == 5.0f && depthScale == 5.0f),
@@ -430,9 +436,9 @@ fun ObjectDimensionsControlTab(
                         label = { Text("Urban District 100m×100m", fontSize = 11.sp) }
                     )
                     FilterChip(
-                        selected = (widthScale == 60.0f && depthScale == 60.0f),
-                        onClick = { onScaleChange(1.0f); onWidthScaleChange(60.0f); onHeightScaleChange(1.0f); onDepthScaleChange(60.0f) },
-                        label = { Text("Superfield 120m×120m (>100m)", fontSize = 11.sp) }
+                        selected = (widthScale == 500.0f && depthScale == 500.0f),
+                        onClick = { onScaleChange(1.0f); onWidthScaleChange(500.0f); onHeightScaleChange(1.0f); onDepthScaleChange(500.0f) },
+                        label = { Text("1km × 1km (1 km²)", fontSize = 11.sp) }
                     )
                 }
                 PreviewMeshShape.SPHERE -> {
@@ -487,12 +493,12 @@ fun ObjectDimensionsControlTab(
         DimensionSlider(
             label = when (shape) {
                 PreviewMeshShape.WALL -> "Wall Width (X-Span)"
-                PreviewMeshShape.PLANE -> "Floor Width (X-Span)"
+                PreviewMeshShape.PLANE -> "Surface Width (X-Span)"
                 PreviewMeshShape.SPHERE -> "Sphere Radius / Width"
                 else -> "Width (X-Axis)"
             },
-            value = widthScale.coerceIn(0.20f, 150.0f),
-            range = 0.20f..150.0f,
+            value = widthScale.coerceIn(0.20f, 500.0f),
+            range = 0.20f..500.0f,
             unit = "x  (${"%.2f".format(actualW)}m)",
             accentColor = Color(0xFFEF4444),
             onValueChange = onWidthScaleChange
@@ -506,8 +512,8 @@ fun ObjectDimensionsControlTab(
                     PreviewMeshShape.PLANE -> "Slab Foundation Depth"
                     else -> "Height (Y-Axis)"
                 },
-                value = heightScale.coerceIn(0.20f, 150.0f),
-                range = 0.20f..150.0f,
+                value = heightScale.coerceIn(0.20f, 500.0f),
+                range = 0.20f..500.0f,
                 unit = "x  (${"%.2f".format(actualH)}m)",
                 accentColor = Color(0xFF10B981),
                 onValueChange = onHeightScaleChange
@@ -519,11 +525,11 @@ fun ObjectDimensionsControlTab(
             DimensionSlider(
                 label = when (shape) {
                     PreviewMeshShape.WALL -> "Wall Thickness (Coping & Core)"
-                    PreviewMeshShape.PLANE -> "Floor Length (Z-Depth)"
+                    PreviewMeshShape.PLANE -> "Surface Length (Z-Depth)"
                     else -> "Depth (Z-Axis)"
                 },
-                value = depthScale.coerceIn(0.20f, 150.0f),
-                range = 0.20f..150.0f,
+                value = depthScale.coerceIn(0.20f, 500.0f),
+                range = 0.20f..500.0f,
                 unit = if (shape == PreviewMeshShape.WALL && actualD < 2.0f) "x  (${(actualD * 1000).toInt()}mm)" else "x  (${"%.2f".format(actualD)}m)",
                 accentColor = Color(0xFF3B82F6),
                 onValueChange = onDepthScaleChange
@@ -552,7 +558,12 @@ fun ObjectDimensionsControlTab(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text("Footprint Area:", style = MaterialTheme.typography.bodySmall)
-                    Text("${"%.2f".format(footprintArea)} m²", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace))
+                    val areaStr = if (footprintArea >= 100_000f) {
+                        "${"%.0f".format(footprintArea)} m² (${"%.2f".format(footprintArea / 1_000_000f)} km²)"
+                    } else {
+                        "${"%.2f".format(footprintArea)} m²"
+                    }
+                    Text(areaStr, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace))
                 }
 
                 Row(

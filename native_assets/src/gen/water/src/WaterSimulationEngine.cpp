@@ -12,6 +12,7 @@ WaterSimulationEngine& WaterSimulationEngine::Get() {
 
 WaterSimulationEngine::WaterSimulationEngine() {
     m_Simulator.Initialize(m_PhysicsParams);
+    m_SurfaceSimulator.Configure(m_SurfaceParams);
     m_Camera.SetOrbit(-34.0f, 22.0f, 4.6f);
     m_Camera.SetTarget(Vec3(0.0f, 0.85f, 0.0f));
     m_Camera.SetViewport(360, 240, 48.0f);
@@ -24,6 +25,7 @@ bool WaterSimulationEngine::Generate(sphere::GeneratorContext& context, std::sha
     std::lock_guard<std::mutex> lock(m_Mutex);
     if (!m_Initialized) {
         m_Simulator.Initialize(m_PhysicsParams);
+        m_SurfaceSimulator.Configure(m_SurfaceParams);
         m_Initialized = true;
     }
     return true;
@@ -54,9 +56,32 @@ void WaterSimulationEngine::Configure(
 
     m_PhysicsParams = merged;
     m_RenderParams = render;
+    m_BaseCamYawDeg = camYawDeg;
+    m_BaseCamPitchDeg = camPitchDeg;
+    m_BaseCamDistance = camDistance;
     m_Simulator.UpdateParams(m_PhysicsParams);
-    m_Camera.SetTarget(Vec3(0.0f, std::clamp(merged.boundsHeight * 0.38f, 0.5f, 1.5f), 0.0f));
-    m_Camera.SetOrbit(camYawDeg, camPitchDeg, camDistance);
+    SyncCameraForCurrentMode();
+}
+
+void WaterSimulationEngine::SyncCameraForCurrentMode() {
+    if (m_SurfaceParams.enabled) {
+        if (m_SurfaceParams.cutoutEnabled) {
+            float maxSpan = std::max({
+                m_SurfaceParams.cutoutWidthM,
+                m_SurfaceParams.cutoutHeightM,
+                m_SurfaceParams.cutoutDepthM
+            });
+            float scaledDist = std::max(3.6f, m_BaseCamDistance * std::max(1.0f, maxSpan / 3.4f));
+            m_Camera.SetTarget(Vec3(0.0f, -m_SurfaceParams.cutoutHeightM * 0.42f, 0.0f));
+            m_Camera.SetOrbit(m_BaseCamYawDeg, std::clamp(m_BaseCamPitchDeg, -25.0f, 82.0f), scaledDist);
+        } else {
+            m_Camera.SetTarget(Vec3(0.0f, 0.35f, 0.0f));
+            m_Camera.SetOrbit(m_BaseCamYawDeg, std::clamp(m_BaseCamPitchDeg, 6.0f, 82.0f), std::max(m_BaseCamDistance, 3.2f));
+        }
+    } else {
+        m_Camera.SetTarget(Vec3(0.0f, std::clamp(m_PhysicsParams.boundsHeight * 0.38f, 0.5f, 1.5f), 0.0f));
+        m_Camera.SetOrbit(m_BaseCamYawDeg, m_BaseCamPitchDeg, m_BaseCamDistance);
+    }
 }
 
 void WaterSimulationEngine::ConfigureWaterfall(
@@ -89,8 +114,19 @@ void WaterSimulationEngine::ConfigureWaterfall(
     m_Simulator.UpdateParams(m_PhysicsParams);
 }
 
+void WaterSimulationEngine::ConfigureWaterSurface(const WaterSurfaceParams& params) {
+    std::lock_guard<std::mutex> lock(m_Mutex);
+    m_SurfaceParams = params;
+    m_SurfaceSimulator.Configure(params);
+    SyncCameraForCurrentMode();
+}
+
 void WaterSimulationEngine::ResetSimulation(WaterSpawnScenario scenario, uint32_t particleCount) {
     std::lock_guard<std::mutex> lock(m_Mutex);
+    if (m_SurfaceParams.enabled) {
+        m_SurfaceSimulator.Reset(m_SurfaceParams);
+        return;
+    }
     m_PhysicsParams.scenario = scenario;
     if (scenario == WaterSpawnScenario::WATERFALL_CLIFF) {
         m_PhysicsParams.waterfallEnabled = true;
@@ -110,6 +146,20 @@ void WaterSimulationEngine::InjectScreenImpulse(
     Vec3 rayOrigin, rayDir;
     m_Camera.ScreenToWorldRay(std::clamp(normU, 0.0f, 1.0f), std::clamp(normV, 0.0f, 1.0f), rayOrigin, rayDir);
 
+    if (m_SurfaceParams.enabled) {
+        float t = (std::abs(rayDir.y) > 1e-4f) ? (-rayOrigin.y / rayDir.y) : 5.0f;
+        t = std::clamp(t, 0.8f, 48.0f);
+        Vec3 hitPoint = rayOrigin + rayDir * t;
+        if (m_SurfaceParams.cutoutEnabled) {
+            float hx = std::max(1.0f, m_SurfaceParams.cutoutWidthM * 0.5f);
+            float hz = std::max(1.0f, m_SurfaceParams.cutoutDepthM * 0.5f);
+            hitPoint.x = std::clamp(hitPoint.x, -hx, hx);
+            hitPoint.z = std::clamp(hitPoint.z, -hz, hz);
+        }
+        m_SurfaceSimulator.InjectDisturbance(hitPoint.x, hitPoint.z, strength * 0.95f);
+        return;
+    }
+
     // Intersect ray with horizontal plane at mid-fluid height (y ~ 0.65m)
     float planeY = std::clamp(m_PhysicsParams.boundsHeight * 0.30f, 0.25f, 1.2f);
     float t = (std::abs(rayDir.y) > 1e-4f) ? ((planeY - rayOrigin.y) / rayDir.y) : 3.5f;
@@ -123,6 +173,10 @@ void WaterSimulationEngine::InjectScreenImpulse(
 
 void WaterSimulationEngine::TriggerSplashPulse(int32_t pulseType, float strength) {
     std::lock_guard<std::mutex> lock(m_Mutex);
+    if (m_SurfaceParams.enabled) {
+        m_SurfaceSimulator.TriggerPulse(pulseType, strength);
+        return;
+    }
     if (pulseType == 0) {
         // Center plunge / upward geyser
         m_Simulator.InjectImpulse(Vec3(0.0f, 0.35f, 0.0f), Vec3(0.0f, 4.8f * strength, 0.0f), 0.95f);
@@ -150,6 +204,33 @@ WaterTelemetry WaterSimulationEngine::StepAndRenderBitmap(
     std::lock_guard<std::mutex> lock(m_Mutex);
 
     m_Camera.SetViewport(width, height, 48.0f);
+    WaterTelemetry telemetry{};
+
+    if (m_SurfaceParams.enabled) {
+        if (isPlaying) {
+            m_SurfaceSimulator.Step(dtSeconds);
+        }
+        m_SurfaceRenderer.Render(
+            pixelsRGBA8888,
+            stridePixels,
+            width,
+            height,
+            m_SurfaceSimulator,
+            m_Camera
+        );
+        uint32_t n = static_cast<uint32_t>(m_SurfaceSimulator.GetParams().gridResolution);
+        telemetry.activeParticles = n * n;
+        telemetry.occupiedCells = n;
+        telemetry.hashTableSize = n * n * 2u;
+        telemetry.physicsStepMs = m_SurfaceSimulator.GetLastFftMs();
+        telemetry.renderPassMs = m_SurfaceRenderer.GetLastRenderMs();
+        telemetry.avgDensity = m_SurfaceSimulator.GetSignificantWaveHeightM();
+        telemetry.maxSpeed = m_SurfaceSimulator.GetPeakCrestM();
+        telemetry.kineticEnergy = m_SurfaceSimulator.GetParams().windSpeedMs;
+        telemetry.vulkanGpuActive = sphere::vk::VulkanNativeSceneRenderer::IsGpuNodeAccessible();
+        return telemetry;
+    }
+
     if (isPlaying) {
         m_Simulator.Step(dtSeconds);
     }
@@ -164,7 +245,6 @@ WaterTelemetry WaterSimulationEngine::StepAndRenderBitmap(
         m_RenderParams
     );
 
-    WaterTelemetry telemetry{};
     telemetry.activeParticles = static_cast<uint32_t>(m_Simulator.GetPositions().size());
     telemetry.occupiedCells = m_Simulator.GetOccupiedCellCount();
     telemetry.hashTableSize = m_Simulator.GetHashTableSize();
@@ -180,6 +260,19 @@ WaterTelemetry WaterSimulationEngine::StepAndRenderBitmap(
 WaterTelemetry WaterSimulationEngine::GetTelemetry() const {
     std::lock_guard<std::mutex> lock(m_Mutex);
     WaterTelemetry telemetry{};
+    if (m_SurfaceParams.enabled) {
+        uint32_t n = static_cast<uint32_t>(m_SurfaceSimulator.GetParams().gridResolution);
+        telemetry.activeParticles = n * n;
+        telemetry.occupiedCells = n;
+        telemetry.hashTableSize = n * n * 2u;
+        telemetry.physicsStepMs = m_SurfaceSimulator.GetLastFftMs();
+        telemetry.renderPassMs = m_SurfaceRenderer.GetLastRenderMs();
+        telemetry.avgDensity = m_SurfaceSimulator.GetSignificantWaveHeightM();
+        telemetry.maxSpeed = m_SurfaceSimulator.GetPeakCrestM();
+        telemetry.kineticEnergy = m_SurfaceSimulator.GetParams().windSpeedMs;
+        telemetry.vulkanGpuActive = sphere::vk::VulkanNativeSceneRenderer::IsGpuNodeAccessible();
+        return telemetry;
+    }
     telemetry.activeParticles = static_cast<uint32_t>(m_Simulator.GetPositions().size());
     telemetry.occupiedCells = m_Simulator.GetOccupiedCellCount();
     telemetry.hashTableSize = m_Simulator.GetHashTableSize();

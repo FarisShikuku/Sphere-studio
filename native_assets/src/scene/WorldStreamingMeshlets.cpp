@@ -59,7 +59,8 @@ WorldStreamingTelemetry WorldStreamingMeshlets::EvaluateTelemetry(
 ) {
     WorldStreamingTelemetry t;
     t.cell_size_m = kGridCellSizeM;
-    t.grid_cell_x = static_cast<int32_t>(std::floor(distanceDrivenM / kGridCellSizeM));
+    const float safeDist = std::isfinite(distanceDrivenM) ? distanceDrivenM : 0.0f;
+    t.grid_cell_x = static_cast<int32_t>(std::floor(std::clamp(safeDist / kGridCellSizeM, -1.0e7f, 1.0e7f)));
     t.grid_cell_z = 0;
     t.loaded_ring_cells = 9; // 3x3 active streaming ring (192m x 192m)
     t.max_tris_per_meshlet = static_cast<int32_t>(kMaxMeshletTris);

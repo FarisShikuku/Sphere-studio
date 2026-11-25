@@ -42,6 +42,7 @@ fun WaterStudioScreen(
     var optics by remember { mutableStateOf(selectedPreset.optics) }
     var tank by remember { mutableStateOf(selectedPreset.tank) }
     var waterfall by remember { mutableStateOf(selectedPreset.waterfall) }
+    var waterSurface by remember { mutableStateOf(WaterSurfaceState()) }
     var camera by remember { mutableStateOf(WaterCameraState()) }
     var telemetry by remember { mutableStateOf(WaterTelemetryState()) }
 
@@ -50,9 +51,18 @@ fun WaterStudioScreen(
     var stepTrigger by remember { mutableIntStateOf(0) }
     var selectedTab by remember { mutableIntStateOf(0) }
 
-    val tabTitles = listOf("SPH Physics", "Waterfall", "SSFR Optics", "Tank & Camera", "Vulkan Compute", "C++ Registry")
+    val tabTitles = listOf(
+        "SPH Physics",
+        "Waterfall",
+        "Water Surface",
+        "SSFR Optics",
+        "Tank & Camera",
+        "Vulkan Compute",
+        "C++ Registry"
+    )
 
     fun syncAndRespawnWaterfall(nextWaterfall: WaterWaterfallState = waterfall.copy(enabled = true)) {
+        waterSurface = waterSurface.copy(enabled = false)
         waterfall = nextWaterfall
         val nextPhysics = physics.copy(
             scenario = WaterSpawnScenarioType.WATERFALL_CLIFF,
@@ -92,6 +102,7 @@ fun WaterStudioScreen(
         optics = preset.optics
         tank = preset.tank
         waterfall = preset.waterfall
+        waterSurface = waterSurface.copy(enabled = false)
         SphereNativeEngine.configureWaterfall(
             enabled = preset.waterfall.enabled,
             cliffHeight = preset.waterfall.cliffHeight,
@@ -166,6 +177,7 @@ fun WaterStudioScreen(
                     IconButton(
                         onClick = {
                             camera = WaterCameraState()
+                            waterSurface = WaterSurfaceState()
                             applyPreset(waterPresetsList[0])
                         },
                         modifier = Modifier.testTag("water_reset_all_button")
@@ -217,12 +229,13 @@ fun WaterStudioScreen(
                 }
             }
 
-            // Real-Time 3D SPH + SSFR Viewport
+            // Real-Time 3D SPH + SSFR + Tessendorf FFT Water Surface Viewport
             WaterViewportCanvas(
                 physics = physics,
                 optics = optics,
                 tank = tank,
                 waterfall = waterfall,
+                waterSurface = waterSurface,
                 camera = camera,
                 isPlaying = isPlaying,
                 interactionMode = interactionMode,
@@ -263,8 +276,19 @@ fun WaterStudioScreen(
                         selected = selectedTab == index,
                         onClick = {
                             selectedTab = index
-                            if (index == 1 && !waterfall.enabled) {
-                                syncAndRespawnWaterfall(waterfall.copy(enabled = true))
+                            when (index) {
+                                0 -> {
+                                    waterSurface = waterSurface.copy(enabled = false)
+                                }
+                                1 -> {
+                                    waterSurface = waterSurface.copy(enabled = false)
+                                    if (!waterfall.enabled) {
+                                        syncAndRespawnWaterfall(waterfall.copy(enabled = true))
+                                    }
+                                }
+                                2 -> {
+                                    waterSurface = waterSurface.copy(enabled = true)
+                                }
                             }
                         },
                         modifier = Modifier.testTag("water_tab_$index"),
@@ -290,8 +314,12 @@ fun WaterStudioScreen(
                 when (selectedTab) {
                     0 -> WaterPhysicsTab(
                         physics = physics,
-                        onPhysicsChange = { physics = it },
+                        onPhysicsChange = {
+                            waterSurface = waterSurface.copy(enabled = false)
+                            physics = it
+                        },
                         onRespawnWithScenario = { scenario, count ->
+                            waterSurface = waterSurface.copy(enabled = false)
                             val isCliff = (scenario == WaterSpawnScenarioType.WATERFALL_CLIFF)
                             waterfall = waterfall.copy(enabled = isCliff)
                             physics = physics.copy(scenario = scenario, particleCount = count)
@@ -320,6 +348,7 @@ fun WaterStudioScreen(
                         waterfall = waterfall,
                         physics = physics,
                         onWaterfallChange = { nextWf ->
+                            waterSurface = waterSurface.copy(enabled = false)
                             waterfall = nextWf
                             if (nextWf.enabled && physics.scenario != WaterSpawnScenarioType.WATERFALL_CLIFF) {
                                 syncAndRespawnWaterfall(nextWf)
@@ -339,11 +368,26 @@ fun WaterStudioScreen(
                             syncAndRespawnWaterfall(waterfall.copy(enabled = true))
                         }
                     )
-                    2 -> WaterOpticsTab(
+                    2 -> WaterSurfaceTab(
+                        surface = waterSurface,
+                        telemetry = telemetry,
+                        onSurfaceChange = { waterSurface = it },
+                        onApplyPreset = { preset ->
+                            waterSurface = preset.state
+                        },
+                        onResetSurface = {
+                            waterSurface = waterSurface.copy(enabled = true)
+                            SphereNativeEngine.resetWaterSimulation(
+                                scenarioOrdinal = physics.scenario.ordinalId,
+                                particleCount = physics.particleCount
+                            )
+                        }
+                    )
+                    3 -> WaterOpticsTab(
                         optics = optics,
                         onOpticsChange = { optics = it }
                     )
-                    3 -> WaterTankTab(
+                    4 -> WaterTankTab(
                         tank = tank,
                         camera = camera,
                         onTankChange = { tank = it },
@@ -352,11 +396,11 @@ fun WaterStudioScreen(
                             SphereNativeEngine.triggerWaterPulse(pulseType, tank.impulseStrength)
                         }
                     )
-                    4 -> WaterVulkanComputeTab(
+                    5 -> WaterVulkanComputeTab(
                         physics = physics,
                         telemetry = telemetry
                     )
-                    5 -> WaterRegistryCppTab()
+                    6 -> WaterRegistryCppTab()
                 }
             }
         }

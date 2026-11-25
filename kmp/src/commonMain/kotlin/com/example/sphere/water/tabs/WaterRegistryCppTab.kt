@@ -41,17 +41,22 @@ fun WaterRegistryCppTab() {
                 │   ├── OrbitalCamera.hpp
                 │   ├── FluidSimulator.hpp
                 │   ├── FluidRenderer.hpp
+                │   ├── WaterSurfaceParams.hpp
+                │   ├── WaterSurfaceSimulator.hpp
+                │   ├── WaterSurfaceRenderer.hpp
                 │   ├── VulkanFluidPipeline.hpp
                 │   └── WaterSimulationEngine.hpp
                 ├── src/
                 │   ├── OrbitalCamera.cpp
                 │   ├── FluidSimulator.cpp
                 │   ├── FluidRenderer.cpp
+                │   ├── WaterSurfaceSimulator.cpp
+                │   ├── WaterSurfaceRenderer.cpp
                 │   ├── VulkanFluidPipeline.cpp
                 │   └── WaterSimulationEngine.cpp
                 └── shaders/
-                    ├── compute/ (7 GLSL 450 Vulkan compute stages)
-                    └── graphics/ (10 GLSL 450 SSFR & box stages)
+                    ├── compute/ (7 SPH + phillips_fft_spectrum.comp)
+                    └── graphics/ (10 SSFR + water_surface + underwater_terrain)
             """.trimIndent()
 
             Surface(

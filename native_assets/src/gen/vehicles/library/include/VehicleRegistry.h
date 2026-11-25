@@ -2,6 +2,7 @@
 #include "IVehicle.h"
 #include "VehicleID.h"
 #include <memory>
+#include <mutex>
 #include <vector>
 #include <unordered_map>
 #include <vulkan/vulkan.h>
@@ -15,7 +16,7 @@ public:
     void Initialize();
 
     std::shared_ptr<IVehicle> GetVehicle(VehicleID id);
-    const VehicleDef& GetDef(VehicleID id);
+    VehicleDef GetDef(VehicleID id);
     void SetDef(VehicleID id, const VehicleDef& def);
 
     std::shared_ptr<Mesh> RequestMesh(VehicleID id, uint32_t lod = 0);
@@ -31,6 +32,7 @@ private:
     VehicleRegistry();
     void RegisterAll();
 
+    mutable std::recursive_mutex m_Mutex;
     std::unordered_map<uint32_t, std::shared_ptr<IVehicle>> m_Vehicles;
     bool m_Initialized = false;
 };

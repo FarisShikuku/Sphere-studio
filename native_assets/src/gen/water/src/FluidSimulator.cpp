@@ -383,6 +383,11 @@ void FluidSimulator::PredictPositions(float dt) {
     const uint32_t tSalt = static_cast<uint32_t>(m_ElapsedTime * 600.0f);
 
     for (size_t i = 0; i < n; ++i) {
+        if (!std::isfinite(m_Positions[i].x) || !std::isfinite(m_Positions[i].y) || !std::isfinite(m_Positions[i].z) ||
+            !std::isfinite(m_Velocities[i].x) || !std::isfinite(m_Velocities[i].y) || !std::isfinite(m_Velocities[i].z)) {
+            m_Positions[i] = Vec3(0.0f, 0.5f, 0.0f);
+            m_Velocities[i] = Vec3(0.0f, 0.0f, 0.0f);
+        }
         m_Velocities[i] += externalAccel * dt;
         if (waterfallActive && mistAmp > 0.01f && m_Positions[i].y > m_Params.plungePoolDepth + 0.12f) {
             m_Velocities[i] *= airDrag;
@@ -392,6 +397,9 @@ void FluidSimulator::PredictPositions(float dt) {
             m_Velocities[i].z += jz;
         }
         m_PredictedPositions[i] = m_Positions[i] + m_Velocities[i] * predDt;
+        if (!std::isfinite(m_PredictedPositions[i].x) || !std::isfinite(m_PredictedPositions[i].y) || !std::isfinite(m_PredictedPositions[i].z)) {
+            m_PredictedPositions[i] = m_Positions[i];
+        }
     }
 }
 
@@ -404,9 +412,12 @@ void FluidSimulator::BuildSpatialHashAndOffsets() {
 
     for (uint32_t i = 0; i < n; ++i) {
         const Vec3& p = m_PredictedPositions[i];
-        int32_t cx = static_cast<int32_t>(std::floor(p.x * invH));
-        int32_t cy = static_cast<int32_t>(std::floor(p.y * invH));
-        int32_t cz = static_cast<int32_t>(std::floor(p.z * invH));
+        float px = std::isfinite(p.x) ? std::clamp(p.x * invH, -1.0e6f, 1.0e6f) : 0.0f;
+        float py = std::isfinite(p.y) ? std::clamp(p.y * invH, -1.0e6f, 1.0e6f) : 0.0f;
+        float pz = std::isfinite(p.z) ? std::clamp(p.z * invH, -1.0e6f, 1.0e6f) : 0.0f;
+        int32_t cx = static_cast<int32_t>(std::floor(px));
+        int32_t cy = static_cast<int32_t>(std::floor(py));
+        int32_t cz = static_cast<int32_t>(std::floor(pz));
 
         uint32_t hash = HashCell3D(cx, cy, cz);
         uint32_t key = hash & (m_HashTableSize - 1u);
@@ -449,9 +460,12 @@ void FluidSimulator::ComputeDensities() {
 
     for (uint32_t i = 0; i < n; ++i) {
         const Vec3& pos = m_PredictedPositions[i];
-        int32_t ox = static_cast<int32_t>(std::floor(pos.x * invH));
-        int32_t oy = static_cast<int32_t>(std::floor(pos.y * invH));
-        int32_t oz = static_cast<int32_t>(std::floor(pos.z * invH));
+        float px = std::isfinite(pos.x) ? std::clamp(pos.x * invH, -1.0e6f, 1.0e6f) : 0.0f;
+        float py = std::isfinite(pos.y) ? std::clamp(pos.y * invH, -1.0e6f, 1.0e6f) : 0.0f;
+        float pz = std::isfinite(pos.z) ? std::clamp(pos.z * invH, -1.0e6f, 1.0e6f) : 0.0f;
+        int32_t ox = static_cast<int32_t>(std::floor(px));
+        int32_t oy = static_cast<int32_t>(std::floor(py));
+        int32_t oz = static_cast<int32_t>(std::floor(pz));
 
         float density = 0.0f;
         float nearDensity = 0.0f;
@@ -514,8 +528,8 @@ void FluidSimulator::ComputeForcesAndIntegrate(float dt) {
     for (uint32_t i = 0; i < n; ++i) {
         const Vec3& pos = m_PredictedPositions[i];
         const Vec3& vel = m_Velocities[i];
-        float density = m_Densities[i].x;
-        float nearDensity = m_Densities[i].y;
+        float density = std::isfinite(m_Densities[i].x) ? std::max(m_Densities[i].x, 1e-5f) : 1.0f;
+        float nearDensity = std::isfinite(m_Densities[i].y) ? std::max(m_Densities[i].y, 1e-5f) : 1.0f;
 
         float pressure = (density - targetDensity) * pressureMult;
         float nearPressure = nearDensity * nearPressureMult;
@@ -524,9 +538,12 @@ void FluidSimulator::ComputeForcesAndIntegrate(float dt) {
         Vec3 viscosityForce(0.0f, 0.0f, 0.0f);
         Vec3 cohesionForce(0.0f, 0.0f, 0.0f);
 
-        int32_t ox = static_cast<int32_t>(std::floor(pos.x * invH));
-        int32_t oy = static_cast<int32_t>(std::floor(pos.y * invH));
-        int32_t oz = static_cast<int32_t>(std::floor(pos.z * invH));
+        float px = std::isfinite(pos.x) ? std::clamp(pos.x * invH, -1.0e6f, 1.0e6f) : 0.0f;
+        float py = std::isfinite(pos.y) ? std::clamp(pos.y * invH, -1.0e6f, 1.0e6f) : 0.0f;
+        float pz = std::isfinite(pos.z) ? std::clamp(pos.z * invH, -1.0e6f, 1.0e6f) : 0.0f;
+        int32_t ox = static_cast<int32_t>(std::floor(px));
+        int32_t oy = static_cast<int32_t>(std::floor(py));
+        int32_t oz = static_cast<int32_t>(std::floor(pz));
 
         for (int32_t dx = -1; dx <= 1; ++dx) {
             for (int32_t dy = -1; dy <= 1; ++dy) {
@@ -549,8 +566,8 @@ void FluidSimulator::ComputeForcesAndIntegrate(float dt) {
                             float dst = std::sqrt(sqDst);
                             Vec3 dir = (dst > 1e-5f) ? (offset / dst) : Vec3(0.0f, 1.0f, 0.0f);
 
-                            float nDens = m_Densities[j].x;
-                            float nNearDens = m_Densities[j].y;
+                            float nDens = std::isfinite(m_Densities[j].x) ? std::max(m_Densities[j].x, 1e-5f) : 1.0f;
+                            float nNearDens = std::isfinite(m_Densities[j].y) ? std::max(m_Densities[j].y, 1e-5f) : 1.0f;
 
                             float nPress = (nDens - targetDensity) * pressureMult;
                             float nNearPress = nNearDens * nearPressureMult;
@@ -571,11 +588,16 @@ void FluidSimulator::ComputeForcesAndIntegrate(float dt) {
         }
 
         Vec3 totalAccel = (pressureForce / density) + viscosityForce * viscosity + cohesionForce * tension;
-        m_Velocities[i] += totalAccel * dt;
+        if (std::isfinite(totalAccel.x) && std::isfinite(totalAccel.y) && std::isfinite(totalAccel.z)) {
+            m_Velocities[i] += totalAccel * dt;
+        }
 
         // Stability velocity clamp
         float vSq = m_Velocities[i].LengthSq();
-        if (vSq > 225.0f) {
+        if (!std::isfinite(vSq)) {
+            m_Velocities[i] = Vec3(0.0f, 0.0f, 0.0f);
+            vSq = 0.0f;
+        } else if (vSq > 225.0f) {
             m_Velocities[i] *= (15.0f / std::sqrt(vSq));
             vSq = 225.0f;
         }

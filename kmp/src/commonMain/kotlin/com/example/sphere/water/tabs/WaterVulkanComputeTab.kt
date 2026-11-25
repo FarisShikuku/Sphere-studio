@@ -91,6 +91,21 @@ private val ssfrGraphicsPasses = listOf(
         "G5", "shaders/graphics/container_box.vert/.frag", "GRAPHICS",
         "Renders 12-edge wireframe tank bounds & wave-maker wall marker.",
         "LineList Topology + UBO[0]"
+    ),
+    VulkanPassSpec(
+        "S1", "shaders/compute/phillips_fft_spectrum.comp", "COMPUTE 256",
+        "Evaluates Tessendorf Phillips wave spectrum & 2D IFFT Displacement/Normal/Jacobian maps.",
+        "H0 + H0Conj SSBO -> 2D Displacement & Normal Maps"
+    ),
+    VulkanPassSpec(
+        "S2", "shaders/graphics/water_surface.vert/.frag", "GRAPHICS",
+        "Displaced FFT grid with Preetham sky, Snell refraction, Beer-Lambert absorption & SSS foam.",
+        "DisplacementMap + NormalJacobianMap + WaterSurfaceUBO"
+    ),
+    VulkanPassSpec(
+        "S3", "shaders/graphics/underwater_terrain.vert/.frag", "GRAPHICS",
+        "Value-noise procedural seabed terrain illuminated by underwater caustics.",
+        "BedGrid + WaterSurfaceUBO"
     )
 )
 

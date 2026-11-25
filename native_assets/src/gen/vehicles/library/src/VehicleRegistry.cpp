@@ -18,6 +18,7 @@ VehicleRegistry::VehicleRegistry() {
 }
 
 void VehicleRegistry::Initialize() {
+    std::lock_guard<std::recursive_mutex> lock(m_Mutex);
     if (m_Initialized) return;
     RegisterAll();
     m_Initialized = true;
@@ -99,22 +100,25 @@ void VehicleRegistry::RegisterAll() {
 }
 
 std::shared_ptr<IVehicle> VehicleRegistry::GetVehicle(VehicleID id) {
+    std::lock_guard<std::recursive_mutex> lock(m_Mutex);
     auto it = m_Vehicles.find(static_cast<uint32_t>(id));
     return (it != m_Vehicles.end()) ? it->second : nullptr;
 }
 
-const VehicleDef& VehicleRegistry::GetDef(VehicleID id) {
-    static const VehicleDef kFallbackDef;
+VehicleDef VehicleRegistry::GetDef(VehicleID id) {
+    std::lock_guard<std::recursive_mutex> lock(m_Mutex);
     auto v = GetVehicle(id);
-    return v ? v->GetDef() : kFallbackDef;
+    return v ? v->GetDef() : VehicleDef{};
 }
 
 void VehicleRegistry::SetDef(VehicleID id, const VehicleDef& def) {
+    std::lock_guard<std::recursive_mutex> lock(m_Mutex);
     auto v = GetVehicle(id);
     if (v) v->SetDef(def);
 }
 
 std::shared_ptr<Mesh> VehicleRegistry::RequestMesh(VehicleID id, uint32_t lod) {
+    std::lock_guard<std::recursive_mutex> lock(m_Mutex);
     auto v = GetVehicle(id);
     if (!v) return nullptr;
     auto cached = v->GetCachedMesh();
@@ -122,6 +126,7 @@ std::shared_ptr<Mesh> VehicleRegistry::RequestMesh(VehicleID id, uint32_t lod) {
 }
 
 bool VehicleRegistry::RequestTextures(VehicleID id, VkDevice device, VkQueue queue, VkCommandPool pool) {
+    std::lock_guard<std::recursive_mutex> lock(m_Mutex);
     auto v = GetVehicle(id);
     return v ? v->GenerateTextures(device, queue, pool) : false;
 }

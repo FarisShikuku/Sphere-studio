@@ -5,6 +5,9 @@
 #include "FluidRenderer.hpp"
 #include "OrbitalCamera.hpp"
 #include "VulkanFluidPipeline.hpp"
+#include "WaterSurfaceParams.hpp"
+#include "WaterSurfaceSimulator.hpp"
+#include "WaterSurfaceRenderer.hpp"
 #include "shared/IGenerator.h"
 #include <mutex>
 #include <string>
@@ -14,10 +17,10 @@ namespace sphere::water {
 /**
  * WaterSimulationEngine
  *
- * Master controller for the gen/water SPH + SSFR subsystem inside Sphere Engine 3D.
- * Integrates with GeneratorRegistry (GeneratorType::Water) and provides thread-safe
- * JNI entrypoints for real-time simulation, orbital camera control, impulse injection,
- * and multi-pass Screen-Space Fluid Rendering.
+ * Master controller for the gen/water SPH + SSFR + Tessendorf WaterSurface subsystem
+ * inside Sphere Engine 3D. Integrates with GeneratorRegistry (GeneratorType::Water) and
+ * provides thread-safe JNI entrypoints for real-time simulation, orbital camera control,
+ * impulse injection, multi-pass SSFR, and 2D FFT Water Surface rendering.
  */
 class WaterSimulationEngine : public sphere::IGenerator {
 public:
@@ -54,6 +57,8 @@ public:
         float plungePoolDepth
     );
 
+    void ConfigureWaterSurface(const WaterSurfaceParams& params);
+
     void ResetSimulation(WaterSpawnScenario scenario, uint32_t particleCount);
     void InjectScreenImpulse(float normU, float normV, float dragDx, float dragDy, float strength);
     void TriggerSplashPulse(int32_t pulseType, float strength);
@@ -75,11 +80,19 @@ private:
 
     FluidSimulator m_Simulator;
     FluidRenderer m_Renderer;
+    WaterSurfaceSimulator m_SurfaceSimulator;
+    WaterSurfaceRenderer m_SurfaceRenderer;
     OrbitalCamera m_Camera;
     VulkanFluidPipeline m_VulkanPipeline;
 
+    void SyncCameraForCurrentMode();
+
     FluidPhysicsParams m_PhysicsParams{};
     FluidRenderParams m_RenderParams{};
+    WaterSurfaceParams m_SurfaceParams{};
+    float m_BaseCamYawDeg = -34.0f;
+    float m_BaseCamPitchDeg = 22.0f;
+    float m_BaseCamDistance = 4.6f;
     bool m_Initialized = false;
 };
 

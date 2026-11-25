@@ -34,7 +34,16 @@ fun NativeVulkanSurfaceHost(
     onFpsUpdated: (Int, Float) -> Unit = { _, _ -> }
 ) {
     var isSurfaceReady by remember { mutableStateOf(false) }
+    var activeHolder by remember { mutableStateOf<SurfaceHolder?>(null) }
     val latestOnFps by rememberUpdatedState(onFpsUpdated)
+
+    DisposableEffect(Unit) {
+        onDispose {
+            isSurfaceReady = false
+            activeHolder = null
+            SphereNativeEngine.destroyVulkanSurface()
+        }
+    }
 
     LaunchedEffect(
         isSurfaceReady,
@@ -51,7 +60,7 @@ fun NativeVulkanSurfaceHost(
         var frameCount = 0
         var lastDrawMs = 0f
 
-        while (isActive) {
+        while (isActive && isSurfaceReady) {
             withFrameNanos { frameNanos ->
                 if (lastPacedNanos == 0L) {
                     lastPacedNanos = frameNanos
@@ -59,7 +68,8 @@ fun NativeVulkanSurfaceHost(
                 }
                 if (frameNanos - lastPacedNanos >= gateThresholdNs || frameCount == 0) {
                     lastPacedNanos = frameNanos
-                    if (SphereNativeEngine.isVulkanInitialized()) {
+                    val holderValid = activeHolder?.surface?.isValid == true
+                    if (isSurfaceReady && holderValid && SphereNativeEngine.isVulkanInitialized()) {
                         val t0 = System.nanoTime()
                         SphereNativeEngine.renderVulkanFrame(
                             lightPosX, lightPosY, lightPosZ,
@@ -91,10 +101,13 @@ fun NativeVulkanSurfaceHost(
             SurfaceView(context).apply {
                 holder.addCallback(object : SurfaceHolder.Callback {
                     override fun surfaceCreated(surfaceHolder: SurfaceHolder) {
+                        if (!surfaceHolder.surface.isValid) return
+                        activeHolder = surfaceHolder
                         val w = width.coerceAtLeast(640)
                         val h = height.coerceAtLeast(480)
                         val initialized = SphereNativeEngine.createVulkanSurface(surfaceHolder.surface, w, h)
                         if (initialized) {
+                            isSurfaceReady = true
                             SphereNativeEngine.renderVulkanFrame(
                                 lightPosX, lightPosY, lightPosZ,
                                 intensity, colorR, colorG, colorB,
@@ -102,13 +115,14 @@ fun NativeVulkanSurfaceHost(
                                 objectWidth, objectHeight, objectDepth,
                                 stageMode
                             )
-                            isSurfaceReady = true
                         }
                     }
 
                     override fun surfaceChanged(surfaceHolder: SurfaceHolder, format: Int, w: Int, h: Int) {
+                        if (!surfaceHolder.surface.isValid || w <= 0 || h <= 0) return
+                        activeHolder = surfaceHolder
                         SphereNativeEngine.resizeVulkanSurface(w, h)
-                        if (SphereNativeEngine.isVulkanInitialized()) {
+                        if (isSurfaceReady && SphereNativeEngine.isVulkanInitialized()) {
                             SphereNativeEngine.renderVulkanFrame(
                                 lightPosX, lightPosY, lightPosZ,
                                 intensity, colorR, colorG, colorB,
@@ -121,13 +135,14 @@ fun NativeVulkanSurfaceHost(
 
                     override fun surfaceDestroyed(surfaceHolder: SurfaceHolder) {
                         isSurfaceReady = false
+                        activeHolder = null
                         SphereNativeEngine.destroyVulkanSurface()
                     }
                 })
             }
         },
         update = {
-            if (SphereNativeEngine.isVulkanInitialized()) {
+            if (isSurfaceReady && activeHolder?.surface?.isValid == true && SphereNativeEngine.isVulkanInitialized()) {
                 SphereNativeEngine.renderVulkanFrame(
                     lightPosX, lightPosY, lightPosZ,
                     intensity, colorR, colorG, colorB,

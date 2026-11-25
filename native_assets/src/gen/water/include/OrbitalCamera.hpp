@@ -56,7 +56,7 @@ private:
     uint32_t m_Height = 240;
     float m_FovDeg = 48.0f;
     float m_NearPlane = 0.1f;
-    float m_FarPlane = 60.0f;
+    float m_FarPlane = 200.0f;
     float m_TanHalfFov = 0.4452f;
     float m_Aspect = 1.5f;
 

@@ -46,6 +46,12 @@ inline bool Vec4Near(const sphere::Vec4& a, const sphere::Vec4& b) {
 inline bool FloatNear(float a, float b) {
     return std::abs(a - b) < 1e-4f;
 }
+
+inline float FiniteOr(float v, float fallback) {
+    return std::isfinite(v) ? v : fallback;
+}
+
+std::mutex gGeometryRegistryMutex;
 } // namespace
 
 extern "C" {
@@ -315,6 +321,7 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeGetCargoWeight(
     JNIEnv* env, jclass clazz, jint id
 ) {
     if (id >= 0 && id < static_cast<jint>(sphere::cargo::CargoID::COUNT)) {
+        std::lock_guard<std::mutex> lock(gGeometryRegistryMutex);
         const auto& def = sphere::cargo::CargoRegistry::Get().GetDef(static_cast<sphere::cargo::CargoID>(id));
         return def.weight_kg;
     }
@@ -326,6 +333,7 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeGetCargoVolume(
     JNIEnv* env, jclass clazz, jint id
 ) {
     if (id >= 0 && id < static_cast<jint>(sphere::cargo::CargoID::COUNT)) {
+        std::lock_guard<std::mutex> lock(gGeometryRegistryMutex);
         const auto& def = sphere::cargo::CargoRegistry::Get().GetDef(static_cast<sphere::cargo::CargoID>(id));
         return def.volume_m3;
     }
@@ -341,6 +349,7 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeGetCargoDimensions
 
     jfloat dims[3] = {0.8f, 0.5f, 0.2f};
     if (id >= 0 && id < static_cast<jint>(sphere::cargo::CargoID::COUNT)) {
+        std::lock_guard<std::mutex> lock(gGeometryRegistryMutex);
         const auto& def = sphere::cargo::CargoRegistry::Get().GetDef(static_cast<sphere::cargo::CargoID>(id));
         dims[0] = def.dimensions.x;
         dims[1] = def.dimensions.y;
@@ -359,9 +368,13 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRequestCargoMeshSt
 
     jint stats[2] = {0, 0};
     if (id >= 0 && id < static_cast<jint>(sphere::cargo::CargoID::COUNT)) {
-        auto mesh = sphere::cargo::CargoRegistry::Get().RequestMesh(
-            static_cast<sphere::cargo::CargoID>(id), static_cast<uint32_t>(lod)
-        );
+        std::shared_ptr<sphere::Mesh> mesh;
+        {
+            std::lock_guard<std::mutex> lock(gGeometryRegistryMutex);
+            mesh = sphere::cargo::CargoRegistry::Get().RequestMesh(
+                static_cast<sphere::cargo::CargoID>(id), static_cast<uint32_t>(std::max(0, lod))
+            );
+        }
         if (mesh) {
             stats[0] = static_cast<jint>(mesh->vertices.size());
             stats[1] = static_cast<jint>(mesh->indices.size() / 3);
@@ -411,6 +424,7 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeGetTrailerSpecs(
 
     jfloat specs[6] = {6200.f, 32000.f, 13.6f, 2.55f, 1.55f, 1.35f};
     if (id >= 0 && id < static_cast<jint>(sphere::trailers::TrailerID::COUNT)) {
+        std::lock_guard<std::mutex> lock(gGeometryRegistryMutex);
         const auto& def = sphere::trailers::TrailerRegistry::Get().GetDef(static_cast<sphere::trailers::TrailerID>(id));
         specs[0] = def.empty_weight_kg;
         specs[1] = def.max_payload_kg;
@@ -432,9 +446,13 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRequestTrailerMesh
 
     jint stats[2] = {0, 0};
     if (id >= 0 && id < static_cast<jint>(sphere::trailers::TrailerID::COUNT)) {
-        auto mesh = sphere::trailers::TrailerRegistry::Get().RequestMesh(
-            static_cast<sphere::trailers::TrailerID>(id), static_cast<uint32_t>(lod)
-        );
+        std::shared_ptr<sphere::Mesh> mesh;
+        {
+            std::lock_guard<std::mutex> lock(gGeometryRegistryMutex);
+            mesh = sphere::trailers::TrailerRegistry::Get().RequestMesh(
+                static_cast<sphere::trailers::TrailerID>(id), static_cast<uint32_t>(std::max(0, lod))
+            );
+        }
         if (mesh) {
             stats[0] = static_cast<jint>(mesh->vertices.size());
             stats[1] = static_cast<jint>(mesh->indices.size() / 3);
@@ -477,33 +495,38 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderCargoBitmap(
     AndroidBitmapInfo info{};
     if (AndroidBitmap_getInfo(env, bitmap, &info) != ANDROID_BITMAP_RESULT_SUCCESS ||
         info.format != ANDROID_BITMAP_FORMAT_RGBA_8888 ||
-        info.width == 0 || info.height == 0) {
+        info.width == 0 || info.height == 0 ||
+        info.stride < info.width * 4u) {
         env->SetIntArrayRegion(result, 0, 2, stats);
         return result;
     }
 
-    auto cid = static_cast<sphere::cargo::CargoID>(cargoId);
-    auto cargo = sphere::cargo::CargoRegistry::Get().GetCargo(cid);
-    if (!cargo) {
-        env->SetIntArrayRegion(result, 0, 2, stats);
-        return result;
-    }
+    const float safeRotX = FiniteOr(rotX, 18.0f);
+    const float safeRotY = FiniteOr(rotY, -35.0f);
+    const float safeZoom = std::clamp(FiniteOr(zoom, 1.0f), 0.25f, 4.0f);
+    const float effRough = std::clamp(FiniteOr(roughness, 0.65f), 0.04f, 1.0f);
+    const float effMetal = std::clamp(FiniteOr(metallic, 0.0f), 0.0f, 1.0f);
+    const float effWear = std::clamp(FiniteOr(wear, 0.0f), 0.0f, 1.0f);
+    const float effWrinkle = std::clamp(FiniteOr(wrinkle, 0.0f), 0.0f, 1.0f);
+    const float rawOpacity = FiniteOr(opacity, 1.0f);
+    const float effOpacity = (rawOpacity >= 0.99f) ? 1.0f : std::clamp(rawOpacity, 0.15f, 1.0f);
 
     std::shared_ptr<sphere::Mesh> cargoMesh;
     std::shared_ptr<sphere::Mesh> palletMesh;
     {
-        static std::mutex sCargoRenderMutex;
         static std::unordered_map<int32_t, uint32_t> sLastLod;
-        std::lock_guard<std::mutex> lock(sCargoRenderMutex);
+        std::lock_guard<std::mutex> lock(gGeometryRegistryMutex);
+
+        auto cid = static_cast<sphere::cargo::CargoID>(cargoId);
+        auto cargo = sphere::cargo::CargoRegistry::Get().GetCargo(cid);
+        if (!cargo) {
+            env->SetIntArrayRegion(result, 0, 2, stats);
+            return result;
+        }
 
         sphere::cargo::CargoDef nextDef = cargo->GetDef();
         sphere::Vec4 pCol = UnpackArgbToVec4(primaryArgb, 1.0f);
         sphere::Vec4 sCol = UnpackArgbToVec4(secondaryArgb, 1.0f);
-        float effOpacity = (opacity >= 0.99f) ? 1.0f : std::clamp(opacity, 0.15f, 1.0f);
-        float effRough = std::clamp(roughness, 0.04f, 1.0f);
-        float effMetal = std::clamp(metallic, 0.0f, 1.0f);
-        float effWear = std::clamp(wear, 0.0f, 1.0f);
-        float effWrinkle = std::clamp(wrinkle, 0.0f, 1.0f);
 
         bool defChanged =
             !Vec4Near(nextDef.base_color, pCol) ||
@@ -550,14 +573,14 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderCargoBitmap(
         sphere::scene::CargoRasterParams rParams;
         rParams.cargoId = cargoId;
         rParams.stackingMode = stackingMode;
-        rParams.rotXDeg = rotX;
-        rParams.rotYDeg = rotY;
-        rParams.zoom = std::max(0.25f, zoom);
+        rParams.rotXDeg = safeRotX;
+        rParams.rotYDeg = safeRotY;
+        rParams.zoom = safeZoom;
         rParams.showPallet = (showPallet == JNI_TRUE);
         rParams.showStraps = (showStraps == JNI_TRUE);
         rParams.showShrinkwrap = (showShrinkwrap == JNI_TRUE);
-        rParams.roughness = std::clamp(roughness, 0.04f, 1.0f);
-        rParams.metallic = std::clamp(metallic, 0.0f, 1.0f);
+        rParams.roughness = effRough;
+        rParams.metallic = effMetal;
 
         sphere::scene::NativeMeshRasterizer::RenderCargoBitmap(
             static_cast<uint32_t*>(pixelsPtr),
@@ -614,17 +637,22 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderTrailerBitma
     AndroidBitmapInfo info{};
     if (AndroidBitmap_getInfo(env, bitmap, &info) != ANDROID_BITMAP_RESULT_SUCCESS ||
         info.format != ANDROID_BITMAP_FORMAT_RGBA_8888 ||
-        info.width == 0 || info.height == 0) {
+        info.width == 0 || info.height == 0 ||
+        info.stride < info.width * 4u) {
         env->SetIntArrayRegion(result, 0, 2, stats);
         return result;
     }
 
-    auto tid = static_cast<sphere::trailers::TrailerID>(trailerId);
-    auto trailer = sphere::trailers::TrailerRegistry::Get().GetTrailer(tid);
-    if (!trailer) {
-        env->SetIntArrayRegion(result, 0, 2, stats);
-        return result;
-    }
+    const float safeRotX = FiniteOr(rotX, 16.0f);
+    const float safeRotY = FiniteOr(rotY, -35.0f);
+    const float safeZoom = std::clamp(FiniteOr(zoom, 1.0f), 0.25f, 4.0f);
+    const float effRough = std::clamp(FiniteOr(roughness, 0.55f), 0.04f, 1.0f);
+    const float effMetal = std::clamp(FiniteOr(metallic, 0.15f), 0.0f, 1.0f);
+    const float effCurtainOpen = std::clamp(FiniteOr(curtainOpenRatio, 0.0f), 0.0f, 1.0f);
+    const float effHydLift = std::clamp(FiniteOr(hydraulicLiftRatio, 0.0f), 0.0f, 1.0f);
+    const float rawOpacity = FiniteOr(curtainOpacity, 1.0f);
+    const float effOpacity = (rawOpacity >= 0.99f) ? 1.0f : std::clamp(rawOpacity, 0.15f, 1.0f);
+    const float effSteerDeg = std::clamp(FiniteOr(steerAngleDeg, 0.0f), -35.0f, 35.0f);
 
     std::shared_ptr<sphere::Mesh> trailerMesh;
     std::shared_ptr<sphere::Mesh> loadedCargoMesh;
@@ -633,17 +661,18 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderTrailerBitma
     float deckW = 2.55f;
 
     {
-        static std::mutex sTrailerRenderMutex;
-        std::lock_guard<std::mutex> lock(sTrailerRenderMutex);
+        std::lock_guard<std::mutex> lock(gGeometryRegistryMutex);
+
+        auto tid = static_cast<sphere::trailers::TrailerID>(trailerId);
+        auto trailer = sphere::trailers::TrailerRegistry::Get().GetTrailer(tid);
+        if (!trailer) {
+            env->SetIntArrayRegion(result, 0, 2, stats);
+            return result;
+        }
 
         sphere::trailers::TrailerDef nextDef = trailer->GetDef();
         sphere::Vec4 pCol = UnpackArgbToVec4(baseArgb, 1.0f);
         sphere::Vec4 sCol = UnpackArgbToVec4(secondaryArgb, 1.0f);
-        float effOpacity = (curtainOpacity >= 0.99f) ? 1.0f : std::clamp(curtainOpacity, 0.15f, 1.0f);
-        float effRough = std::clamp(roughness, 0.04f, 1.0f);
-        float effMetal = std::clamp(metallic, 0.0f, 1.0f);
-        float effCurtainOpen = std::clamp(curtainOpenRatio, 0.0f, 1.0f);
-        float effHydLift = std::clamp(hydraulicLiftRatio, 0.0f, 1.0f);
         uint32_t effAxles = static_cast<uint32_t>(std::max(1, axleCount));
         auto effSusp = static_cast<sphere::trailers::SuspensionType>(std::clamp(suspensionOrdinal, 0, 2));
         auto effBrake = static_cast<sphere::trailers::BrakeType>(std::clamp(brakeOrdinal, 0, 1));
@@ -660,7 +689,7 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderTrailerBitma
             !FloatNear(nextDef.metallic, effMetal) ||
             !FloatNear(nextDef.curtain_open_ratio, effCurtainOpen) ||
             !FloatNear(nextDef.hydraulic_lift_ratio, effHydLift) ||
-            !FloatNear(nextDef.steer_angle_deg, steerAngleDeg) ||
+            !FloatNear(nextDef.steer_angle_deg, effSteerDeg) ||
             nextDef.axle_count != effAxles ||
             nextDef.suspension_type != effSusp ||
             nextDef.brake_type != effBrake ||
@@ -677,7 +706,7 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderTrailerBitma
             nextDef.metallic = effMetal;
             nextDef.curtain_open_ratio = effCurtainOpen;
             nextDef.hydraulic_lift_ratio = effHydLift;
-            nextDef.steer_angle_deg = steerAngleDeg;
+            nextDef.steer_angle_deg = effSteerDeg;
             nextDef.axle_count = effAxles;
             nextDef.suspension_type = effSusp;
             nextDef.brake_type = effBrake;
@@ -714,11 +743,11 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderTrailerBitma
     if (trailerMesh && AndroidBitmap_lockPixels(env, bitmap, &pixelsPtr) == ANDROID_BITMAP_RESULT_SUCCESS && pixelsPtr) {
         sphere::scene::TrailerRasterParams rParams;
         rParams.trailerId = trailerId;
-        rParams.rotXDeg = rotX;
-        rParams.rotYDeg = rotY;
-        rParams.zoom = std::max(0.25f, zoom);
-        rParams.roughness = std::clamp(roughness, 0.04f, 1.0f);
-        rParams.metallic = std::clamp(metallic, 0.0f, 1.0f);
+        rParams.rotXDeg = safeRotX;
+        rParams.rotYDeg = safeRotY;
+        rParams.zoom = safeZoom;
+        rParams.roughness = effRough;
+        rParams.metallic = effMetal;
         rParams.cargoFloorY = floorY;
         rParams.deckLengthM = deckL;
         rParams.deckWidthM = deckW;
@@ -781,6 +810,7 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeGetVehicleSpecs(
 
     jfloat specs[10] = {7250.f, 18000.f, 4.8f, 0.f, 1150.f, 290.f, 2.f, 8.2f, 2.5f, 3.45f};
     if (id >= 0 && id < static_cast<jint>(sphere::vehicles::VehicleID::COUNT)) {
+        std::lock_guard<std::mutex> lock(gGeometryRegistryMutex);
         const auto& def = sphere::vehicles::VehicleRegistry::Get().GetDef(static_cast<sphere::vehicles::VehicleID>(id));
         specs[0] = def.kerb_weight_kg;
         specs[1] = def.max_gvw_kg;
@@ -839,17 +869,20 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderVehicleBitma
     AndroidBitmapInfo info{};
     if (AndroidBitmap_getInfo(env, bitmap, &info) != ANDROID_BITMAP_RESULT_SUCCESS ||
         info.format != ANDROID_BITMAP_FORMAT_RGBA_8888 ||
-        info.width == 0 || info.height == 0) {
+        info.width == 0 || info.height == 0 ||
+        info.stride < info.width * 4u) {
         env->SetIntArrayRegion(result, 0, 4, stats);
         return result;
     }
 
-    auto vid = static_cast<sphere::vehicles::VehicleID>(vehicleId);
-    auto vehicle = sphere::vehicles::VehicleRegistry::Get().GetVehicle(vid);
-    if (!vehicle) {
-        env->SetIntArrayRegion(result, 0, 4, stats);
-        return result;
-    }
+    const float safeRotX = FiniteOr(rotX, 16.0f);
+    const float safeRotY = FiniteOr(rotY, -35.0f);
+    const float safeZoom = std::clamp(FiniteOr(zoom, 1.0f), 0.25f, 4.0f);
+    const float effRough = std::clamp(FiniteOr(roughness, 0.35f), 0.04f, 1.0f);
+    const float effMetal = std::clamp(FiniteOr(metallic, 0.35f), 0.0f, 1.0f);
+    const float effAction = std::clamp(FiniteOr(actionRatio, 0.0f), 0.0f, 1.0f);
+    const float effDoorOpen = std::clamp(FiniteOr(doorOpenRatio, 0.0f), 0.0f, 1.0f);
+    const float effSteer = std::clamp(FiniteOr(steerAngleDeg, 0.0f), -30.0f, 30.0f);
 
     std::shared_ptr<sphere::Mesh> vehicleMesh;
     std::shared_ptr<sphere::Mesh> hitchedTrailerMesh;
@@ -863,19 +896,22 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderVehicleBitma
     bool effInsideCabin = (insideCabinView == JNI_TRUE);
 
     {
-        static std::mutex sVehicleRenderMutex;
-        std::lock_guard<std::mutex> lock(sVehicleRenderMutex);
+        std::lock_guard<std::mutex> lock(gGeometryRegistryMutex);
+
+        auto vid = static_cast<sphere::vehicles::VehicleID>(vehicleId);
+        auto vehicle = sphere::vehicles::VehicleRegistry::Get().GetVehicle(vid);
+        if (!vehicle) {
+            env->SetIntArrayRegion(result, 0, 4, stats);
+            return result;
+        }
 
         sphere::vehicles::VehicleDef nextDef = vehicle->GetDef();
+        const float effWheelbase = std::clamp(FiniteOr(wheelbaseM, nextDef.wheelbase_m), 1.5f, 12.0f);
+        const float effFifthWheel = std::clamp(FiniteOr(fifthWheelOffsetM, nextDef.fifth_wheel_offset_m), -2.0f, 6.0f);
         sphere::Vec4 pCol = UnpackArgbToVec4(baseArgb, 1.0f);
         sphere::Vec4 sCol = UnpackArgbToVec4(accentArgb, 1.0f);
         auto effLivery = static_cast<sphere::vehicles::LiveryID>(std::clamp(liveryOrdinal, 0, 5));
         uint32_t effSeed = static_cast<uint32_t>(randomSeed == 0 ? 0x5A1C0001 : randomSeed);
-        float effRough = std::clamp(roughness, 0.04f, 1.0f);
-        float effMetal = std::clamp(metallic, 0.0f, 1.0f);
-        float effAction = std::clamp(actionRatio, 0.0f, 1.0f);
-        float effDoorOpen = std::clamp(doorOpenRatio, 0.0f, 1.0f);
-        float effSteer = std::clamp(steerAngleDeg, -30.0f, 30.0f);
         bool effHeadlights = (headlightsOn == JNI_TRUE);
         bool effRoofRack = (hasRoofRack == JNI_TRUE);
         bool effExhaust = (hasExhaustStacks == JNI_TRUE);
@@ -887,8 +923,8 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderVehicleBitma
             !Vec4Near(nextDef.accent_color, sCol) ||
             !FloatNear(nextDef.roughness, effRough) ||
             !FloatNear(nextDef.metallic, effMetal) ||
-            !FloatNear(nextDef.wheelbase_m, wheelbaseM) ||
-            !FloatNear(nextDef.fifth_wheel_offset_m, fifthWheelOffsetM) ||
+            !FloatNear(nextDef.wheelbase_m, effWheelbase) ||
+            !FloatNear(nextDef.fifth_wheel_offset_m, effFifthWheel) ||
             !FloatNear(nextDef.action_ratio, effAction) ||
             !FloatNear(nextDef.door_open_ratio, effDoorOpen) ||
             !FloatNear(nextDef.steer_angle_deg, effSteer) ||
@@ -904,8 +940,8 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderVehicleBitma
             nextDef.accent_color = sCol;
             nextDef.roughness = effRough;
             nextDef.metallic = effMetal;
-            nextDef.wheelbase_m = wheelbaseM;
-            nextDef.fifth_wheel_offset_m = fifthWheelOffsetM;
+            nextDef.wheelbase_m = effWheelbase;
+            nextDef.fifth_wheel_offset_m = effFifthWheel;
             nextDef.action_ratio = effAction;
             nextDef.door_open_ratio = effDoorOpen;
             nextDef.steer_angle_deg = effSteer;
@@ -966,11 +1002,11 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeRenderVehicleBitma
     if (vehicleMesh && AndroidBitmap_lockPixels(env, bitmap, &pixelsPtr) == ANDROID_BITMAP_RESULT_SUCCESS && pixelsPtr) {
         sphere::scene::VehicleRasterParams rParams;
         rParams.vehicleId = vehicleId;
-        rParams.rotXDeg = rotX;
-        rParams.rotYDeg = rotY;
-        rParams.zoom = std::max(0.25f, zoom);
-        rParams.roughness = std::clamp(roughness, 0.04f, 1.0f);
-        rParams.metallic = std::clamp(metallic, 0.0f, 1.0f);
+        rParams.rotXDeg = safeRotX;
+        rParams.rotYDeg = safeRotY;
+        rParams.zoom = safeZoom;
+        rParams.roughness = effRough;
+        rParams.metallic = effMetal;
         rParams.fifthWheelOffsetM = effectiveFifthWheel;
         rParams.showHitchedTrailer = (hitchTrailer == JNI_TRUE && hitchedTrailerMesh != nullptr);
         rParams.trailerLengthM = trailerLengthM;
@@ -1128,6 +1164,7 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeGetVehicleStreamin
     std::shared_ptr<sphere::Mesh> cargoMesh;
 
     if (vehicleId >= 0 && vehicleId < static_cast<jint>(sphere::vehicles::VehicleID::COUNT)) {
+        std::lock_guard<std::mutex> lock(gGeometryRegistryMutex);
         auto vid = static_cast<sphere::vehicles::VehicleID>(vehicleId);
         auto v = sphere::vehicles::VehicleRegistry::Get().GetVehicle(vid);
         if (v) {
@@ -1153,7 +1190,7 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeGetVehicleStreamin
         trailerMesh.get(),
         cargoMesh.get(),
         cargoQty,
-        distanceDrivenM
+        FiniteOr(distanceDrivenM, 0.0f)
     );
 
     jint vals[7] = {
@@ -1254,6 +1291,39 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeGetWeatherAudioTel
     };
     env->SetFloatArrayRegion(telemetryOut, 0, 5, vals);
     return telemetryOut;
+}
+
+JNIEXPORT void JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeUploadCustomAudioSample(
+    JNIEnv* env, jclass clazz,
+    jint slotId,
+    jshortArray pcm16Array,
+    jint sampleRate
+) {
+    (void)clazz;
+    if (!pcm16Array || sampleRate <= 0) return;
+    jsize len = env->GetArrayLength(pcm16Array);
+    if (len <= 0) return;
+    jshort* elems = env->GetShortArrayElements(pcm16Array, nullptr);
+    if (!elems) return;
+
+    const int16_t* pcmPtr = reinterpret_cast<const int16_t*>(elems);
+    if (slotId >= 0 && slotId < 10) {
+        sphere::audio::EngineAudioSystem::Get().UploadCustomSample(
+            static_cast<int32_t>(slotId),
+            pcmPtr,
+            static_cast<int32_t>(len),
+            static_cast<int32_t>(sampleRate)
+        );
+    } else if (slotId >= 10) {
+        sphere::audio::WeatherAudioSystem::Get().UploadCustomSample(
+            static_cast<int32_t>(slotId),
+            pcmPtr,
+            static_cast<int32_t>(len),
+            static_cast<int32_t>(sampleRate)
+        );
+    }
+    env->ReleaseShortArrayElements(pcm16Array, elems, JNI_ABORT);
 }
 
 // ---------------------------------------------------------------------------
@@ -1463,7 +1533,8 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeStepAndRenderWater
     if (bitmap &&
         AndroidBitmap_getInfo(env, bitmap, &info) == ANDROID_BITMAP_RESULT_SUCCESS &&
         info.format == ANDROID_BITMAP_FORMAT_RGBA_8888 &&
-        info.width > 0 && info.height > 0) {
+        info.width > 0 && info.height > 0 &&
+        info.stride >= info.width * 4u) {
         void* pixelsPtr = nullptr;
         if (AndroidBitmap_lockPixels(env, bitmap, &pixelsPtr) == ANDROID_BITMAP_RESULT_SUCCESS && pixelsPtr) {
             auto t = sphere::water::WaterSimulationEngine::Get().StepAndRenderBitmap(
@@ -1471,7 +1542,7 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeStepAndRenderWater
                 static_cast<int32_t>(info.stride / 4),
                 info.width,
                 info.height,
-                dtSeconds,
+                std::clamp(FiniteOr(dtSeconds, 0.016f), 0.001f, 0.05f),
                 isPlaying == JNI_TRUE
             );
             AndroidBitmap_unlockPixels(env, bitmap);
@@ -1489,6 +1560,66 @@ Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeStepAndRenderWater
     }
     env->SetFloatArrayRegion(outTelemetry, 0, 9, vals);
     return outTelemetry;
+}
+
+JNIEXPORT void JNICALL
+Java_com_example_sphere_nativebridge_SphereNativeEngine_nativeConfigureWaterSurface(
+    JNIEnv* env, jclass clazz,
+    jboolean enabled,
+    jint gridResolution,
+    jfloat patchSizeM,
+    jfloat windSpeedMs,
+    jfloat windDirectionDeg,
+    jfloat amplitudeScale,
+    jfloat choppinessLambda,
+    jfloat smallWaveCutoff,
+    jfloat timeScale,
+    jfloat waterDepthM,
+    jfloat seabedRoughness,
+    jfloat seabedScale,
+    jfloat sunAzimuthDeg,
+    jfloat sunElevationDeg,
+    jfloat skyTurbidity,
+    jfloat indexOfRefraction,
+    jfloat absorptionStrength,
+    jfloat scatterStrength,
+    jfloat foamThreshold,
+    jfloat reflectionStrength,
+    jint debugModeOrdinal,
+    jboolean cutoutEnabled,
+    jfloat cutoutWidthM,
+    jfloat cutoutHeightM,
+    jfloat cutoutDepthM
+) {
+    (void)env;
+    (void)clazz;
+    sphere::water::WaterSurfaceParams p{};
+    p.enabled = (enabled == JNI_TRUE);
+    p.gridResolution = static_cast<int32_t>(gridResolution);
+    p.patchSizeM = patchSizeM;
+    p.windSpeedMs = windSpeedMs;
+    p.windDirectionDeg = windDirectionDeg;
+    p.amplitudeScale = amplitudeScale;
+    p.choppinessLambda = choppinessLambda;
+    p.smallWaveCutoff = smallWaveCutoff;
+    p.timeScale = timeScale;
+    p.waterDepthM = waterDepthM;
+    p.seabedRoughness = seabedRoughness;
+    p.seabedScale = seabedScale;
+    p.sunAzimuthDeg = sunAzimuthDeg;
+    p.sunElevationDeg = sunElevationDeg;
+    p.skyTurbidity = skyTurbidity;
+    p.indexOfRefraction = indexOfRefraction;
+    p.absorptionStrength = absorptionStrength;
+    p.scatterStrength = scatterStrength;
+    p.foamThreshold = foamThreshold;
+    p.reflectionStrength = reflectionStrength;
+    p.cutoutEnabled = (cutoutEnabled == JNI_TRUE);
+    p.cutoutWidthM = std::clamp(cutoutWidthM, 2.0f, 36.0f);
+    p.cutoutHeightM = std::clamp(cutoutHeightM, 2.0f, 28.0f);
+    p.cutoutDepthM = std::clamp(cutoutDepthM, 2.0f, 36.0f);
+    p.debugMode = static_cast<sphere::water::WaterSurfaceDebugMode>(std::clamp<jint>(debugModeOrdinal, 0, 5));
+    sphere::water::WaterSimulationEngine::Get().ConfigureWaterSurface(p);
 }
 
 } // extern "C"

@@ -26,12 +26,14 @@ enum class SurfacePatternType(val label: String, val description: String) {
     METAL_CORRUGATED_RIBS("Corrugated & Ribbed Metal", "Profiled metal cladding sheets with linear flutes and shadow ribs"),
     METAL_DIAMOND_TREAD("Diamond Tread Plate", "High-traction metal plate with raised directional diamond lugs"),
     ORGANIC_SOIL_LOAM("Organic Soil & Earth", "Damp rich loam with scattered mineral pebbles and decomposed foliage"),
+    SAND_COASTAL_AGGREGATE("Coastal Sand & Shell", "Warm silica sand grains mixed with crushed shell fragments and pebbles"),
     TURF_BLADE_ORGANIC("Lawn Turf", "Live grass blades, root thatch layer, and underlying soil substrate"),
     FOLIAGE_SOIL_SPLATMAP("Earth & Foliage", "Organic loam substrate supporting scattered micro-foliage and pebbles"),
     DUAL_LAYER_CLEARCOAT("Multi-Layer Paint", "Base metal + color pigment basecoat + high-gloss clearcoat reflection"),
     PLANK_GRAIN_FLOOR("Wood Planks", "Timber grain planks with polyurethane varnish and joinery seams"),
     TILED_GROUT_GRID("Ceramic Tiles", "Glazed vitrified tiles surrounded by porous cementitious grout lines"),
-    ASPHALT_ROAD_MARKING("Pathway & Road", "Bitumen aggregate asphalt with reflective painted traffic markings")
+    ASPHALT_ROAD_MARKING("Pathway & Road", "Bitumen aggregate asphalt with reflective painted traffic markings"),
+    ROAD_HIGHWAY_LANES("Highway & Roadway Lanes", "Multi-lane asphalt roadway with painted dividers, shoulders, and micro-cracking")
 }
 
 data class SurfaceLayer(
@@ -172,6 +174,56 @@ val defaultCompositeSurfaces = listOf(
             SurfaceLayer("Soil Substrate", getMaterial("earth_foliage").copy(name = "Moist Organic Loam", baseColor = Color(0xFF4A3B2B), roughness = 0.92f), 55f),
             SurfaceLayer("Creeping Ivy Foliage", getMaterial("mondo_grass").copy(name = "Broadleaf Micro-Foliage", baseColor = Color(0xFF5B7828), subsurface = 0.5f), 35f),
             SurfaceLayer("Basalt Pebbles", getMaterial("concrete_polished").copy(name = "Basalt Stone Aggregate", baseColor = Color(0xFF6B6E72), roughness = 0.6f), 10f)
+        )
+    ),
+
+    // 7B. Lush Meadow Grass Turf (1000mm KTX2)
+    CompositeSurface(
+        id = "grass_meadow_1000",
+        name = "Lush Meadow Grass Turf (1000mm)",
+        category = SurfaceCategory.NATURE,
+        description = "Seamless 1000mm meadow turf KTX2 container combining interwoven green grass blades and warm organic thatch.",
+        patternType = SurfacePatternType.TURF_BLADE_ORGANIC,
+        macroTileMeters = 1.000f,
+        displacementScaleMeters = 0.016f,
+        assetPath = "src/shared/materials/grass_surface/textures/grass_meadow_1000.ktx2",
+        layers = listOf(
+            SurfaceLayer("Meadow Grass Canopy", getMaterial("grass_meadow_1000"), 76f),
+            SurfaceLayer("Dry Thatch & Soil Bed", getMaterial("soil_loam_700").copy(name = "Dry Straw Thatch", baseColor = Color(0xFF8C7E4B), roughness = 0.88f), 24f)
+        )
+    ),
+
+    // 7C. Coast Sand & Shell Aggregate (800mm KTX2)
+    CompositeSurface(
+        id = "coast_sand_800",
+        name = "Coast Sand & Shell Aggregate (800mm)",
+        category = SurfaceCategory.NATURE,
+        description = "Seamless 800mm coastal sand KTX2 surface blending quartz silica sand, crushed shells, and sparse coastal flora.",
+        patternType = SurfacePatternType.SAND_COASTAL_AGGREGATE,
+        macroTileMeters = 0.800f,
+        displacementScaleMeters = 0.024f,
+        assetPath = "src/shared/materials/dirt/textures/coast_sand_800.ktx2",
+        layers = listOf(
+            SurfaceLayer("Quartz Coastal Sand", getMaterial("coast_sand_800"), 74f),
+            SurfaceLayer("Shell & Gravel Grit", getMaterial("concrete_polished").copy(name = "Crushed Shell Grit", baseColor = Color(0xFFA79A85), roughness = 0.84f), 22f),
+            SurfaceLayer("Coastal Scrub Tufts", getMaterial("grass_meadow_1000").copy(name = "Salt-Tolerant Scrub", baseColor = Color(0xFF5D6A3B), roughness = 0.78f), 4f)
+        )
+    ),
+
+    // 7D. Brown Mud with Forest Leaves (1300mm KTX2)
+    CompositeSurface(
+        id = "brown_mud_leaves",
+        name = "Brown Mud with Forest Leaves (1300mm)",
+        category = SurfaceCategory.NATURE,
+        description = "Seamless 1300mm forest floor KTX2 surface mixing damp terracotta-brown loam with dense creeping green leaf clusters.",
+        patternType = SurfacePatternType.FOLIAGE_SOIL_SPLATMAP,
+        macroTileMeters = 1.300f,
+        displacementScaleMeters = 0.035f,
+        assetPath = "src/shared/materials/dirt/textures/brown_mud_leaves.ktx2",
+        layers = listOf(
+            SurfaceLayer("Forest Mud Substrate", getMaterial("brown_mud_leaves"), 54f),
+            SurfaceLayer("Ground-Cover Leaves", getMaterial("earth_foliage").copy(name = "Creeping Green Leaves", baseColor = Color(0xFF648232), roughness = 0.62f, subsurface = 0.45f), 42f),
+            SurfaceLayer("Mineral Soil Pebbles", getMaterial("concrete_polished").copy(name = "Mineral Grit", baseColor = Color(0xFF8B7357), roughness = 0.82f), 4f)
         )
     ),
 
@@ -349,6 +401,86 @@ val defaultCompositeSurfaces = listOf(
             SurfaceLayer("Reflective Road Line", getMaterial("concrete_polished").copy(name = "Reflective Road Marking Paint", baseColor = Color(0xFFF5CF22), roughness = 0.35f), 8f),
             SurfaceLayer("Rainwater Puddle Sheen", getMaterial("water_surface"), 7f)
         )
+    ),
+
+    // 19. Highway Two-Lane (Yellow Edge & White Dash KTX2)
+    CompositeSurface(
+        id = "road_highway_two_lane",
+        name = "Highway Two-Lane (Yellow Edge & White Dash)",
+        category = SurfaceCategory.INFRASTRUCTURE,
+        description = "Coarse black highway asphalt with solid yellow edge stripes and dashed white center divider.",
+        patternType = SurfacePatternType.ROAD_HIGHWAY_LANES,
+        macroTileMeters = 7.40f,
+        displacementScaleMeters = 0.018f,
+        assetPath = "src/shared/materials/infrastructure/textures/road_highway_two_lane.ktx2",
+        layers = listOf(
+            SurfaceLayer("Coarse Highway Asphalt", getMaterial("road_highway_two_lane"), 88f),
+            SurfaceLayer("Yellow & White Traffic Paint", getMaterial("concrete_polished").copy(name = "Reflective Thermoplastic Paint", baseColor = Color(0xFFE09F24), roughness = 0.42f), 12f)
+        )
+    ),
+
+    // 20. Two-Lane Paved Highway (White Shoulders KTX2)
+    CompositeSurface(
+        id = "road_two_lane_white_dash",
+        name = "Two-Lane Paved Highway (White Shoulders)",
+        category = SurfaceCategory.INFRASTRUCTURE,
+        description = "Sun-weathered asphalt arterial highway with solid white shoulders and dashed white centerline.",
+        patternType = SurfacePatternType.ROAD_HIGHWAY_LANES,
+        macroTileMeters = 7.20f,
+        displacementScaleMeters = 0.018f,
+        assetPath = "src/shared/materials/infrastructure/textures/road_two_lane_white_dash.ktx2",
+        layers = listOf(
+            SurfaceLayer("Sun-Weathered Asphalt", getMaterial("road_two_lane_white_dash"), 90f),
+            SurfaceLayer("Worn White Striping", getMaterial("concrete_polished").copy(name = "Chalky White Striping", baseColor = Color(0xFFDAD8D3), roughness = 0.65f), 10f)
+        )
+    ),
+
+    // 21. Urban Two-Way Road (Double Yellow Center KTX2)
+    CompositeSurface(
+        id = "road_double_yellow_line",
+        name = "Urban Two-Way Road (Double Yellow Center)",
+        category = SurfaceCategory.INFRASTRUCTURE,
+        description = "Cracked urban roadway featuring dual solid yellow no-passing divider lines.",
+        patternType = SurfacePatternType.ROAD_HIGHWAY_LANES,
+        macroTileMeters = 6.80f,
+        displacementScaleMeters = 0.022f,
+        assetPath = "src/shared/materials/infrastructure/textures/road_double_yellow_line.ktx2",
+        layers = listOf(
+            SurfaceLayer("Cracked Urban Blacktop", getMaterial("road_double_yellow_line"), 92f),
+            SurfaceLayer("Double Yellow Centerline", getMaterial("concrete_polished").copy(name = "Traffic Yellow Paint", baseColor = Color(0xFFD49E48), roughness = 0.48f), 8f)
+        )
+    ),
+
+    // 22. Multi-Lane Highway Segment (White Dash & Yellow Edge KTX2)
+    CompositeSurface(
+        id = "road_highway_yellow_edge",
+        name = "Multi-Lane Highway Segment (White Dash & Yellow Edge)",
+        category = SurfaceCategory.INFRASTRUCTURE,
+        description = "Heavy-wear cracked asphalt highway segment with dashed white lane separator and solid yellow outer edge.",
+        patternType = SurfacePatternType.ROAD_HIGHWAY_LANES,
+        macroTileMeters = 7.50f,
+        displacementScaleMeters = 0.024f,
+        assetPath = "src/shared/materials/infrastructure/textures/road_highway_yellow_edge.ktx2",
+        layers = listOf(
+            SurfaceLayer("Fatigue-Cracked Asphalt", getMaterial("road_highway_yellow_edge"), 89f),
+            SurfaceLayer("White & Yellow Lane Paint", getMaterial("concrete_polished").copy(name = "Highway Traffic Paint", baseColor = Color(0xFFDCD8D0), roughness = 0.50f), 11f)
+        )
+    ),
+
+    // 23. Cracked Urban Asphalt (Unmarked Lane KTX2)
+    CompositeSurface(
+        id = "road_cracked_urban_unmarked",
+        name = "Cracked Urban Asphalt (Unmarked Lane)",
+        category = SurfaceCategory.INFRASTRUCTURE,
+        description = "Unmarked alligator-cracked dark urban blacktop for side streets, shoulders, and intersections.",
+        patternType = SurfacePatternType.ASPHALT_AGGREGATE_MACADAM,
+        macroTileMeters = 4.00f,
+        displacementScaleMeters = 0.022f,
+        assetPath = "src/shared/materials/infrastructure/textures/road_cracked_urban_unmarked.ktx2",
+        layers = listOf(
+            SurfaceLayer("Cracked Asphalt Aggregate", getMaterial("road_cracked_urban_unmarked"), 94f),
+            SurfaceLayer("Structural Fissure Seams", getMaterial("concrete_polished").copy(name = "Asphalt Crack Fill", baseColor = Color(0xFF282726), roughness = 0.96f), 6f)
+        )
     )
 )
 
@@ -359,6 +491,7 @@ fun getCompositeSurfaceForMaterial(mat: PbrMaterial): CompositeSurface {
     }?.let { return it }
 
     val pattern = when {
+        mat.id.contains("road") || mat.id.contains("highway") -> SurfacePatternType.ROAD_HIGHWAY_LANES
         mat.id.contains("herringbone") -> SurfacePatternType.BRICK_HERRINGBONE
         mat.id.contains("four_leaf") || mat.id.contains("four-leaf") -> SurfacePatternType.GRASS_PAVER_FOUR_LEAF
         mat.id.contains("picket") -> SurfacePatternType.GRASS_PAVER_PICKET_SQUARE
@@ -371,6 +504,7 @@ fun getCompositeSurfaceForMaterial(mat: PbrMaterial): CompositeSurface {
         mat.id.contains("shingle") || mat.id.contains("roof") || mat.id.contains("felt") -> SurfacePatternType.ROOF_SHINGLE_SCALLOP
         mat.id.contains("corrugated") || mat.id.contains("profile") || mat.id.contains("cladding") -> SurfacePatternType.METAL_CORRUGATED_RIBS
         mat.id.contains("tread") || mat.id.contains("diamond") -> SurfacePatternType.METAL_DIAMOND_TREAD
+        mat.id.contains("sand") || mat.id.contains("coast") -> SurfacePatternType.SAND_COASTAL_AGGREGATE
         mat.id.contains("soil") || mat.id.contains("mud") || mat.id.contains("earth") -> SurfacePatternType.ORGANIC_SOIL_LOAM
         mat.id.contains("grass") || mat.id.contains("turf") || mat.id.contains("ryegrass") || mat.id.contains("moss") -> SurfacePatternType.TURF_BLADE_ORGANIC
         mat.id.contains("brick") -> SurfacePatternType.BRICK_BOND_MASONRY
@@ -384,8 +518,8 @@ fun getCompositeSurfaceForMaterial(mat: PbrMaterial): CompositeSurface {
         "Masonry" -> SurfaceCategory.ARCHITECTURAL
         "Metals" -> SurfaceCategory.ARCHITECTURAL
         "Flooring" -> SurfaceCategory.INTERIOR
+        "Infrastructure", "Roads" -> SurfaceCategory.INFRASTRUCTURE
         "Nature", "Organics" -> SurfaceCategory.NATURE
-        "Infrastructure" -> SurfaceCategory.INFRASTRUCTURE
         "Transportation" -> SurfaceCategory.TRANSPORTATION
         else -> SurfaceCategory.ARCHITECTURAL
     }

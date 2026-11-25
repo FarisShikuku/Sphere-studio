@@ -2,10 +2,10 @@ package com.example.sphere
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ViewInAr
-import androidx.compose.material.icons.outlined.Agriculture
 import androidx.compose.material.icons.outlined.Apartment
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.DirectionsCar
+import androidx.compose.material.icons.outlined.EditRoad
 import androidx.compose.material.icons.outlined.Forest
 import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.Landscape
@@ -37,7 +37,7 @@ val availableAssetCategories = listOf(
     AssetCategory("trailers", "Trailers & Haulage", "Semi, Tanker, Heavy & Dollies", Icons.Outlined.RvHookup, "Procedural flatbeds, tankers, box vans, container chassis, logging, curtainsiders, hoppers & running gear"),
     AssetCategory("lighting", "Lighting Studio", "PlainRenderer Vulkan Lights", Icons.Default.Lightbulb, "Physically based lights: flashlight spot cones, filament bulbs, area softboxes & Kelvin blackbody spectrum"),
     AssetCategory("water", "Water Simulation", "Vulkan Compute SPH & SSFR", Icons.Outlined.Water, "3D Smoothed Particle Hydrodynamics, spatial hash bitonic sort, bilateral depth blur, Beer-Lambert absorption & Fresnel refraction"),
-    AssetCategory("roads", "Roads & Pathways", "Splines, Markings & States", Icons.Outlined.Agriculture, "Procedural camber, asphalt PBR, sign SDFs & 10 surface states"),
+    AssetCategory("roads", "Roads & Highways", "Highway, Two-Lane & Urban KTX2", Icons.Outlined.EditRoad, "Khronos KTX 2.0 roadways: highway two-lane, white shoulders, double yellow & asphalt"),
     AssetCategory("vegetation", "Vegetation & Foliage", "L-System Trees, Grass & Biomes", Icons.Outlined.Forest, "L-system branching, blade compute simulation & species rules"),
     AssetCategory("surfaces", "PBR Surfaces", "Materials, Decals & Detail", Icons.Outlined.Texture, "Multi-layer PBR textures, micro-detail noise & Voronoi"),
     AssetCategory("text", "GlyphCore Studio", "Vulkan SDF & TextOverlay Engine", Icons.Outlined.TextFields, "Sascha Willems SDF glyph rasterizer, text overlay pipelines, 3D billboard labels & typography styling"),

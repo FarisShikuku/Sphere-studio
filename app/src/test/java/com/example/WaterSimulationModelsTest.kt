@@ -66,4 +66,40 @@ class WaterSimulationModelsTest {
             assertTrue("${preset.name} pool depth bounds", w.plungePoolDepth in 0.05f..0.90f)
         }
     }
+
+    @Test
+    fun waterSurfacePresetsAndDebugModesMatchNativeBounds() {
+        assertEquals(0, WaterSurfaceDebugViewType.LIT_OPTICS.ordinalId)
+        assertEquals(1, WaterSurfaceDebugViewType.DISPLACEMENT_MAP.ordinalId)
+        assertEquals(2, WaterSurfaceDebugViewType.NORMAL_MAP.ordinalId)
+        assertEquals(3, WaterSurfaceDebugViewType.SEABED_DEPTH.ordinalId)
+        assertEquals(4, WaterSurfaceDebugViewType.FRESNEL_AND_FOAM.ordinalId)
+        assertEquals(5, WaterSurfaceDebugViewType.WIREFRAME_GRID.ordinalId)
+
+        assertTrue("Expected at least 6 water surface presets", waterSurfacePresetsList.size >= 6)
+        val cutPreset = waterSurfacePresetsList.firstOrNull { it.state.cutoutEnabled }
+        assertNotNull("Expected 10m Ocean Cut preset in waterSurfacePresetsList", cutPreset)
+        assertEquals(10f, cutPreset!!.state.cutoutWidthM, 0.01f)
+        assertEquals(10f, cutPreset.state.cutoutHeightM, 0.01f)
+        assertEquals(10f, cutPreset.state.cutoutDepthM, 0.01f)
+
+        val defaultState = WaterSurfaceState()
+        assertFalse(defaultState.cutoutEnabled)
+        assertEquals(10f, defaultState.cutoutWidthM, 0.01f)
+        assertEquals(10f, defaultState.cutoutHeightM, 0.01f)
+        assertEquals(10f, defaultState.cutoutDepthM, 0.01f)
+        assertTrue(waterCutoutSizePresets.any { it.widthM == 10f && it.heightM == 10f && it.depthM == 10f })
+
+        waterSurfacePresetsList.forEach { preset ->
+            val s = preset.state
+            assertTrue("${preset.name} should enable surface mode", s.enabled)
+            assertTrue("${preset.name} gridResolution power of 2", s.gridResolution in listOf(32, 64, 128))
+            assertTrue("${preset.name} patchSizeM bounds", s.patchSizeM in 8f..256f)
+            assertTrue("${preset.name} windSpeedMs bounds", s.windSpeedMs in 1f..36f)
+            assertTrue("${preset.name} choppinessLambda bounds", s.choppinessLambda in 0f..2.5f)
+            assertTrue("${preset.name} waterDepthM bounds", s.waterDepthM in 1f..24f)
+            assertTrue("${preset.name} indexOfRefraction bounds", s.indexOfRefraction in 1.0f..1.75f)
+            assertTrue("${preset.name} cutout dims bounds", s.cutoutWidthM in 3f..32f && s.cutoutHeightM in 3f..24f && s.cutoutDepthM in 3f..32f)
+        }
+    }
 }

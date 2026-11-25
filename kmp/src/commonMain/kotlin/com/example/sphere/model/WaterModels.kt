@@ -441,3 +441,209 @@ val waterPresetsList = listOf(
         )
     )
 )
+
+enum class WaterSurfaceDebugViewType(
+    val ordinalId: Int,
+    val label: String,
+    val shaderPassName: String
+) {
+    LIT_OPTICS(0, "Lit Ocean", "water_surface.frag"),
+    DISPLACEMENT_MAP(1, "Displacement", "phillips_fft_spectrum.comp (dx,y,dz)"),
+    NORMAL_MAP(2, "Normal Map", "water_surface.vert (∇h, Jacobian)"),
+    SEABED_DEPTH(3, "Seabed Depth", "underwater_terrain.vert (Value Noise)"),
+    FRESNEL_AND_FOAM(4, "Fresnel & Foam", "water_surface.frag (Schlick + J)"),
+    WIREFRAME_GRID(5, "Displaced Mesh", "water_surface.vert (N×N grid)")
+}
+
+@Immutable
+data class WaterSurfaceState(
+    val enabled: Boolean = false,
+    val gridResolution: Int = 64,
+    val patchSizeM: Float = 64.0f,
+    val windSpeedMs: Float = 14.0f,
+    val windDirectionDeg: Float = 35.0f,
+    val amplitudeScale: Float = 0.45f,
+    val choppinessLambda: Float = 1.25f,
+    val smallWaveCutoff: Float = 0.08f,
+    val timeScale: Float = 1.0f,
+    val waterDepthM: Float = 6.5f,
+    val seabedRoughness: Float = 1.8f,
+    val seabedScale: Float = 0.14f,
+    val sunAzimuthDeg: Float = 42.0f,
+    val sunElevationDeg: Float = 34.0f,
+    val skyTurbidity: Float = 2.6f,
+    val indexOfRefraction: Float = 1.333f,
+    val absorptionStrength: Float = 0.55f,
+    val scatterStrength: Float = 0.48f,
+    val foamThreshold: Float = 0.35f,
+    val reflectionStrength: Float = 1.0f,
+    val cutoutEnabled: Boolean = false,
+    val cutoutWidthM: Float = 10.0f,
+    val cutoutHeightM: Float = 10.0f,
+    val cutoutDepthM: Float = 10.0f,
+    val debugMode: WaterSurfaceDebugViewType = WaterSurfaceDebugViewType.LIT_OPTICS
+)
+
+@Immutable
+data class WaterCutoutSizePreset(
+    val label: String,
+    val widthM: Float,
+    val heightM: Float,
+    val depthM: Float
+)
+
+val waterCutoutSizePresets = listOf(
+    WaterCutoutSizePreset("6×6×6 m", 6f, 6f, 6f),
+    WaterCutoutSizePreset("10×10×10 m", 10f, 10f, 10f),
+    WaterCutoutSizePreset("16×10×16 m", 16f, 10f, 16f),
+    WaterCutoutSizePreset("24×14×24 m", 24f, 14f, 24f)
+)
+
+@Immutable
+data class WaterSurfacePreset(
+    val name: String,
+    val icon: String,
+    val description: String,
+    val state: WaterSurfaceState
+)
+
+val waterSurfacePresetsList = listOf(
+    WaterSurfacePreset(
+        name = "10m Ocean Cut",
+        icon = "🧊",
+        description = "Compact 10m×10m×10m cross-section block showing waves, seabed strata & control performance",
+        state = WaterSurfaceState(
+            enabled = true,
+            gridResolution = 64,
+            patchSizeM = 22f,
+            windSpeedMs = 13.5f,
+            windDirectionDeg = 35f,
+            amplitudeScale = 0.48f,
+            choppinessLambda = 1.35f,
+            waterDepthM = 6.2f,
+            seabedRoughness = 1.6f,
+            seabedScale = 0.22f,
+            sunAzimuthDeg = 42f,
+            sunElevationDeg = 42f,
+            skyTurbidity = 2.4f,
+            absorptionStrength = 0.55f,
+            scatterStrength = 0.58f,
+            foamThreshold = 0.35f,
+            cutoutEnabled = true,
+            cutoutWidthM = 10f,
+            cutoutHeightM = 10f,
+            cutoutDepthM = 10f
+        )
+    ),
+    WaterSurfacePreset(
+        name = "Trade Wind Swell",
+        icon = "🌊",
+        description = "Balanced Tessendorf Phillips ocean swells with translucent emerald wave crests",
+        state = WaterSurfaceState(
+            enabled = true,
+            gridResolution = 64,
+            patchSizeM = 64f,
+            windSpeedMs = 14f,
+            windDirectionDeg = 35f,
+            amplitudeScale = 0.45f,
+            choppinessLambda = 1.25f,
+            waterDepthM = 6.5f,
+            seabedRoughness = 1.8f,
+            sunAzimuthDeg = 42f,
+            sunElevationDeg = 34f,
+            skyTurbidity = 2.6f,
+            absorptionStrength = 0.55f,
+            scatterStrength = 0.48f,
+            foamThreshold = 0.35f
+        )
+    ),
+    WaterSurfacePreset(
+        name = "Tropical Shallows",
+        icon = "🏝️",
+        description = "Crystal-clear sunlit sandbar seabed with crisp Snell refraction & caustics",
+        state = WaterSurfaceState(
+            enabled = true,
+            gridResolution = 64,
+            patchSizeM = 48f,
+            windSpeedMs = 8.5f,
+            windDirectionDeg = 20f,
+            amplitudeScale = 0.32f,
+            choppinessLambda = 0.85f,
+            waterDepthM = 3.6f,
+            seabedRoughness = 1.4f,
+            seabedScale = 0.18f,
+            sunAzimuthDeg = 55f,
+            sunElevationDeg = 58f,
+            skyTurbidity = 2.1f,
+            absorptionStrength = 0.32f,
+            scatterStrength = 0.65f,
+            foamThreshold = 0.20f
+        )
+    ),
+    WaterSurfacePreset(
+        name = "North Atlantic Gale",
+        icon = "⛈️",
+        description = "Heavy choppy storm sea with steep trochoidal crests and whitecap foam",
+        state = WaterSurfaceState(
+            enabled = true,
+            gridResolution = 64,
+            patchSizeM = 96f,
+            windSpeedMs = 24f,
+            windDirectionDeg = -45f,
+            amplitudeScale = 0.72f,
+            choppinessLambda = 1.85f,
+            waterDepthM = 14.0f,
+            seabedRoughness = 2.4f,
+            sunAzimuthDeg = 18f,
+            sunElevationDeg = 22f,
+            skyTurbidity = 5.4f,
+            absorptionStrength = 0.95f,
+            scatterStrength = 0.38f,
+            foamThreshold = 0.58f
+        )
+    ),
+    WaterSurfacePreset(
+        name = "Golden Sunset Glass",
+        icon = "🌅",
+        description = "Low Preetham solar elevation casting warm specular glitter over gentle ripples",
+        state = WaterSurfaceState(
+            enabled = true,
+            gridResolution = 64,
+            patchSizeM = 52f,
+            windSpeedMs = 6.2f,
+            windDirectionDeg = 12f,
+            amplitudeScale = 0.24f,
+            choppinessLambda = 0.65f,
+            waterDepthM = 8.0f,
+            seabedRoughness = 1.2f,
+            sunAzimuthDeg = 10f,
+            sunElevationDeg = 11f,
+            skyTurbidity = 4.6f,
+            absorptionStrength = 0.62f,
+            scatterStrength = 0.42f,
+            foamThreshold = 0.12f,
+            reflectionStrength = 1.25f
+        )
+    ),
+    WaterSurfacePreset(
+        name = "High-Res Mesh 128",
+        icon = "📐",
+        description = "High-density 128x128 FFT displaced grid inspection with sharp capillary detail",
+        state = WaterSurfaceState(
+            enabled = true,
+            gridResolution = 128,
+            patchSizeM = 72f,
+            windSpeedMs = 16.5f,
+            windDirectionDeg = 55f,
+            amplitudeScale = 0.50f,
+            choppinessLambda = 1.45f,
+            smallWaveCutoff = 0.04f,
+            waterDepthM = 7.5f,
+            seabedRoughness = 2.0f,
+            sunAzimuthDeg = 48f,
+            sunElevationDeg = 40f,
+            skyTurbidity = 2.4f,
+            debugMode = WaterSurfaceDebugViewType.WIREFRAME_GRID
+        )
+    )
+)

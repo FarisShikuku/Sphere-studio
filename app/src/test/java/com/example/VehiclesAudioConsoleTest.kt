@@ -10,9 +10,15 @@ import com.example.sphere.VehiclesStudioScreen
 import com.example.sphere.model.createDefaultVehiclesCatalog
 import com.example.sphere.vehicles.VehicleAudioController
 import com.example.sphere.vehicles.computeFallbackGridCellX
+import com.example.sphere.audio.SphereAudioAssetLoader
+import com.example.sphere.nativebridge.SphereNativeEngine
 import com.example.sphere.weather.WeatherAudioController
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -136,5 +142,65 @@ class VehiclesAudioConsoleTest {
         composeTestRule.onNodeWithTag("card_vehicle_audio_compute")
             .performScrollTo()
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun audioAssetLoaderParsesMonoAndStereoWavAndResolvesSlotsSafely() {
+        assertEquals(
+            SphereNativeEngine.AudioSampleSlots.TRUCK_ENGINE,
+            SphereAudioAssetLoader.resolveSlotForFilename("Truck_Engine.MP3")
+        )
+        assertEquals(
+            SphereNativeEngine.AudioSampleSlots.RAIN_LOOP,
+            SphereAudioAssetLoader.resolveSlotForFilename("rain_loop.wav")
+        )
+        assertEquals(
+            SphereNativeEngine.AudioSampleSlots.THUNDER_DISTANT,
+            SphereAudioAssetLoader.resolveSlotForFilename("thunder_distant.ogg")
+        )
+        assertNull(SphereAudioAssetLoader.resolveSlotForFilename("unknown_track.wav"))
+        assertEquals(0, SphereAudioAssetLoader.loadFromAssetsIfPresent(null, forceReload = true))
+
+        // Build a synthetic stereo 48kHz PCM16 WAV with an extra JUNK chunk before data
+        val frames = 4
+        val dataBytesLen = frames * 2 * 2 // stereo 16-bit
+        val junkPayloadLen = 4
+        val riffPayloadSize = 4 + (8 + junkPayloadLen) + (8 + 16) + (8 + dataBytesLen)
+        val wavBuffer = ByteBuffer.allocate(8 + riffPayloadSize).order(ByteOrder.LITTLE_ENDIAN)
+        wavBuffer.put("RIFF".toByteArray(Charsets.US_ASCII))
+        wavBuffer.putInt(riffPayloadSize)
+        wavBuffer.put("WAVE".toByteArray(Charsets.US_ASCII))
+
+        // JUNK chunk
+        wavBuffer.put("JUNK".toByteArray(Charsets.US_ASCII))
+        wavBuffer.putInt(junkPayloadLen)
+        wavBuffer.putInt(0x12345678)
+
+        // fmt chunk
+        wavBuffer.put("fmt ".toByteArray(Charsets.US_ASCII))
+        wavBuffer.putInt(16)
+        wavBuffer.putShort(1) // PCM
+        wavBuffer.putShort(2) // Stereo
+        wavBuffer.putInt(48000)
+        wavBuffer.putInt(48000 * 4)
+        wavBuffer.putShort(4)
+        wavBuffer.putShort(16)
+
+        // data chunk
+        wavBuffer.put("data".toByteArray(Charsets.US_ASCII))
+        wavBuffer.putInt(dataBytesLen)
+        wavBuffer.putShort(1000); wavBuffer.putShort(3000)   // avg 2000
+        wavBuffer.putShort(-4000); wavBuffer.putShort(-2000) // avg -3000
+        wavBuffer.putShort(12000); wavBuffer.putShort(12000) // avg 12000
+        wavBuffer.putShort(0); wavBuffer.putShort(100)       // avg 50
+
+        val decoded = SphereAudioAssetLoader.parsePcmWav(wavBuffer.array())
+        assertNotNull("Valid stereo WAV should parse cleanly", decoded)
+        assertEquals(48000, decoded!!.sampleRate)
+        assertEquals(4, decoded.monoPcm16.size)
+        assertEquals(2000.toShort(), decoded.monoPcm16[0])
+        assertEquals((-3000).toShort(), decoded.monoPcm16[1])
+        assertEquals(12000.toShort(), decoded.monoPcm16[2])
+        assertEquals(50.toShort(), decoded.monoPcm16[3])
     }
 }

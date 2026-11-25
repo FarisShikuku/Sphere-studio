@@ -9,6 +9,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -20,12 +21,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.sphere.model.PbrMaterial
+import com.example.sphere.texture.rememberDecodedKtx2Texture
 
 @Composable
 fun MaterialVulkanSpecTab(
     material: PbrMaterial,
     modifier: Modifier = Modifier
 ) {
+    val decodedKtx2 = rememberDecodedKtx2Texture(material.assetPath)
+    val kvd = decodedKtx2?.info?.kvdMetadata.orEmpty()
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -33,6 +38,40 @@ fun MaterialVulkanSpecTab(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        if (decodedKtx2 != null) {
+            Card(
+                modifier = Modifier.testTag("ktx2_metadata_card"),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.45f))
+            ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Verified, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Khronos KTX 2.0 Container & Filename Metadata",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = Color.White)
+                        )
+                    }
+                    KtxSpecRow("Asset Container", decodedKtx2.assetName, Color(0xFF38BDF8))
+                    KtxSpecRow("VkFormat", "${decodedKtx2.info.vkFormatName} (${decodedKtx2.info.vkFormat})", Color(0xFF34D399))
+                    kvd["KTXsourceFile"]?.let { KtxSpecRow("Source File", it, Color(0xFFCBD5E1)) }
+                    kvd["KTXtileScaleMm"]?.let { KtxSpecRow("Filename Tile Scale", "$it mm (${material.tileScaleMeters} m)", Color(0xFFFBBF24)) }
+                    kvd["KTXroadType"]?.let { KtxSpecRow("Road Type", it, Color(0xFFFBBF24)) }
+                    kvd["KTXlaneCount"]?.let { lanes ->
+                        val formattedLanes = if (lanes.contains("Lane", ignoreCase = true)) lanes else if (lanes == "1") "1 Lane" else "$lanes Lanes"
+                        KtxSpecRow("Lanes", formattedLanes, Color(0xFF38BDF8))
+                    }
+                    kvd["KTXroadWidthM"]?.let { KtxSpecRow("Road Width", "$it m", Color(0xFF34D399)) }
+                    kvd["KTXmarkings"]?.let { KtxSpecRow("Markings", it, Color(0xFFCBD5E1)) }
+                    kvd["KTXmaterialSource"]?.let { KtxSpecRow("Publisher", it, Color(0xFFA78BFA)) }
+                    kvd["KTXmaterialCategory"]?.let { KtxSpecRow("Category", it, Color(0xFFCBD5E1)) }
+                    kvd["KTXmaterialId"]?.let { KtxSpecRow("Material ID", it, Color(0xFFCBD5E1)) }
+                }
+            }
+        }
+
         // Vulkan 1.3 Descriptor Indexing & Bindless Heap Card
         Card(
             shape = RoundedCornerShape(12.dp),
@@ -50,7 +89,7 @@ fun MaterialVulkanSpecTab(
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Albedo Texture (BC7 sRGB)", style = MaterialTheme.typography.bodySmall, color = Color(0xFF94A3B8))
+                    Text("Albedo Texture (${material.albedoFormat})", style = MaterialTheme.typography.bodySmall, color = Color(0xFF94A3B8))
                     Text("Slot #${material.bindlessAlbedoSlot}", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = Color(0xFF38BDF8), fontSize = 12.sp)
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -84,17 +123,25 @@ fun MaterialVulkanSpecTab(
                     )
                 }
 
+                val resW = decodedKtx2?.info?.pixelWidth ?: material.resolution
+                val resH = decodedKtx2?.info?.pixelHeight ?: material.resolution
+                val mipCount = decodedKtx2?.info?.levelCount ?: 12
+                val vramLabel = decodedKtx2?.let {
+                    val kb = it.info.level0ByteLength / 1024.0
+                    "${"%.1f".format(kb)} KB Level-0 (${it.info.levelCount} mips)"
+                } ?: "10.66 MB (Mipmapped)"
+
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Resolution", style = MaterialTheme.typography.bodySmall, color = Color(0xFF94A3B8))
-                    Text("${material.resolution} x ${material.resolution} px", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 12.sp)
+                    Text("$resW x $resH px", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 12.sp)
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Mipmap Chain Count", style = MaterialTheme.typography.bodySmall, color = Color(0xFF94A3B8))
-                    Text("12 Levels (to 1x1)", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 12.sp)
+                    Text("$mipCount Levels (to 1x1)", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 12.sp)
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Total Compressed VRAM", style = MaterialTheme.typography.bodySmall, color = Color(0xFF94A3B8))
-                    Text("10.66 MB (Mipmapped)", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = Color(0xFF4ADE80), fontSize = 12.sp)
+                    Text("Texture Payload", style = MaterialTheme.typography.bodySmall, color = Color(0xFF94A3B8))
+                    Text(vramLabel, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = Color(0xFF4ADE80), fontSize = 12.sp)
                 }
             }
         }
@@ -153,5 +200,33 @@ fun MaterialVulkanSpecTab(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun KtxSpecRow(
+    label: String,
+    value: String,
+    valueColor: Color
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodySmall,
+            color = Color(0xFF94A3B8)
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            value,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            color = valueColor,
+            fontSize = 11.sp,
+            maxLines = 1
+        )
     }
 }

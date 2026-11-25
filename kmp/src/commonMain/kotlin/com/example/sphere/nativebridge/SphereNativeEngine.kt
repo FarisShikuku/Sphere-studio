@@ -44,7 +44,7 @@ object SphereNativeEngine {
     }
 
     fun getRegisteredTextureCount(): Int {
-        return if (isLibraryLoaded) nativeGetRegisteredTextureCount() else 65
+        return if (isLibraryLoaded) nativeGetRegisteredTextureCount() else 71
     }
 
     fun getTextureKtx2Path(index: Int): String {
@@ -674,6 +674,25 @@ object SphereNativeEngine {
         }
     }
 
+    object AudioSampleSlots {
+        const val AIR_BRAKE = 0
+        const val TRUCK_HORN = 1
+        const val BUS_DOOR = 2
+        const val MATATU_HORN = 3
+        const val GEAR_SHIFT = 4
+        const val TRUCK_ENGINE = 5
+        const val RAIN_LOOP = 10
+        const val WIND_LOOP = 11
+        const val THUNDER_CLOSE = 12
+        const val THUNDER_DISTANT = 13
+    }
+
+    fun uploadCustomAudioSample(slotId: Int, pcm16: ShortArray, sampleRate: Int) {
+        if (isLibraryLoaded && pcm16.isNotEmpty() && sampleRate > 0) {
+            nativeUploadCustomAudioSample(slotId, pcm16, sampleRate)
+        }
+    }
+
     private external fun nativeConfigureWeatherAudio(
         rainIntensity: Float,
         snowIntensity: Float,
@@ -687,6 +706,7 @@ object SphereNativeEngine {
     private external fun nativeTriggerWeatherThunder(closeStrike: Boolean, gain: Float)
     private external fun nativeRenderWeatherAudioBlock(outPcmArray: ShortArray, sampleCount: Int): FloatArray?
     private external fun nativeGetWeatherAudioTelemetry(): FloatArray?
+    private external fun nativeUploadCustomAudioSample(slotId: Int, pcm16: ShortArray, sampleRate: Int)
 
     // -----------------------------------------------------------------------
     // Vulkan SPH & Screen-Space Fluid Rendering Bridge (gen/water)
@@ -827,6 +847,64 @@ object SphereNativeEngine {
         }
     }
 
+    fun configureWaterSurface(
+        enabled: Boolean,
+        gridResolution: Int,
+        patchSizeM: Float,
+        windSpeedMs: Float,
+        windDirectionDeg: Float,
+        amplitudeScale: Float,
+        choppinessLambda: Float,
+        smallWaveCutoff: Float,
+        timeScale: Float,
+        waterDepthM: Float,
+        seabedRoughness: Float,
+        seabedScale: Float,
+        sunAzimuthDeg: Float,
+        sunElevationDeg: Float,
+        skyTurbidity: Float,
+        indexOfRefraction: Float,
+        absorptionStrength: Float,
+        scatterStrength: Float,
+        foamThreshold: Float,
+        reflectionStrength: Float,
+        debugModeOrdinal: Int,
+        cutoutEnabled: Boolean,
+        cutoutWidthM: Float,
+        cutoutHeightM: Float,
+        cutoutDepthM: Float
+    ) {
+        if (isLibraryLoaded) {
+            nativeConfigureWaterSurface(
+                enabled,
+                gridResolution,
+                patchSizeM,
+                windSpeedMs,
+                windDirectionDeg,
+                amplitudeScale,
+                choppinessLambda,
+                smallWaveCutoff,
+                timeScale,
+                waterDepthM,
+                seabedRoughness,
+                seabedScale,
+                sunAzimuthDeg,
+                sunElevationDeg,
+                skyTurbidity,
+                indexOfRefraction,
+                absorptionStrength,
+                scatterStrength,
+                foamThreshold,
+                reflectionStrength,
+                debugModeOrdinal,
+                cutoutEnabled,
+                cutoutWidthM,
+                cutoutHeightM,
+                cutoutDepthM
+            )
+        }
+    }
+
     private external fun nativeConfigureWaterSimulation(
         particleCount: Int,
         scenarioOrdinal: Int,
@@ -902,6 +980,33 @@ object SphereNativeEngine {
     private external fun nativeInjectWaterImpulse(normU: Float, normV: Float, dragDx: Float, dragDy: Float, strength: Float)
     private external fun nativeTriggerWaterPulse(pulseType: Int, strength: Float)
     private external fun nativeStepAndRenderWaterBitmap(bitmap: Bitmap, dtSeconds: Float, isPlaying: Boolean): FloatArray?
+    private external fun nativeConfigureWaterSurface(
+        enabled: Boolean,
+        gridResolution: Int,
+        patchSizeM: Float,
+        windSpeedMs: Float,
+        windDirectionDeg: Float,
+        amplitudeScale: Float,
+        choppinessLambda: Float,
+        smallWaveCutoff: Float,
+        timeScale: Float,
+        waterDepthM: Float,
+        seabedRoughness: Float,
+        seabedScale: Float,
+        sunAzimuthDeg: Float,
+        sunElevationDeg: Float,
+        skyTurbidity: Float,
+        indexOfRefraction: Float,
+        absorptionStrength: Float,
+        scatterStrength: Float,
+        foamThreshold: Float,
+        reflectionStrength: Float,
+        debugModeOrdinal: Int,
+        cutoutEnabled: Boolean,
+        cutoutWidthM: Float,
+        cutoutHeightM: Float,
+        cutoutDepthM: Float
+    )
 }
 
 

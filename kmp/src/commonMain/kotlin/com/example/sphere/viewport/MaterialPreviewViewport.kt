@@ -1,5 +1,10 @@
 package com.example.sphere.viewport
 
+import android.graphics.Bitmap
+import android.graphics.BitmapShader
+import android.graphics.LightingColorFilter
+import android.graphics.Matrix
+import android.graphics.Shader
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -14,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -21,18 +27,15 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.sphere.model.CompositeSurface
 import com.example.sphere.model.MaterialChannelMode
 import com.example.sphere.model.PbrMaterial
 import com.example.sphere.model.SurfacePatternType
+import com.example.sphere.texture.rememberDecodedKtx2Texture
 import kotlinx.coroutines.isActive
 import kotlin.math.*
 
@@ -53,6 +56,19 @@ private data class Vec3D(val x: Float, val y: Float, val z: Float) {
 }
 
 private data class Point2D(val x: Float, val y: Float, val zView: Float)
+
+internal fun computePhysicalUvRepeat(
+    surfaceSpanMeters: Float,
+    tileScaleMeters: Float,
+    useRealWorldScale: Boolean,
+    uvTilingMultiplier: Float
+): Float {
+    return if (useRealWorldScale) {
+        ((surfaceSpanMeters / tileScaleMeters.coerceAtLeast(0.05f)) * uvTilingMultiplier).coerceIn(0.01f, 2000f)
+    } else {
+        uvTilingMultiplier.coerceIn(0.01f, 2000f)
+    }
+}
 
 @Composable
 fun MaterialPreviewViewport(
@@ -85,6 +101,22 @@ fun MaterialPreviewViewport(
     var lastDrawMs by remember { mutableFloatStateOf(0f) }
     var measuredFps by remember { mutableIntStateOf(SceneFpsConfig.TARGET_FPS) }
     val timingScratch = remember { LongArray(1) }
+
+    val decodedKtx2 = rememberDecodedKtx2Texture(material.assetPath)
+    val ktx2ChannelBitmap = remember(
+        decodedKtx2,
+        channelMode,
+        material.roughness,
+        material.metallic,
+        material.occlusion
+    ) {
+        decodedKtx2?.bitmapForChannel(
+            channelMode = channelMode,
+            roughness = material.roughness,
+            metallic = material.metallic,
+            occlusion = material.occlusion
+        )
+    }
 
     LaunchedEffect(isAutoRotating) {
         if (!isAutoRotating) return@LaunchedEffect
@@ -190,9 +222,14 @@ fun MaterialPreviewViewport(
                 objectDepthScale * objectScale,
                 1.0f
             )
-            // Camera distance adapts smoothly with sub-linear damping so large objects (> 100m) remain in view
-            // while physical mesh dimensions clearly expand and shrink visually on screen
-            val cameraDist = (3.8f + (maxDimensionExtent - 1.0f).coerceAtLeast(0f) * 0.40f)
+            // Keep camera outside bounding sphere even for 1km (1000m) surfaces so vertices never clip behind eye
+            val worldHalfExtent = when (shape) {
+                PreviewMeshShape.CUBE -> 0.50f * maxOf(objectWidthScale, objectHeightScale, objectDepthScale) * objectScale * 1.732f
+                PreviewMeshShape.WALL -> 1.00f * maxOf(objectWidthScale, objectHeightScale * 0.75f, objectDepthScale * 0.17f) * objectScale * 1.45f
+                PreviewMeshShape.PLANE -> 1.00f * maxOf(objectWidthScale, objectDepthScale) * objectScale * 1.45f
+                PreviewMeshShape.SPHERE -> 0.50f * maxDimensionExtent
+            }
+            val cameraDist = maxOf(3.8f, worldHalfExtent * 2.55f + 1.2f)
             // Camera FOV magnification depends purely on cameraZoomFactor (optical view zoom, not physical dimension)
             val fovFactor = min(w, h) * 1.35f * cameraZoomFactor
 
@@ -339,7 +376,27 @@ fun MaterialPreviewViewport(
                             else -> Pair(hw * 2f, hh * 2f)
                         }
 
+                        val repX = computePhysicalUvRepeat(faceW, material.tileScaleMeters, useRealWorldScale, uvTilingMultiplierX)
+                        val repY = computePhysicalUvRepeat(faceH, material.tileScaleMeters, useRealWorldScale, uvTilingMultiplierY)
 
+                        val isRawChannelMap = channelMode == MaterialChannelMode.ALBEDO_MAP ||
+                            channelMode == MaterialChannelMode.NORMAL_MAP ||
+                            channelMode == MaterialChannelMode.ORM_MAP ||
+                            channelMode == MaterialChannelMode.HEIGHT_MAP
+
+                        val drewKtx2 = if (ktx2ChannelBitmap != null) {
+                            drawKtx2TexturedQuad(
+                                bitmap = ktx2ChannelBitmap,
+                                pts = projPts,
+                                facePath = facePath,
+                                repeatX = repX,
+                                repeatY = repY,
+                                diffuse = if (isRawChannelMap) 1.0f else diffuse,
+                                specular = if (isRawChannelMap) 0f else specular * 0.45f
+                            )
+                        } else false
+
+                        if (!drewKtx2) {
                             when (channelMode) {
                                 MaterialChannelMode.ALBEDO_MAP -> {
                                     drawPath(path = facePath, color = material.baseColor)
@@ -365,26 +422,20 @@ fun MaterialPreviewViewport(
                                     drawPath(path = facePath, color = Color(hVal, hVal, hVal))
                                 }
                                 else -> {
-                                    // Full PBR
                                     val litRed = (material.baseColor.red * diffuse + specular).coerceIn(0f, 1f)
                                     val litGreen = (material.baseColor.green * diffuse + specular).coerceIn(0f, 1f)
                                     val litBlue = (material.baseColor.blue * diffuse + specular).coerceIn(0f, 1f)
-                                    val litColor = Color(litRed, litGreen, litBlue, 1.0f)
-
-                                    drawPath(path = facePath, color = litColor)
-
-                                    // Procedural Texture with real-world repetition (constant metric scale, never stretched)
-                                    val repX = ((faceW / material.tileScaleMeters.coerceAtLeast(0.05f)) * uvTilingMultiplierX).coerceIn(0.2f, 1000f)
-                                    val repY = ((faceH / material.tileScaleMeters.coerceAtLeast(0.05f)) * uvTilingMultiplierY).coerceIn(0.2f, 1000f)
+                                    drawPath(path = facePath, color = Color(litRed, litGreen, litBlue, 1.0f))
                                     drawProceduralFaceTexture(
                                         material = material,
                                         compositeSurface = compositeSurface,
                                         pts = projPts,
                                         diffuse = diffuse,
-                                        repeatX = if (useRealWorldScale) repX else uvTilingMultiplierX,
-                                        repeatY = if (useRealWorldScale) repY else uvTilingMultiplierY
+                                        repeatX = repX,
+                                        repeatY = repY
                                     )
                                 }
+                            }
                         }
 
                         // Edge Rim Highlight (only rendered when wireframe inspection mode is active)
@@ -499,7 +550,27 @@ fun MaterialPreviewViewport(
                             Pair(ht * 2f, hh * 2f)
                         }
 
+                        val repX = computePhysicalUvRepeat(wallFaceW, material.tileScaleMeters, useRealWorldScale, uvTilingMultiplierX)
+                        val repY = computePhysicalUvRepeat(wallFaceH, material.tileScaleMeters, useRealWorldScale, uvTilingMultiplierY)
 
+                        val isRawChannelMap = channelMode == MaterialChannelMode.ALBEDO_MAP ||
+                            channelMode == MaterialChannelMode.NORMAL_MAP ||
+                            channelMode == MaterialChannelMode.ORM_MAP ||
+                            channelMode == MaterialChannelMode.HEIGHT_MAP
+
+                        val drewWallKtx2 = if (!wf.isCoping && ktx2ChannelBitmap != null) {
+                            drawKtx2TexturedQuad(
+                                bitmap = ktx2ChannelBitmap,
+                                pts = pts,
+                                facePath = path,
+                                repeatX = repX,
+                                repeatY = repY,
+                                diffuse = if (isRawChannelMap) 1.0f else diffuse,
+                                specular = 0f
+                            )
+                        } else false
+
+                        if (!drewWallKtx2) {
                             val baseCol = if (wf.isCoping) Color(0xFFC5C9CD) else material.baseColor
                             val litRed = (baseCol.red * diffuse).coerceIn(0f, 1f)
                             val litGreen = (baseCol.green * diffuse).coerceIn(0f, 1f)
@@ -507,17 +578,16 @@ fun MaterialPreviewViewport(
                             drawPath(path = path, color = Color(litRed, litGreen, litBlue))
 
                             if (wf.isFront) {
-                                val repX = ((wallFaceW / material.tileScaleMeters.coerceAtLeast(0.05f)) * uvTilingMultiplierX).coerceIn(0.2f, 1000f)
-                                val repY = ((wallFaceH / material.tileScaleMeters.coerceAtLeast(0.05f)) * uvTilingMultiplierY).coerceIn(0.2f, 1000f)
                                 drawProceduralFaceTexture(
                                     material = material,
                                     compositeSurface = compositeSurface,
                                     pts = pts,
                                     diffuse = diffuse,
-                                    repeatX = if (useRealWorldScale) repX else uvTilingMultiplierX,
-                                    repeatY = if (useRealWorldScale) repY else uvTilingMultiplierY
+                                    repeatX = repX,
+                                    repeatY = repY
                                 )
                             }
+                        }
 
                         if (isWireframeVisible) {
                             drawPath(
@@ -544,35 +614,98 @@ fun MaterialPreviewViewport(
                     )
 
                     val highlight = Offset(sCenter.x + lightDir.x * sRadius * 0.40f, sCenter.y - lightDir.y * sRadius * 0.40f)
+                    val isRawChannelMap = channelMode == MaterialChannelMode.ALBEDO_MAP ||
+                        channelMode == MaterialChannelMode.NORMAL_MAP ||
+                        channelMode == MaterialChannelMode.ORM_MAP ||
+                        channelMode == MaterialChannelMode.HEIGHT_MAP
 
-                    val sphereGrad = Brush.radialGradient(
-                        colors = listOf(
-                            material.baseColor,
-                            material.baseColor.copy(red = material.baseColor.red * 0.42f, green = material.baseColor.green * 0.42f, blue = material.baseColor.blue * 0.42f),
-                            Color.Black.copy(alpha = 0.92f)
-                        ),
-                        center = highlight,
-                        radius = sRadius * 1.15f
-                    )
-                    drawCircle(brush = sphereGrad, radius = sRadius, center = sCenter)
+                    val drewSphereKtx2 = if (ktx2ChannelBitmap != null && !ktx2ChannelBitmap.isRecycled) {
+                        val spherePath = Path().apply {
+                            addOval(
+                                Rect(
+                                    sCenter.x - sRadius,
+                                    sCenter.y - sRadius,
+                                    sCenter.x + sRadius,
+                                    sCenter.y + sRadius
+                                )
+                            )
+                        }
+                        val repSphere = if (useRealWorldScale) {
+                            ((sScale / material.tileScaleMeters.coerceAtLeast(0.05f)) * uvTilingMultiplierX).coerceIn(0.5f, 32f)
+                        } else uvTilingMultiplierX.coerceIn(0.5f, 32f)
+                        val texScaleX = (sRadius * 2f) / (ktx2ChannelBitmap.width.toFloat().coerceAtLeast(1f) * repSphere)
+                        val texScaleY = (sRadius * 2f) / (ktx2ChannelBitmap.height.toFloat().coerceAtLeast(1f) * repSphere)
+                        val shaderMatrix = Matrix().apply {
+                            setScale(texScaleX, texScaleY)
+                            postTranslate(
+                                sCenter.x - sRadius + (rotY / 360f) * sRadius * 2f,
+                                sCenter.y - sRadius - (rotX / 180f) * sRadius
+                            )
+                        }
+                        val shader = BitmapShader(ktx2ChannelBitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT).apply {
+                            setLocalMatrix(shaderMatrix)
+                        }
+                        val paint = android.graphics.Paint(
+                            android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG
+                        ).apply {
+                            this.shader = shader
+                        }
+                        drawIntoCanvas { canvas ->
+                            canvas.save()
+                            canvas.clipPath(spherePath)
+                            canvas.nativeCanvas.drawCircle(sCenter.x, sCenter.y, sRadius, paint)
+                            canvas.restore()
+                        }
+                        if (!isRawChannelMap) {
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color.Black.copy(alpha = 0.28f),
+                                        Color.Black.copy(alpha = 0.78f)
+                                    ),
+                                    center = highlight,
+                                    radius = sRadius * 1.18f
+                                ),
+                                radius = sRadius,
+                                center = sCenter
+                            )
+                        }
+                        true
+                    } else false
 
-                    val specRadius = sRadius * (0.08f + material.roughness * 0.36f)
-                    val specAlpha = ((1.0f - material.roughness) * (0.5f + material.metallic * 0.5f)).coerceIn(0.1f, 0.95f)
-                    drawCircle(
-                        brush = Brush.radialGradient(listOf(Color.White.copy(alpha = specAlpha), Color.Transparent), center = highlight, radius = specRadius),
-                        radius = specRadius,
-                        center = highlight
-                    )
+                    if (!drewSphereKtx2) {
+                        val sphereGrad = Brush.radialGradient(
+                            colors = listOf(
+                                material.baseColor,
+                                material.baseColor.copy(red = material.baseColor.red * 0.42f, green = material.baseColor.green * 0.42f, blue = material.baseColor.blue * 0.42f),
+                                Color.Black.copy(alpha = 0.92f)
+                            ),
+                            center = highlight,
+                            radius = sRadius * 1.15f
+                        )
+                        drawCircle(brush = sphereGrad, radius = sRadius, center = sCenter)
+                    }
+
+                    if (!isRawChannelMap) {
+                        val specRadius = sRadius * (0.08f + material.roughness * 0.36f)
+                        val specAlpha = ((1.0f - material.roughness) * (0.5f + material.metallic * 0.5f)).coerceIn(0.1f, 0.95f)
+                        drawCircle(
+                            brush = Brush.radialGradient(listOf(Color.White.copy(alpha = specAlpha), Color.Transparent), center = highlight, radius = specRadius),
+                            radius = specRadius,
+                            center = highlight
+                        )
+                    }
                     if (isWireframeVisible) {
                         drawCircle(color = Color.White.copy(alpha = 0.25f), radius = sRadius, center = sCenter, style = Stroke(width = 1.4f))
                     }
                 }
 
                 PreviewMeshShape.PLANE -> {
-                    // 3D Architectural Ground Slab / Floor with thickness & bevel
-                    val baseFloorW = 2.4f * objectScale
-                    val baseFloorD = 2.4f * objectScale
-                    val slabThickness = 0.20f * objectScale * objectHeightScale
+                    // 3D Architectural Ground Slab / Floor (base 2.0m x 2.0m at 1.0x, matching HUD & Dimensions tab)
+                    val baseFloorW = 2.0f * objectScale
+                    val baseFloorD = 2.0f * objectScale
+                    val slabThickness = 0.15f * objectScale * objectHeightScale
 
                     val hfw = baseFloorW * 0.5f * objectWidthScale
                     val hfd = baseFloorD * 0.5f * objectDepthScale
@@ -648,18 +781,37 @@ fun MaterialPreviewViewport(
                         if (ff.isTop) {
                             val floorFaceW = hfw * 2f
                             val floorFaceD = hfd * 2f
+                            val repX = computePhysicalUvRepeat(floorFaceW, material.tileScaleMeters, useRealWorldScale, uvTilingMultiplierX)
+                            val repY = computePhysicalUvRepeat(floorFaceD, material.tileScaleMeters, useRealWorldScale, uvTilingMultiplierY)
 
+                            val isRawChannelMap = channelMode == MaterialChannelMode.ALBEDO_MAP ||
+                                channelMode == MaterialChannelMode.NORMAL_MAP ||
+                                channelMode == MaterialChannelMode.ORM_MAP ||
+                                channelMode == MaterialChannelMode.HEIGHT_MAP
+
+                            val drewFloorKtx2 = if (ktx2ChannelBitmap != null) {
+                                drawKtx2TexturedQuad(
+                                    bitmap = ktx2ChannelBitmap,
+                                    pts = pts,
+                                    facePath = path,
+                                    repeatX = repX,
+                                    repeatY = repY,
+                                    diffuse = if (isRawChannelMap) 1.0f else diffuse,
+                                    specular = 0f
+                                )
+                            } else false
+
+                            if (!drewFloorKtx2) {
                                 drawPath(path = path, color = material.baseColor)
-                                val repX = ((floorFaceW / material.tileScaleMeters.coerceAtLeast(0.05f)) * uvTilingMultiplierX).coerceIn(0.2f, 1000f)
-                                val repY = ((floorFaceD / material.tileScaleMeters.coerceAtLeast(0.05f)) * uvTilingMultiplierY).coerceIn(0.2f, 1000f)
                                 drawProceduralFaceTexture(
                                     material = material,
                                     compositeSurface = compositeSurface,
                                     pts = pts,
                                     diffuse = diffuse,
-                                    repeatX = if (useRealWorldScale) repX else uvTilingMultiplierX,
-                                    repeatY = if (useRealWorldScale) repY else uvTilingMultiplierY
+                                    repeatX = repX,
+                                    repeatY = repY
                                 )
+                            }
                         } else {
                             val edgeBase = Color(0xFF64748B)
                             val litCol = Color(
@@ -704,8 +856,12 @@ fun MaterialPreviewViewport(
         }
         val hudPatternM = if (material.tileScaleMeters > 0.05f) material.tileScaleMeters else 1.0f
         val hudPatternMm = (hudPatternM * 1000).toInt()
-        val hudTilesX = ((hudActualW / hudPatternM) * uvTilingMultiplierX).coerceAtLeast(1f).roundToInt()
-        val hudTilesY = (((if (shape == PreviewMeshShape.PLANE) hudActualD else hudActualH) / hudPatternM) * uvTilingMultiplierY).coerceAtLeast(1f).roundToInt()
+        val hudSpanY = if (shape == PreviewMeshShape.PLANE) hudActualD else hudActualH
+        val hudTilesX = computePhysicalUvRepeat(hudActualW, hudPatternM, useRealWorldScale, uvTilingMultiplierX)
+        val hudTilesY = computePhysicalUvRepeat(hudSpanY, hudPatternM, useRealWorldScale, uvTilingMultiplierY)
+        fun formatRepeat(v: Float): String = if (abs(v - v.roundToInt()) < 0.04f) "${v.roundToInt()}" else "${"%.1f".format(v)}"
+        val totalAreaM2 = hudActualW * hudSpanY
+        val areaLabel = if (totalAreaM2 >= 100_000f) "${"%.2f".format(totalAreaM2 / 1_000_000f)} km²" else "${"%.2f".format(totalAreaM2)} m²"
 
         Surface(
             modifier = Modifier
@@ -743,18 +899,32 @@ fun MaterialPreviewViewport(
                     fontFamily = FontFamily.Monospace
                 )
                 Text(
-                    text = "Area: ${"%.2f".format(hudActualW * (if (shape == PreviewMeshShape.PLANE) hudActualD else hudActualH))} m²  •  Tiles: ${hudTilesX}×${hudTilesY} (${hudTilesX * hudTilesY})",
+                    text = "Area: $areaLabel  •  Repeat: ${formatRepeat(hudTilesX)}×${formatRepeat(hudTilesY)}",
                     color = Color(0xFF94A3B8),
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace
                 )
                 Text(
-                    text = "PBR Tile: ${hudPatternMm}mm (Constant physical scale)",
-                    color = Color(0xFF10B981),
+                    text = if (useRealWorldScale) {
+                        "PBR Size: ${"%.2f".format(hudPatternM)}m (${hudPatternMm}mm fixed • repeats by surface)"
+                    } else {
+                        "Fit Mode: Stretched 1×1 across surface (Enable Real-World Scale)"
+                    },
+                    color = if (useRealWorldScale) Color(0xFF10B981) else Color(0xFFF59E0B),
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Medium,
                     fontFamily = FontFamily.Monospace
                 )
+                if (decodedKtx2 != null) {
+                    val scaleMeta = decodedKtx2.info.kvdMetadata["KTXtileScaleMm"] ?: hudPatternMm.toString()
+                    Text(
+                        text = "KTX2 GPU: ${decodedKtx2.info.pixelWidth}px • ${decodedKtx2.info.levelCount} Mips • ${scaleMeta}mm",
+                        color = Color(0xFFFBBF24),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
             }
         }
 
@@ -886,6 +1056,7 @@ private fun DrawScope.drawProceduralFaceTexture(
         material.id.contains("herringbone") -> SurfacePatternType.BRICK_HERRINGBONE
         material.id.contains("four_leaf") || material.id.contains("four-leaf") -> SurfacePatternType.GRASS_PAVER_FOUR_LEAF
         material.id.contains("picket") -> SurfacePatternType.GRASS_PAVER_PICKET_SQUARE
+        material.id.contains("road") || material.id.contains("highway") -> SurfacePatternType.ROAD_HIGHWAY_LANES
         material.id.contains("asphalt") || material.id.contains("macadam") -> SurfacePatternType.ASPHALT_AGGREGATE_MACADAM
         material.id.contains("chevron") -> SurfacePatternType.CHEVRON_PARQUET_WOOD
         material.id.contains("paver") || material.id.contains("bowtie") -> SurfacePatternType.PAVER_INTERLOCKING_GEOMETRIC
@@ -895,6 +1066,7 @@ private fun DrawScope.drawProceduralFaceTexture(
         material.id.contains("shingle") || material.id.contains("roof") -> SurfacePatternType.ROOF_SHINGLE_SCALLOP
         material.id.contains("corrugated") || material.id.contains("profile") -> SurfacePatternType.METAL_CORRUGATED_RIBS
         material.id.contains("tread") || material.id.contains("diamond") -> SurfacePatternType.METAL_DIAMOND_TREAD
+        material.id.contains("sand") || material.id.contains("coast") -> SurfacePatternType.SAND_COASTAL_AGGREGATE
         material.id.contains("soil") || material.id.contains("mud") -> SurfacePatternType.ORGANIC_SOIL_LOAM
         material.id.contains("grass") || material.id.contains("turf") -> SurfacePatternType.TURF_BLADE_ORGANIC
         material.id.contains("brick") -> SurfacePatternType.BRICK_BOND_MASONRY
@@ -1189,6 +1361,24 @@ private fun DrawScope.drawProceduralFaceTexture(
             }
         }
 
+        SurfacePatternType.SAND_COASTAL_AGGREGATE -> {
+            val specks = 24
+            val shellChip = Color(0xFFD5C8B4).copy(alpha = 0.80f)
+            val darkGrit = Color(0xFF574C3D).copy(alpha = 0.65f)
+            val scrubCol = Color(0xFF5D6A3B).copy(alpha = 0.70f)
+
+            for (i in 0 until specks) {
+                val u = (sin(i * 19.7f + 0.4f) * 0.46f + 0.5f).coerceIn(0.02f, 0.98f)
+                val v = (cos(i * 13.1f + 0.8f) * 0.46f + 0.5f).coerceIn(0.02f, 0.98f)
+                val col = when (i % 7) {
+                    0 -> scrubCol
+                    1, 2 -> shellChip
+                    else -> darkGrit
+                }
+                drawCircle(color = col, radius = if (i % 4 == 0) 2.6f else 1.7f, center = lerp(u, v))
+            }
+        }
+
         SurfacePatternType.TURF_BLADE_ORGANIC -> {
             // Live lawn grass blade tufts
             val tufts = (10f * repeatX).roundToInt().coerceIn(6, 120)
@@ -1269,6 +1459,20 @@ private fun DrawScope.drawProceduralFaceTexture(
             drawPath(path = yPath, color = Color(0xFFFBBF24))
         }
 
+        SurfacePatternType.ROAD_HIGHWAY_LANES -> {
+            val yellowLine = Color(0xFFF59E0B).copy(alpha = 0.90f)
+            val whiteDash = Color(0xFFF8FAFC).copy(alpha = 0.90f)
+            // Shoulder edge markings
+            drawLine(color = yellowLine, start = lerp(0.08f, 0.0f), end = lerp(0.08f, 1.0f), strokeWidth = 2.6f)
+            drawLine(color = yellowLine, start = lerp(0.92f, 0.0f), end = lerp(0.92f, 1.0f), strokeWidth = 2.6f)
+            // Center dashed lane divider
+            for (d in 0 until 4) {
+                val v0 = d * 0.25f + 0.05f
+                val v1 = v0 + 0.14f
+                drawLine(color = whiteDash, start = lerp(0.50f, v0), end = lerp(0.50f, v1), strokeWidth = 2.4f)
+            }
+        }
+
         else -> {
             if (material.id.contains("concrete")) {
                 val holes = listOf(lerp(0.25f, 0.25f), lerp(0.75f, 0.25f), lerp(0.25f, 0.75f), lerp(0.75f, 0.75f))
@@ -1279,4 +1483,70 @@ private fun DrawScope.drawProceduralFaceTexture(
             }
         }
     }
+}
+
+private fun DrawScope.drawKtx2TexturedQuad(
+    bitmap: Bitmap,
+    pts: List<Point2D>,
+    facePath: Path,
+    repeatX: Float,
+    repeatY: Float,
+    diffuse: Float,
+    specular: Float
+): Boolean {
+    if (bitmap.isRecycled || pts.size < 4) return false
+    val safeRepX = repeatX.coerceIn(0.01f, 2000f)
+    val safeRepY = repeatY.coerceIn(0.01f, 2000f)
+    val bmpW = bitmap.width.toFloat().coerceAtLeast(1f)
+    val texW = bmpW * safeRepX
+    val texH = bitmap.height.toFloat().coerceAtLeast(1f) * safeRepY
+    val uOffset = if (safeRepX < 1.0f) (bmpW - texW) * 0.5f else 0f
+
+    val src = floatArrayOf(
+        uOffset, 0f,
+        uOffset + texW, 0f,
+        uOffset + texW, texH,
+        uOffset, texH
+    )
+    val dst = floatArrayOf(
+        pts[0].x, pts[0].y,
+        pts[1].x, pts[1].y,
+        pts[2].x, pts[2].y,
+        pts[3].x, pts[3].y
+    )
+
+    val matrix = Matrix()
+    if (!matrix.setPolyToPoly(src, 0, dst, 0, 4)) {
+        return false
+    }
+
+    val shader = BitmapShader(
+        bitmap,
+        Shader.TileMode.REPEAT,
+        Shader.TileMode.REPEAT
+    ).apply {
+        setLocalMatrix(matrix)
+    }
+
+    val d = diffuse.coerceIn(0.1f, 1f)
+    val dInt = (d * 255f).toInt().coerceIn(0, 255)
+    val sInt = (specular.coerceIn(0f, 0.85f) * 255f).toInt().coerceIn(0, 255)
+    val paint = android.graphics.Paint(
+        android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG
+    ).apply {
+        this.shader = shader
+        if (dInt < 254 || sInt > 0) {
+            val mul = (0xFF shl 24) or (dInt shl 16) or (dInt shl 8) or dInt
+            val add = (sInt shl 16) or (sInt shl 8) or sInt
+            colorFilter = LightingColorFilter(mul, add)
+        }
+    }
+
+    drawIntoCanvas { canvas ->
+        canvas.save()
+        canvas.clipPath(facePath)
+        canvas.nativeCanvas.drawPath(facePath.asAndroidPath(), paint)
+        canvas.restore()
+    }
+    return true
 }

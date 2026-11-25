@@ -11,7 +11,7 @@ constexpr float kDegToRad = 3.14159265358979323846f / 180.0f;
 void OrbitalCamera::SetOrbit(float yawDeg, float pitchDeg, float distance) {
     m_YawDeg = yawDeg;
     m_PitchDeg = std::clamp(pitchDeg, -82.0f, 82.0f);
-    m_Distance = std::clamp(distance, 1.4f, 18.0f);
+    m_Distance = std::clamp(distance, 1.4f, 120.0f);
     UpdateMatrices();
 }
 

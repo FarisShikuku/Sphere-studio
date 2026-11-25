@@ -3,6 +3,7 @@ package com.example.sphere.vehicles
 import android.os.Process
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
+import com.example.sphere.audio.SphereAudioAssetLoader
 import com.example.sphere.audio.SpherePcmAudioTrack
 import com.example.sphere.model.VehicleItem
 import com.example.sphere.nativebridge.SphereNativeEngine
@@ -272,6 +273,8 @@ fun rememberVehicleAudioController(
                 Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
             } catch (_: Throwable) {
             }
+
+            SphereAudioAssetLoader.loadFromAssetsIfPresent(context)
 
             val blockSamples = 1024
             val audioTrack = SpherePcmAudioTrack(

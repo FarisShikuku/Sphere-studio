@@ -33,6 +33,7 @@ import com.example.sphere.nativebridge.SphereNativeEngine
 import com.example.sphere.viewport.SceneFpsBadge
 import com.example.sphere.viewport.SceneFpsConfig
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
@@ -49,6 +50,7 @@ fun WaterViewportCanvas(
     optics: WaterOpticsState,
     tank: WaterTankState,
     waterfall: WaterWaterfallState,
+    waterSurface: WaterSurfaceState,
     camera: WaterCameraState,
     isPlaying: Boolean,
     interactionMode: WaterInteractionMode,
@@ -69,14 +71,18 @@ fun WaterViewportCanvas(
     var latestTelemetry by remember { mutableStateOf(WaterTelemetryState()) }
 
     val rasterBuffers = remember { DoubleBufferedWaterRaster() }
+    val renderSignal = remember { Channel<Unit>(Channel.CONFLATED) }
 
     val currentCamera by rememberUpdatedState(camera)
     val currentTank by rememberUpdatedState(tank)
-    val currentInteractionMode by rememberUpdatedState(interactionMode)
     val currentIsPlaying by rememberUpdatedState(isPlaying)
+    val currentStepTrigger by rememberUpdatedState(stepTrigger)
+    val currentViewportSizePx by rememberUpdatedState(viewportSizePx)
+    val currentOnCameraChange by rememberUpdatedState(onCameraChange)
+    val currentOnTelemetryUpdate by rememberUpdatedState(onTelemetryUpdate)
 
-    // Sync C++ FluidPhysicsParams, FluidRenderParams, WaterfallCliff & OrbitalCamera whenever UI state changes
-    LaunchedEffect(physics, optics, tank, waterfall, camera) {
+    // Sync C++ FluidPhysicsParams, FluidRenderParams, WaterfallCliff, WaterSurface & OrbitalCamera
+    LaunchedEffect(physics, optics, tank, waterfall, waterSurface, camera, isPlaying, stepTrigger, viewportSizePx) {
         SphereNativeEngine.configureWaterSimulation(
             particleCount = physics.particleCount,
             scenarioOrdinal = physics.scenario.ordinalId,
@@ -148,28 +154,68 @@ fun WaterViewportCanvas(
             airDragAndMist = waterfall.airDragAndMist,
             plungePoolDepth = waterfall.plungePoolDepth
         )
+        SphereNativeEngine.configureWaterSurface(
+            enabled = waterSurface.enabled,
+            gridResolution = waterSurface.gridResolution,
+            patchSizeM = waterSurface.patchSizeM,
+            windSpeedMs = waterSurface.windSpeedMs,
+            windDirectionDeg = waterSurface.windDirectionDeg,
+            amplitudeScale = waterSurface.amplitudeScale,
+            choppinessLambda = waterSurface.choppinessLambda,
+            smallWaveCutoff = waterSurface.smallWaveCutoff,
+            timeScale = waterSurface.timeScale,
+            waterDepthM = waterSurface.waterDepthM,
+            seabedRoughness = waterSurface.seabedRoughness,
+            seabedScale = waterSurface.seabedScale,
+            sunAzimuthDeg = waterSurface.sunAzimuthDeg,
+            sunElevationDeg = waterSurface.sunElevationDeg,
+            skyTurbidity = waterSurface.skyTurbidity,
+            indexOfRefraction = waterSurface.indexOfRefraction,
+            absorptionStrength = waterSurface.absorptionStrength,
+            scatterStrength = waterSurface.scatterStrength,
+            foamThreshold = waterSurface.foamThreshold,
+            reflectionStrength = waterSurface.reflectionStrength,
+            debugModeOrdinal = waterSurface.debugMode.ordinalId,
+            cutoutEnabled = waterSurface.cutoutEnabled,
+            cutoutWidthM = waterSurface.cutoutWidthM,
+            cutoutHeightM = waterSurface.cutoutHeightM,
+            cutoutDepthM = waterSurface.cutoutDepthM
+        )
+        renderSignal.trySend(Unit)
     }
 
-    // Real-time simulation + SSFR render loop (runs when playing, or renders static updates when paused)
-    LaunchedEffect(isPlaying, stepTrigger, physics, optics, tank, waterfall, camera) {
+    // Single sequential simulation + SSFR render loop (never cancelled mid-JNI by slider/camera updates)
+    LaunchedEffect(Unit) {
         var prevFrameNs = withFrameNanos { it }
         var emaFps = SceneFpsConfig.TARGET_FPS.toFloat()
-        var pendingSingleStep = stepTrigger > 0 && !isPlaying
+        var lastRenderedStepTrigger = currentStepTrigger
 
-        do {
+        while (isActive) {
+            val playingNow = currentIsPlaying
+            val triggerNow = currentStepTrigger
+            val pendingSingleStep = !playingNow && triggerNow != lastRenderedStepTrigger
+
+            if (playingNow) {
+                while (renderSignal.tryReceive().isSuccess) {
+                    // Drain stale wakeup signals while running continuously
+                }
+            }
+
             val frameNanos = withFrameNanos { it }
             val dt = ((frameNanos - prevFrameNs) / 1_000_000_000f).coerceIn(0.008f, 0.033f)
 
-            if (currentCamera.autoOrbit && currentIsPlaying) {
-                onCameraChange(
-                    currentCamera.copy(
-                        yawDeg = ((currentCamera.yawDeg + dt * 16f + 180f) % 360f) - 180f
+            val cam = currentCamera
+            if (cam.autoOrbit && playingNow) {
+                currentOnCameraChange(
+                    cam.copy(
+                        yawDeg = ((cam.yawDeg + dt * 16f + 180f) % 360f) - 180f
                     )
                 )
             }
 
-            val aspect = if (viewportSizePx.height > 0) {
-                viewportSizePx.width.toFloat() / viewportSizePx.height.toFloat()
+            val sizePx = currentViewportSizePx
+            val aspect = if (sizePx.height > 0) {
+                sizePx.width.toFloat() / sizePx.height.toFloat()
             } else {
                 1.5f
             }
@@ -183,9 +229,11 @@ fun WaterViewportCanvas(
                 if (writeA) rasterBuffers.bufferA = targetBmp else rasterBuffers.bufferB = targetBmp
             }
 
-            val shouldAdvancePhysics = currentIsPlaying || pendingSingleStep
+            val shouldAdvancePhysics = playingNow || pendingSingleStep
             val stepDt = if (pendingSingleStep) 0.016f else dt
-            pendingSingleStep = false
+            if (pendingSingleStep) {
+                lastRenderedStepTrigger = triggerNow
+            }
 
             val renderStartNs = System.nanoTime()
             val rawTelemetry = withContext(Dispatchers.Default) {
@@ -199,7 +247,7 @@ fun WaterViewportCanvas(
 
             lastFrameRenderMs = ((renderEndNs - renderStartNs) / 1_000_000f).coerceAtLeast(0.1f)
             val deltaNs = (frameNanos - prevFrameNs).coerceAtLeast(1_000_000L)
-            if (deltaNs < 250_000_000L && currentIsPlaying) {
+            if (deltaNs < 250_000_000L && playingNow) {
                 val instFps = (1_000_000_000f / deltaNs.toFloat()).coerceIn(1f, SceneFpsConfig.TARGET_FPS.toFloat())
                 emaFps = emaFps * 0.82f + instFps * 0.18f
                 measuredFps = emaFps.roundToInt().coerceIn(1, SceneFpsConfig.TARGET_FPS)
@@ -219,12 +267,17 @@ fun WaterViewportCanvas(
                     vulkanGpuActive = rawTelemetry[8] > 0.5f
                 )
                 latestTelemetry = parsed
-                onTelemetryUpdate(parsed)
+                currentOnTelemetryUpdate(parsed)
             }
 
             displayBitmap = targetBmp.asImageBitmap()
             rasterBuffers.writeToA = !writeA
-        } while (isActive && currentIsPlaying)
+
+            if (!currentIsPlaying && currentStepTrigger == lastRenderedStepTrigger) {
+                renderSignal.receive()
+                prevFrameNs = withFrameNanos { it }
+            }
+        }
     }
 
     Box(
@@ -297,25 +350,52 @@ fun WaterViewportCanvas(
                 .testTag("water_telemetry_hud")
         ) {
             Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-                Text(
-                    text = "${physics.scenario.label.uppercase()} • ${optics.debugMode.label.uppercase()}",
-                    color = Color(0xFF38BDF8),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace
-                )
-                Text(
-                    text = "${latestTelemetry.activeParticles} pts • ${latestTelemetry.occupiedCells}/${latestTelemetry.hashTableSize} hash cells",
-                    color = Color.White,
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-                Text(
-                    text = "SPH ${"%.1f".format(latestTelemetry.physicsStepMs)}ms • SSFR ${"%.1f".format(latestTelemetry.renderPassMs)}ms • vMax ${"%.1f".format(latestTelemetry.maxSpeed)}m/s",
-                    color = Color(0xFF94A3B8),
-                    fontSize = 9.sp,
-                    fontFamily = FontFamily.Monospace
-                )
+                if (waterSurface.enabled) {
+                    val modeTag = if (waterSurface.cutoutEnabled) {
+                        "CUTAWAY ${waterSurface.cutoutWidthM.roundToInt()}×${waterSurface.cutoutHeightM.roundToInt()}×${waterSurface.cutoutDepthM.roundToInt()}m"
+                    } else {
+                        "FFT WATER SURFACE"
+                    }
+                    Text(
+                        text = "$modeTag • ${waterSurface.debugMode.label.uppercase()}",
+                        color = Color(0xFF38BDF8),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        text = "${waterSurface.gridResolution}×${waterSurface.gridResolution} grid • L=${waterSurface.patchSizeM.roundToInt()}m • V=${"%.1f".format(waterSurface.windSpeedMs)}m/s",
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        text = "FFT ${"%.1f".format(latestTelemetry.physicsStepMs)}ms • Surf ${"%.1f".format(latestTelemetry.renderPassMs)}ms • Hs ${"%.2f".format(latestTelemetry.avgDensity)}m",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                } else {
+                    Text(
+                        text = "${physics.scenario.label.uppercase()} • ${optics.debugMode.label.uppercase()}",
+                        color = Color(0xFF38BDF8),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        text = "${latestTelemetry.activeParticles} pts • ${latestTelemetry.occupiedCells}/${latestTelemetry.hashTableSize} hash cells",
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        text = "SPH ${"%.1f".format(latestTelemetry.physicsStepMs)}ms • SSFR ${"%.1f".format(latestTelemetry.renderPassMs)}ms • vMax ${"%.1f".format(latestTelemetry.maxSpeed)}m/s",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
             }
         }
 

@@ -52,10 +52,18 @@ bool VulkanNativeSceneRenderer::IsGpuNodeAccessible() {
 #endif
 }
 
+bool VulkanNativeSceneRenderer::IsInitialized() const {
+    std::lock_guard<std::mutex> lock(m_Mutex);
+    return m_Initialized;
+}
+
 bool VulkanNativeSceneRenderer::InitializeSurface(void* nativeWindowHandle, uint32_t width, uint32_t height) {
+    std::lock_guard<std::mutex> lock(m_Mutex);
+    DestroySurfaceLocked();
+
     LOGI("VulkanNativeSceneRenderer::InitializeSurface starting (%u x %u)...", width, height);
-    m_Width = width;
-    m_Height = height;
+    m_Width = std::max(1u, width);
+    m_Height = std::max(1u, height);
 
 #if defined(__ANDROID__)
     m_NativeWindow = static_cast<ANativeWindow*>(nativeWindowHandle);
@@ -70,15 +78,15 @@ bool VulkanNativeSceneRenderer::InitializeSurface(void* nativeWindowHandle, uint
         LOGI("No Vulkan DRM render node present; activating native C++ ANativeWindow PBR rasterizer.");
         ANativeWindow_setBuffersGeometry(
             m_NativeWindow,
-            static_cast<int32_t>(std::max(1u, width)),
-            static_cast<int32_t>(std::max(1u, height)),
+            static_cast<int32_t>(m_Width),
+            static_cast<int32_t>(m_Height),
             WINDOW_FORMAT_RGBA_8888
         );
         m_SoftwareWindowMode = true;
         m_Initialized = true;
         return true;
 #else
-        DestroySurface();
+        DestroySurfaceLocked();
         return false;
 #endif
     }
@@ -87,12 +95,12 @@ bool VulkanNativeSceneRenderer::InitializeSurface(void* nativeWindowHandle, uint
         !SelectPhysicalDevice() ||
         !CreateLogicalDevice() ||
         !CreateSurface(nativeWindowHandle) ||
-        !CreateSwapChain(width, height) ||
+        !CreateSwapChain(m_Width, m_Height) ||
         !CreateRenderPass() ||
         !CreateFramebuffers() ||
         !CreateCommandBuffers() ||
         !CreateSyncObjects()) {
-        DestroySurface();
+        DestroySurfaceLocked();
         return false;
     }
 
@@ -358,16 +366,23 @@ bool VulkanNativeSceneRenderer::CreateSyncObjects() {
 }
 
 void VulkanNativeSceneRenderer::Resize(uint32_t width, uint32_t height) {
-    if (m_Width == width && m_Height == height) return;
-    m_Width = width;
-    m_Height = height;
+    std::lock_guard<std::mutex> lock(m_Mutex);
+    ResizeLocked(width, height);
+}
+
+void VulkanNativeSceneRenderer::ResizeLocked(uint32_t width, uint32_t height) {
+    uint32_t safeW = std::max(1u, width);
+    uint32_t safeH = std::max(1u, height);
+    if (m_Width == safeW && m_Height == safeH) return;
+    m_Width = safeW;
+    m_Height = safeH;
 
 #if defined(__ANDROID__)
     if (m_SoftwareWindowMode && m_NativeWindow) {
         ANativeWindow_setBuffersGeometry(
             m_NativeWindow,
-            static_cast<int32_t>(std::max(1u, width)),
-            static_cast<int32_t>(std::max(1u, height)),
+            static_cast<int32_t>(safeW),
+            static_cast<int32_t>(safeH),
             WINDOW_FORMAT_RGBA_8888
         );
         return;
@@ -393,20 +408,22 @@ void VulkanNativeSceneRenderer::Resize(uint32_t width, uint32_t height) {
         m_SwapChain = VK_NULL_HANDLE;
     }
 
-    CreateSwapChain(width, height);
+    CreateSwapChain(safeW, safeH);
     CreateFramebuffers();
-    LOGI("VulkanNativeSceneRenderer: Resized swapchain to %ux%u", width, height);
+    LOGI("VulkanNativeSceneRenderer: Resized swapchain to %ux%u", safeW, safeH);
 }
 
 void VulkanNativeSceneRenderer::RenderFrame(const NativeRenderParams& params) {
+    std::lock_guard<std::mutex> lock(m_Mutex);
     m_CurrentParams = params;
     if (!m_Initialized) return;
 
 #if defined(__ANDROID__)
     if (m_SoftwareWindowMode && m_NativeWindow) {
         ANativeWindow_Buffer buffer{};
-        if (ANativeWindow_lock(m_NativeWindow, &buffer, nullptr) == 0) {
-            if (buffer.bits && buffer.width > 0 && buffer.height > 0) {
+        int lockRes = ANativeWindow_lock(m_NativeWindow, &buffer, nullptr);
+        if (lockRes == 0) {
+            if (buffer.bits && buffer.width > 0 && buffer.height > 0 && buffer.stride >= buffer.width) {
                 sphere::scene::PbrStageRasterParams stageParams;
                 stageParams.lightPosX = params.lightPosX;
                 stageParams.lightPosY = params.lightPosY;
@@ -430,6 +447,9 @@ void VulkanNativeSceneRenderer::RenderFrame(const NativeRenderParams& params) {
                 );
             }
             ANativeWindow_unlockAndPost(m_NativeWindow);
+        } else {
+            LOGE("ANativeWindow_lock failed (%d); releasing disconnected window.", lockRes);
+            DestroySurfaceLocked();
         }
         return;
     }
@@ -438,16 +458,23 @@ void VulkanNativeSceneRenderer::RenderFrame(const NativeRenderParams& params) {
     if (!m_LogicalDevice || !m_SwapChain) return;
 
     vkWaitForFences(m_LogicalDevice, 1, &m_InFlightFence, VK_TRUE, UINT64_MAX);
-    vkResetFences(m_LogicalDevice, 1, &m_InFlightFence);
 
     uint32_t imageIndex = 0;
     VkResult res = vkAcquireNextImageKHR(
         m_LogicalDevice, m_SwapChain, UINT64_MAX, m_ImageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex
     );
     if (res == VK_ERROR_OUT_OF_DATE_KHR) {
-        Resize(m_Width, m_Height);
+        ResizeLocked(m_Width, m_Height);
         return;
     }
+    if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR) {
+        return;
+    }
+    if (imageIndex >= m_CommandBuffers.size() || imageIndex >= m_Framebuffers.size()) {
+        return;
+    }
+
+    vkResetFences(m_LogicalDevice, 1, &m_InFlightFence);
 
     VkCommandBuffer cmd = m_CommandBuffers[imageIndex];
     vkResetCommandBuffer(cmd, 0);
@@ -517,6 +544,11 @@ void VulkanNativeSceneRenderer::RenderFrame(const NativeRenderParams& params) {
 }
 
 void VulkanNativeSceneRenderer::DestroySurface() {
+    std::lock_guard<std::mutex> lock(m_Mutex);
+    DestroySurfaceLocked();
+}
+
+void VulkanNativeSceneRenderer::DestroySurfaceLocked() {
     if (m_LogicalDevice) {
         LOGI("VulkanNativeSceneRenderer::DestroySurface cleaning up Vulkan resources...");
         vkDeviceWaitIdle(m_LogicalDevice);

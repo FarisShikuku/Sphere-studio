@@ -28,10 +28,22 @@ struct ActiveOneShotVoice {
     bool active = false;
 };
 
+struct BiquadState {
+    float z1 = 0.0f;
+    float z2 = 0.0f;
+    float b0 = 1.0f, b1 = 0.0f, b2 = 0.0f;
+    float a1 = 0.0f, a2 = 0.0f;
+
+    void SetLowPass(float cutoffHz, float q, float sampleRate);
+    void SetBandPass(float centerHz, float q, float sampleRate);
+    float Process(float x);
+    void Reset() { z1 = 0.0f; z2 = 0.0f; }
+};
+
 /**
  * VehicleAudioMixer:
- * Zero-allocation mono PCM-16 mixing stage for combining procedural engine oscillators,
- * tire rolling noise, and RAM-cached uncompressed one-shot clips with soft limiting.
+ * Zero-allocation mono PCM-16 mixing stage for combining procedural/sampled engine audio,
+ * road/tire rolling rumble, and RAM-cached uncompressed one-shot clips with soft limiting.
  */
 class VehicleAudioMixer {
 public:
@@ -47,11 +59,10 @@ public:
 
 /**
  * EngineAudioSystem:
- * Singleton hybrid procedural + RAM-cached PCM audio synthesizer for Sphere Studio vehicles.
- * - Continuous synthesis: 4-stroke multi-cylinder firing fundamental + diesel knock harmonics +
- *   turbocharger spool + speed-proportional tire rolling rumble.
- * - Zero-latency RAM-cached 44.1kHz mono one-shots: air brake hiss, heavy dual-tone truck horn,
- *   matatu twin horn, pneumatic bus/cab door release, and mechanical gearbox clunk.
+ * Singleton hybrid physical-DSP + RAM-cached PCM audio synthesizer for Sphere Studio vehicles.
+ * - Eliminates raw white-noise static via Paul Kellet pink/brown noise & biquad exhaust formants.
+ * - Continuous 4-stroke compression pulse train + muffler cavity resonances + continuous tread phase.
+ * - Supports optional real audio sample overrides uploaded from app assets (WAV/OGG/MP3 decoded).
  */
 class EngineAudioSystem {
 public:
@@ -71,12 +82,13 @@ public:
     void SetControls(float throttle, float brake, bool cruiseDrive, bool muted);
     void TriggerOneShot(OneShotSoundId id, float gain = 1.0f);
 
-    void StepPhysics(float dtSeconds);
-
     /**
-     * Advances powertrain physics, synthesizes procedural engine/tire oscillators,
-     * mixes active uncompressed RAM one-shots, and writes mono 16-bit PCM samples.
+     * Uploads a real decoded mono PCM16 sample into RAM cache to override procedural synthesis.
+     * Keys: "truck_engine", "truck_horn", "matatu_horn", "air_brake", "bus_door", "gear_shift"
      */
+    void UploadCustomSample(int32_t slotId, const int16_t* pcm16, int32_t sampleCount, int32_t sampleRate);
+
+    void StepPhysics(float dtSeconds);
     void RenderAudioBlock(int16_t* outPcm16, int32_t sampleCount);
 
     VehicleAudioTelemetry GetTelemetry() const;
@@ -85,7 +97,8 @@ public:
 private:
     EngineAudioSystem();
     void BakeOneShotClips();
-    float NextNoise();
+    float NextWhiteNoise();
+    float NextPinkNoise();
     void StepPhysicsLocked(float dtSeconds);
 
     mutable std::mutex m_Mutex;
@@ -98,8 +111,18 @@ private:
     float m_PhaseHarm3 = 0.0f;
     float m_PhaseTurbo = 0.0f;
     float m_PhaseStarter = 0.0f;
-    float m_TireFilterState = 0.0f;
-    float m_ExhaustFilterState = 0.0f;
+    float m_PhaseTread = 0.0f;
+    float m_CustomEngineCursor = 0.0f;
+
+    // Pink / Brown noise and biquad exhaust/tire filters
+    float m_PinkB0 = 0.0f, m_PinkB1 = 0.0f, m_PinkB2 = 0.0f;
+    float m_PinkB3 = 0.0f, m_PinkB4 = 0.0f, m_PinkB5 = 0.0f, m_PinkB6 = 0.0f;
+    float m_BrownState = 0.0f;
+    float m_ExhaustLpState = 0.0f;
+    BiquadState m_ExhaustLowFormant;
+    BiquadState m_ExhaustMidFormant;
+    BiquadState m_ExhaustCutoffLp;
+    BiquadState m_TireLp;
 
     float m_StarterElapsedSec = 0.0f;
     float m_BrakeHissCooldownSec = 0.0f;
@@ -112,6 +135,7 @@ private:
     PcmOneShotClip m_ClipBusDoor;
     PcmOneShotClip m_ClipMatatuHorn;
     PcmOneShotClip m_ClipGearClunk;
+    PcmOneShotClip m_CustomEngineLoop;
 
     static constexpr int kMaxVoices = 8;
     ActiveOneShotVoice m_Voices[kMaxVoices];

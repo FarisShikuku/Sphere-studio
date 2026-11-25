@@ -63,15 +63,24 @@ def build_dfd_block(is_srgb=True):
         
     return basic_header + sample_data
 
-def build_kvd_block():
-    # Key-value data: KTXwriter=SphereStudioEngine 1.0 (SaschaWillems Vulkan Framework)
-    writer_key = b"KTXwriter\x00SphereStudioEngine 1.0 (SaschaWillems Vulkan Framework)\x00"
-    length = len(writer_key)
-    # Each entry is uint32 length followed by bytes padded to 4-byte boundary
-    pad = (4 - (length % 4)) % 4
-    return struct.pack("<I", length) + writer_key + (b"\x00" * pad)
+def build_kvd_block(metadata=None):
+    # Key-value data: KTXwriter + optional sorted custom entries
+    entries = [("KTXwriter", "SphereStudioEngine 1.0 (SaschaWillems Vulkan Framework)")]
+    if metadata:
+        for key in sorted(metadata.keys()):
+            val = metadata[key]
+            if key and val is not None:
+                entries.append((str(key), str(val)))
 
-def convert_image_to_ktx2(input_path, output_path, max_dim=1024, is_srgb=True):
+    kvd = bytearray()
+    for key, val in entries:
+        raw_entry = key.encode("utf-8") + b"\x00" + val.encode("utf-8") + b"\x00"
+        length = len(raw_entry)
+        pad = (4 - (length % 4)) % 4
+        kvd.extend(struct.pack("<I", length) + raw_entry + (b"\x00" * pad))
+    return bytes(kvd)
+
+def convert_image_to_ktx2(input_path, output_path, max_dim=1024, is_srgb=True, metadata=None):
     print(f"Converting {input_path} -> {output_path}")
     
     # Identify image dimensions using convert
@@ -99,7 +108,7 @@ def convert_image_to_ktx2(input_path, output_path, max_dim=1024, is_srgb=True):
         
     level_count = len(levels)
     dfd_data = build_dfd_block(is_srgb=is_srgb)
-    kvd_data = build_kvd_block()
+    kvd_data = build_kvd_block(metadata=metadata)
     
     header_size = 80
     level_index_size = level_count * 24

@@ -23,6 +23,7 @@ inline uint32_t PackRGBA8888(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255) {
 }
 
 inline uint8_t ClampU8(float v) {
+    if (!std::isfinite(v)) return 0;
     int iv = static_cast<int>(v * 255.0f + 0.5f);
     if (iv < 0) return 0;
     if (iv > 255) return 255;
@@ -30,12 +31,13 @@ inline uint8_t ClampU8(float v) {
 }
 
 inline void AlphaBlendPixel(uint32_t& dst, float srcR, float srcG, float srcB, float alpha) {
+    if (!std::isfinite(alpha)) return;
     float a = std::clamp(alpha, 0.0f, 1.0f);
     if (a <= 0.004f) return;
     float invA = 1.0f - a;
-    float sR = std::clamp(srcR, 0.0f, 1.0f);
-    float sG = std::clamp(srcG, 0.0f, 1.0f);
-    float sB = std::clamp(srcB, 0.0f, 1.0f);
+    float sR = std::isfinite(srcR) ? std::clamp(srcR, 0.0f, 1.0f) : 0.0f;
+    float sG = std::isfinite(srcG) ? std::clamp(srcG, 0.0f, 1.0f) : 0.0f;
+    float sB = std::isfinite(srcB) ? std::clamp(srcB, 0.0f, 1.0f) : 0.0f;
     float dR = static_cast<float>(dst & 0xFFu) * (1.0f / 255.0f);
     float dG = static_cast<float>((dst >> 8) & 0xFFu) * (1.0f / 255.0f);
     float dB = static_cast<float>((dst >> 16) & 0xFFu) * (1.0f / 255.0f);
@@ -62,6 +64,21 @@ struct QuantCornerEntry {
     uint32_t tri;
 };
 
+inline int64_t SafeLlroundScaled(float v, float scale) {
+    if (!std::isfinite(v)) return 0;
+    float scaled = std::clamp(v * scale, -1.0e12f, 1.0e12f);
+    return static_cast<int64_t>(std::llround(scaled));
+}
+
+inline bool BoundsNear(const AABB& a, const AABB& b) {
+    return std::abs(a.min.x - b.min.x) < 1e-4f &&
+           std::abs(a.min.y - b.min.y) < 1e-4f &&
+           std::abs(a.min.z - b.min.z) < 1e-4f &&
+           std::abs(a.max.x - b.max.x) < 1e-4f &&
+           std::abs(a.max.y - b.max.y) < 1e-4f &&
+           std::abs(a.max.z - b.max.z) < 1e-4f;
+}
+
 inline uint64_t ComputeMeshFingerprint(const Mesh* mesh) {
     if (!mesh) return 0;
     uint64_t h = static_cast<uint64_t>(mesh->vertices.size()) * 11400714819323198485ull ^
@@ -70,12 +87,12 @@ inline uint64_t ComputeMeshFingerprint(const Mesh* mesh) {
     const size_t step = std::max<size_t>(1, nV / 16);
     for (size_t i = 0; i < nV; i += step) {
         const auto& v = mesh->vertices[i];
-        int64_t px = static_cast<int64_t>(std::llround(v.position.x * 1000.0f));
-        int64_t py = static_cast<int64_t>(std::llround(v.position.y * 1000.0f));
-        int64_t pz = static_cast<int64_t>(std::llround(v.position.z * 1000.0f));
-        int64_t cr = static_cast<int64_t>(std::llround(v.color.x * 255.0f));
-        int64_t cg = static_cast<int64_t>(std::llround(v.color.y * 255.0f));
-        int64_t cb = static_cast<int64_t>(std::llround(v.color.z * 255.0f));
+        int64_t px = SafeLlroundScaled(v.position.x, 1000.0f);
+        int64_t py = SafeLlroundScaled(v.position.y, 1000.0f);
+        int64_t pz = SafeLlroundScaled(v.position.z, 1000.0f);
+        int64_t cr = SafeLlroundScaled(v.color.x, 255.0f);
+        int64_t cg = SafeLlroundScaled(v.color.y, 255.0f);
+        int64_t cb = SafeLlroundScaled(v.color.z, 255.0f);
         h ^= static_cast<uint64_t>(px) * 73856093ull ^
              static_cast<uint64_t>(py) * 19349663ull ^
              static_cast<uint64_t>(pz) * 83492791ull ^
@@ -102,9 +119,9 @@ PreparedMesh BuildPreparedMesh(const Mesh* mesh, uint64_t fingerprint = 0) {
     entries.reserve(static_cast<size_t>(pm.triCount) * 3);
 
     auto quantize = [](const Vec3& p, int64_t& qx, int64_t& qy, int64_t& qz) {
-        qx = static_cast<int64_t>(std::llround(p.x * 2000.0f));
-        qy = static_cast<int64_t>(std::llround(p.y * 2000.0f));
-        qz = static_cast<int64_t>(std::llround(p.z * 2000.0f));
+        qx = SafeLlroundScaled(p.x, 2000.0f);
+        qy = SafeLlroundScaled(p.y, 2000.0f);
+        qz = SafeLlroundScaled(p.z, 2000.0f);
     };
 
     for (uint32_t t = 0; t < pm.triCount; ++t) {
@@ -168,6 +185,9 @@ PreparedMesh BuildPreparedMesh(const Mesh* mesh, uint64_t fingerprint = 0) {
 }
 
 std::shared_ptr<const PreparedMesh> GetPreparedMesh(const Mesh* mesh) {
+    if (!mesh) {
+        return std::make_shared<PreparedMesh>();
+    }
     static std::mutex sCacheMutex;
     static std::unordered_map<const Mesh*, std::shared_ptr<const PreparedMesh>> sCache;
     uint64_t fp = ComputeMeshFingerprint(mesh);
@@ -177,7 +197,8 @@ std::shared_ptr<const PreparedMesh> GetPreparedMesh(const Mesh* mesh) {
         if (it != sCache.end() &&
             it->second->vertexCount == mesh->vertices.size() &&
             it->second->indexCount == mesh->indices.size() &&
-            it->second->fingerprint == fp) {
+            it->second->fingerprint == fp &&
+            BoundsNear(it->second->bounds, mesh->bounds)) {
             return it->second;
         }
     }
@@ -349,14 +370,20 @@ struct FrameBufferView {
         }
 
         // Soft elliptical contact floor shadow over tight screen-space bounding box only
-        const float safeRx = std::max(2.0f, shadowRx);
-        const float safeRy = std::max(2.0f, shadowRy);
+        if (!std::isfinite(shadowCx) || !std::isfinite(shadowCy) ||
+            !std::isfinite(shadowRx) || !std::isfinite(shadowRy)) {
+            return;
+        }
+        const float safeRx = std::clamp(shadowRx, 2.0f, static_cast<float>(width) * 2.0f);
+        const float safeRy = std::clamp(shadowRy, 2.0f, static_cast<float>(height) * 2.0f);
         const float invSRx2 = 1.0f / (safeRx * safeRx);
         const float invSRy2 = 1.0f / (safeRy * safeRy);
-        const int32_t sMinY = std::max<int32_t>(0, static_cast<int32_t>(std::floor(shadowCy - safeRy)));
-        const int32_t sMaxY = std::min<int32_t>(height - 1, static_cast<int32_t>(std::ceil(shadowCy + safeRy)));
-        const int32_t sMinX = std::max<int32_t>(0, static_cast<int32_t>(std::floor(shadowCx - safeRx)));
-        const int32_t sMaxX = std::min<int32_t>(width - 1, static_cast<int32_t>(std::ceil(shadowCx + safeRx)));
+        const float maxW = static_cast<float>(width - 1);
+        const float maxH = static_cast<float>(height - 1);
+        const int32_t sMinY = static_cast<int32_t>(std::clamp(std::floor(shadowCy - safeRy), 0.0f, maxH + 1.0f));
+        const int32_t sMaxY = static_cast<int32_t>(std::clamp(std::ceil(shadowCy + safeRy), -1.0f, maxH));
+        const int32_t sMinX = static_cast<int32_t>(std::clamp(std::floor(shadowCx - safeRx), 0.0f, maxW + 1.0f));
+        const int32_t sMaxX = static_cast<int32_t>(std::clamp(std::ceil(shadowCx + safeRx), -1.0f, maxW));
 
         for (int32_t y = sMinY; y <= sMaxY; ++y) {
             float sdy = static_cast<float>(y) - shadowCy;
@@ -488,15 +515,21 @@ struct FrameBufferView {
     }
 
     void DrawLine(float x0, float y0, float x1, float y1, uint32_t rgba, float thickness) {
+        if (!std::isfinite(x0) || !std::isfinite(y0) ||
+            !std::isfinite(x1) || !std::isfinite(y1) || !std::isfinite(thickness)) {
+            return;
+        }
         float dx = x1 - x0;
         float dy = y1 - y0;
-        int steps = static_cast<int>(std::ceil(std::max(std::abs(dx), std::abs(dy)))) + 1;
+        float maxSpan = std::max(std::abs(dx), std::abs(dy));
+        if (!std::isfinite(maxSpan) || maxSpan > 4096.0f) return;
+        int steps = static_cast<int>(std::ceil(maxSpan)) + 1;
         if (steps <= 1) return;
         float a = static_cast<float>((rgba >> 24) & 0xFFu) / 255.0f;
         float r = static_cast<float>(rgba & 0xFFu) / 255.0f;
         float g = static_cast<float>((rgba >> 8) & 0xFFu) / 255.0f;
         float b = static_cast<float>((rgba >> 16) & 0xFFu) / 255.0f;
-        int halfT = std::max(0, static_cast<int>(thickness * 0.5f));
+        int halfT = std::clamp(static_cast<int>(thickness * 0.5f), 0, 8);
         for (int s = 0; s <= steps; ++s) {
             float t = static_cast<float>(s) / static_cast<float>(steps);
             int px = static_cast<int>(x0 + dx * t);
@@ -570,10 +603,12 @@ struct FrameBufferView {
             if (det2d >= -1e-4f) continue;
             float invArea = 1.0f / (-det2d);
 
-            int32_t minPx = std::max(0, static_cast<int32_t>(std::floor(std::min({sx0, sx1, sx2}))));
-            int32_t maxPx = std::min(width - 1, static_cast<int32_t>(std::ceil(std::max({sx0, sx1, sx2}))));
-            int32_t minPy = std::max(0, static_cast<int32_t>(std::floor(std::min({sy0, sy1, sy2}))));
-            int32_t maxPy = std::min(height - 1, static_cast<int32_t>(std::ceil(std::max({sy0, sy1, sy2}))));
+            const float maxWf = static_cast<float>(width - 1);
+            const float maxHf = static_cast<float>(height - 1);
+            int32_t minPx = static_cast<int32_t>(std::clamp(std::floor(std::min({sx0, sx1, sx2})), 0.0f, maxWf + 1.0f));
+            int32_t maxPx = static_cast<int32_t>(std::clamp(std::ceil(std::max({sx0, sx1, sx2})), -1.0f, maxWf));
+            int32_t minPy = static_cast<int32_t>(std::clamp(std::floor(std::min({sy0, sy1, sy2})), 0.0f, maxHf + 1.0f));
+            int32_t maxPy = static_cast<int32_t>(std::clamp(std::ceil(std::max({sy0, sy1, sy2})), -1.0f, maxHf));
             if (minPx > maxPx || minPy > maxPy) continue;
 
             Vec3 vn0 = cam.RotateNormalToView(pm.cornerNormals[t * 3 + 0]);
@@ -716,11 +751,13 @@ struct FrameBufferView {
                     if (curIn && nxtIn) {
                         if (polyCount < 4) poly[polyCount++] = nxt;
                     } else if (curIn && !nxtIn) {
-                        float alpha = (kNearZ - cur.vp.z) / (nxt.vp.z - cur.vp.z);
-                        if (polyCount < 4) poly[polyCount++] = lerpVert(cur, nxt, alpha);
+                        float denom = nxt.vp.z - cur.vp.z;
+                        float alpha = (std::abs(denom) > 1e-6f) ? ((kNearZ - cur.vp.z) / denom) : 0.0f;
+                        if (polyCount < 4) poly[polyCount++] = lerpVert(cur, nxt, std::clamp(alpha, 0.0f, 1.0f));
                     } else if (!curIn && nxtIn) {
-                        float alpha = (kNearZ - cur.vp.z) / (nxt.vp.z - cur.vp.z);
-                        if (polyCount < 4) poly[polyCount++] = lerpVert(cur, nxt, alpha);
+                        float denom = nxt.vp.z - cur.vp.z;
+                        float alpha = (std::abs(denom) > 1e-6f) ? ((kNearZ - cur.vp.z) / denom) : 0.0f;
+                        if (polyCount < 4) poly[polyCount++] = lerpVert(cur, nxt, std::clamp(alpha, 0.0f, 1.0f));
                         if (polyCount < 4) poly[polyCount++] = nxt;
                     }
                 }
@@ -756,10 +793,12 @@ struct FrameBufferView {
                 if (det2d >= -1e-4f) continue;
                 float invArea = 1.0f / (-det2d);
 
-                int32_t minPx = std::max(0, static_cast<int32_t>(std::floor(std::min({sx0, sx1, sx2}))));
-                int32_t maxPx = std::min(width - 1, static_cast<int32_t>(std::ceil(std::max({sx0, sx1, sx2}))));
-                int32_t minPy = std::max(0, static_cast<int32_t>(std::floor(std::min({sy0, sy1, sy2}))));
-                int32_t maxPy = std::min(height - 1, static_cast<int32_t>(std::ceil(std::max({sy0, sy1, sy2}))));
+                const float maxWf = static_cast<float>(width - 1);
+                const float maxHf = static_cast<float>(height - 1);
+                int32_t minPx = static_cast<int32_t>(std::clamp(std::floor(std::min({sx0, sx1, sx2})), 0.0f, maxWf + 1.0f));
+                int32_t maxPx = static_cast<int32_t>(std::clamp(std::ceil(std::max({sx0, sx1, sx2})), -1.0f, maxWf));
+                int32_t minPy = static_cast<int32_t>(std::clamp(std::floor(std::min({sy0, sy1, sy2})), 0.0f, maxHf + 1.0f));
+                int32_t maxPy = static_cast<int32_t>(std::clamp(std::ceil(std::max({sy0, sy1, sy2})), -1.0f, maxHf));
                 if (minPx > maxPx || minPy > maxPy) continue;
 
                 float r0, g0, b0, r1, g1, b1, r2, g2, b2;
@@ -832,7 +871,7 @@ void NativeMeshRasterizer::RenderCargoBitmap(
     const Mesh* palletMesh,
     const CargoRasterParams& params
 ) {
-    if (!pixelsRGBA8888 || width <= 0 || height <= 0 || !cargoMesh) return;
+    if (!pixelsRGBA8888 || width <= 0 || height <= 0 || stridePixels < width || !cargoMesh) return;
 
     const auto pmCargoPtr = GetPreparedMesh(cargoMesh);
     const PreparedMesh& pmCargo = *pmCargoPtr;
@@ -983,7 +1022,7 @@ void NativeMeshRasterizer::RenderTrailerBitmap(
     const Mesh* loadedCargoMesh,
     const TrailerRasterParams& params
 ) {
-    if (!pixelsRGBA8888 || width <= 0 || height <= 0 || !trailerMesh) return;
+    if (!pixelsRGBA8888 || width <= 0 || height <= 0 || stridePixels < width || !trailerMesh) return;
 
     const auto pmTrailerPtr = GetPreparedMesh(trailerMesh);
     const PreparedMesh& pmTrailer = *pmTrailerPtr;
@@ -1066,7 +1105,7 @@ void NativeMeshRasterizer::RenderVehicleBitmap(
     const Mesh* loadedCargoMesh,
     const VehicleRasterParams& params
 ) {
-    if (!pixelsRGBA8888 || width <= 0 || height <= 0 || !vehicleMesh) return;
+    if (!pixelsRGBA8888 || width <= 0 || height <= 0 || stridePixels < width || !vehicleMesh) return;
 
     const auto pmVehiclePtr = GetPreparedMesh(vehicleMesh);
     const PreparedMesh& pmVehicle = *pmVehiclePtr;
@@ -1201,7 +1240,7 @@ void NativeMeshRasterizer::RenderPbrStageRGBA8888(
     int32_t height,
     const PbrStageRasterParams& params
 ) {
-    if (!pixelsRGBA8888 || width <= 0 || height <= 0) return;
+    if (!pixelsRGBA8888 || width <= 0 || height <= 0 || stridePixels < width) return;
 
     float minDim = static_cast<float>(std::min(width, height));
     float cx = static_cast<float>(width) * 0.5f;

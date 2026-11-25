@@ -448,6 +448,22 @@ fun SphereStudioApp() {
                     }
                 )
             }
+            "roads" -> {
+                com.example.sphere.screens.MaterialInspectorScreen(
+                    onNavigateBack = {
+                        selectedCategoryIndex = 0
+                    },
+                    title = "Roads & Highways KTX2",
+                    initialShape = com.example.sphere.viewport.PreviewMeshShape.PLANE,
+                    initialCategoryFilter = com.example.sphere.screens.MaterialCategoryFilter.ROADS,
+                    initialTabIndex = 2,
+                    initialMaterialId = "road_highway_two_lane",
+                    initialUseRealWorldScale = true,
+                    initialWidthScale = 7.4f,
+                    initialHeightScale = 1.0f,
+                    initialDepthScale = 14.8f
+                )
+            }
             "text" -> {
                 GlyphCoreStudioScreen(
                     onNavigateBack = {

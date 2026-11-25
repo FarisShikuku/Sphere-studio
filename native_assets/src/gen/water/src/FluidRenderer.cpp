@@ -56,24 +56,29 @@ inline void DrawLineRGBA(
     float x1, float y1,
     uint8_t r, uint8_t g, uint8_t b, float alpha
 ) {
+    if (!pixels || w <= 0 || h <= 0 || stride < w) return;
+    if (!std::isfinite(x0) || !std::isfinite(y0) || !std::isfinite(x1) || !std::isfinite(y1) || !std::isfinite(alpha)) return;
     float dx = x1 - x0;
     float dy = y1 - y0;
-    int steps = static_cast<int>(std::ceil(std::max(std::abs(dx), std::abs(dy))));
+    float maxSpan = std::max(std::abs(dx), std::abs(dy));
+    if (!std::isfinite(maxSpan) || maxSpan > 4000.0f) return;
+    int steps = static_cast<int>(std::ceil(maxSpan));
     if (steps <= 0 || steps > 4000) return;
 
     float invSteps = 1.0f / static_cast<float>(steps);
-    float invA = 1.0f - alpha;
+    float clampedAlpha = std::clamp(alpha, 0.0f, 1.0f);
+    float invA = 1.0f - clampedAlpha;
     for (int s = 0; s <= steps; ++s) {
         int px = static_cast<int>(x0 + dx * (static_cast<float>(s) * invSteps));
         int py = static_cast<int>(y0 + dy * (static_cast<float>(s) * invSteps));
         if (px >= 0 && px < w && py >= 0 && py < h) {
-            uint32_t& dst = pixels[py * stride + px];
+            uint32_t& dst = pixels[static_cast<size_t>(py) * static_cast<size_t>(stride) + static_cast<size_t>(px)];
             float dr = static_cast<float>(dst & 0xFFu);
             float dg = static_cast<float>((dst >> 8) & 0xFFu);
             float db = static_cast<float>((dst >> 16) & 0xFFu);
-            uint8_t nr = static_cast<uint8_t>(std::clamp(r * alpha + dr * invA, 0.0f, 255.0f));
-            uint8_t ng = static_cast<uint8_t>(std::clamp(g * alpha + dg * invA, 0.0f, 255.0f));
-            uint8_t nb = static_cast<uint8_t>(std::clamp(b * alpha + db * invA, 0.0f, 255.0f));
+            uint8_t nr = static_cast<uint8_t>(std::clamp(r * clampedAlpha + dr * invA, 0.0f, 255.0f));
+            uint8_t ng = static_cast<uint8_t>(std::clamp(g * clampedAlpha + dg * invA, 0.0f, 255.0f));
+            uint8_t nb = static_cast<uint8_t>(std::clamp(b * clampedAlpha + db * invA, 0.0f, 255.0f));
             dst = (255u << 24) | (static_cast<uint32_t>(nb) << 16) | (static_cast<uint32_t>(ng) << 8) | nr;
         }
     }
@@ -104,7 +109,7 @@ void FluidRenderer::Render(
     const OrbitalCamera& camera,
     const FluidRenderParams& renderParams
 ) {
-    if (!outPixelsRGBA8888 || width == 0 || height == 0) return;
+    if (!outPixelsRGBA8888 || width == 0 || height == 0 || stridePixels < static_cast<int32_t>(width)) return;
 
     auto t0 = std::chrono::steady_clock::now();
 
@@ -171,10 +176,10 @@ void FluidRenderer::RenderBackgroundAndScene(
                 if (tFloor > 0.05f && tFloor < bestT) {
                     Vec3 hit = camPos + rayDir * tFloor;
                     bool insideTank = (std::abs(hit.x) <= halfW + 0.02f && std::abs(hit.z) <= halfD + 0.02f);
-                    if (insideTank) {
+                    if (insideTank && std::isfinite(hit.x) && std::isfinite(hit.z)) {
                         bestT = tFloor;
-                        int cx = static_cast<int>(std::floor(hit.x * 2.2f));
-                        int cz = static_cast<int>(std::floor(hit.z * 2.2f));
+                        int cx = static_cast<int>(std::floor(std::clamp(hit.x * 2.2f, -1.0e6f, 1.0e6f)));
+                        int cz = static_cast<int>(std::floor(std::clamp(hit.z * 2.2f, -1.0e6f, 1.0e6f)));
                         bool checker = ((cx + cz) & 1) == 0;
                         Vec3 baseTile = checker ? Vec3(0.24f, 0.30f, 0.37f) : Vec3(0.15f, 0.20f, 0.26f);
 
@@ -333,14 +338,20 @@ void FluidRenderer::RenderParticleDepthAndThickness(
 
         float sx = halfW + (vp.x / viewZ) * focalX;
         float sy = halfH - (vp.y / viewZ) * focalY;
+        if (!std::isfinite(sx) || !std::isfinite(sy)) continue;
 
         float radPx = (thicknessRadius / viewZ) * focalY;
-        if (radPx < 1.0f) continue;
+        if (!std::isfinite(radPx) || radPx < 1.0f) continue;
 
-        int minX = std::max(0, static_cast<int>(std::floor(sx - radPx)));
-        int maxX = std::min(static_cast<int>(width) - 1, static_cast<int>(std::ceil(sx + radPx)));
-        int minY = std::max(0, static_cast<int>(std::floor(sy - radPx)));
-        int maxY = std::min(static_cast<int>(height) - 1, static_cast<int>(std::ceil(sy + radPx)));
+        float fMinX = std::clamp(std::floor(sx - radPx), 0.0f, static_cast<float>(width));
+        float fMaxX = std::clamp(std::ceil(sx + radPx), -1.0f, static_cast<float>(width) - 1.0f);
+        float fMinY = std::clamp(std::floor(sy - radPx), 0.0f, static_cast<float>(height));
+        float fMaxY = std::clamp(std::ceil(sy + radPx), -1.0f, static_cast<float>(height) - 1.0f);
+        int minX = static_cast<int>(fMinX);
+        int maxX = static_cast<int>(fMaxX);
+        int minY = static_cast<int>(fMinY);
+        int maxY = static_cast<int>(fMaxY);
+        if (minX > maxX || minY > maxY) continue;
 
         float depthRadPx = (rWorld / viewZ) * focalY;
         float invDepthRad = 1.0f / std::max(depthRadPx, 0.5f);
@@ -583,8 +594,12 @@ void FluidRenderer::CompositeFluidSurface(
 
             // 1. Snell Refraction sampling scene background
             float iorOffset = (renderParams.indexOfRefraction - 1.0f) * 3.0f;
-            int refX = std::clamp(x + static_cast<int>(viewNormal.x * refractStrength * iorOffset * static_cast<float>(w) * 0.35f), 0, w - 1);
-            int refY = std::clamp(y - static_cast<int>(viewNormal.y * refractStrength * iorOffset * static_cast<float>(h) * 0.35f), 0, h - 1);
+            float offX = viewNormal.x * refractStrength * iorOffset * static_cast<float>(w) * 0.35f;
+            float offY = viewNormal.y * refractStrength * iorOffset * static_cast<float>(h) * 0.35f;
+            int dxPx = std::isfinite(offX) ? static_cast<int>(std::clamp(offX, -static_cast<float>(w), static_cast<float>(w))) : 0;
+            int dyPx = std::isfinite(offY) ? static_cast<int>(std::clamp(offY, -static_cast<float>(h), static_cast<float>(h))) : 0;
+            int refX = std::clamp(x + dxPx, 0, w - 1);
+            int refY = std::clamp(y - dyPx, 0, h - 1);
             size_t refIdx = static_cast<size_t>(refY) * width + refX;
             Vec3 bgSample(
                 m_SceneColorRGB[refIdx * 3 + 0],
